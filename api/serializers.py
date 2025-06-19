@@ -4,6 +4,8 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Movement, DailyExposureSummary
 
+from .models import PatientMedication, PatientSupplements, PatientLyfeStyleTracker
+
 User = get_user_model()
 
 
@@ -46,3 +48,27 @@ class MovementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Movement
         fields = ("user", "latitude", "longitude", "timestamp")
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        exclude = ["password", "user_permissions", "groups", "is_superuser", "is_staff"]
+
+
+class PatientMedicationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientMedication
+        fields = "__all__"
+
+
+class PatientSupplementsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientSupplements
+        fields = "__all__"
+
+
+class PatientLyfeStyleTrackerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientLyfeStyleTracker
+        fields = "__all__"

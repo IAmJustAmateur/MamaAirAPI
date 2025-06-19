@@ -12,11 +12,27 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from django.utils import timezone
 
-from .models import Movement, DailyExposureSummary
+from .models import (
+    Movement,
+    DailyExposureSummary,
+    PatientMedication,
+    PatientSupplements,
+    PatientLyfeStyleTracker,
+)
 from .serializers import (
     RegisterSerializer,
     MovementUploadSerializer,
     DailyExposureSummarySerializer,
+    UserSerializer,
+    PatientLyfeStyleTrackerSerializer,
+    PatientSupplementsSerializer,
+    PatientLyfeStyleTrackerSerializer,
+)
+from .serializers import (
+    UserSerializer,
+    PatientMedicationSerializer,
+    PatientSupplementsSerializer,
+    PatientLyfeStyleTrackerSerializer,
 )
 from django.contrib.auth import get_user_model
 from api.aq_utils import fetch_air_quality_data
@@ -132,3 +148,45 @@ class AnalyzeView(generics.GenericAPIView):
         # 4) Отдаём JSON-ответ (опционально сериализуем)
         serializer = DailyExposureSummarySerializer(summary_obj)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class UserDetailView(generics.RetrieveUpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class PatientMedicationViewSet(generics.ListCreateAPIView):
+    queryset = PatientMedication.objects.all()
+    serializer_class = PatientMedicationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class PatientMedicationDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = PatientMedication.objects.all()
+    serializer_class = PatientMedicationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class PatientSupplementsViewSet(generics.ListCreateAPIView):
+    queryset = PatientSupplements.objects.all()
+    serializer_class = PatientSupplementsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class PatientSupplementsDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = PatientSupplements.objects.all()
+    serializer_class = PatientSupplementsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class PatientLyfeStyleTrackerViewSet(generics.ListCreateAPIView):
+    queryset = PatientLyfeStyleTracker.objects.all()
+    serializer_class = PatientLyfeStyleTrackerSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class PatientLyfeStyleTrackerDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = PatientLyfeStyleTracker.objects.all()
+    serializer_class = PatientLyfeStyleTrackerSerializer
+    permission_classes = [permissions.IsAuthenticated]
