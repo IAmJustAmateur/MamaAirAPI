@@ -5,15 +5,17 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from datetime import date
 
+from django.utils.translation import gettext_lazy as _
+
 
 class User(AbstractUser):
 
     RACE_CHOICES = [
-        ("caucasian", "Caucasian"),
-        ("african", "African"),
-        ("asian", "Asian"),
-        ("hispanic", "Hispanic"),
-        ("mixed", "Mixed"),
+        ("caucasian", _("Caucasian")),
+        ("african", _("African")),
+        ("asian", _("Asian")),
+        ("hispanic", _("Hispanic")),
+        ("mixed", _("Mixed")),
     ]
 
     COUNTRY_CHOICES = [
@@ -65,24 +67,31 @@ class UserLifeStyle(models.Model):
 
     average_sleep_hours = models.FloatField(null=True, blank=True)
 
-    WORK_TYPE_CHOICES = [...]
+    WORK_TYPE_CHOICES = [
+        ("Desk", _("Desk")),
+        ("Standing", _("Standing")),
+        ("Physical", -("Physical")),
+        ("Care", _("Care")),
+        ("Field", _("Field")),
+        ("Domestic", _("Domestic")),
+    ]
     work_type = models.CharField(
         max_length=64, choices=WORK_TYPE_CHOICES, null=True, blank=True
     )
 
     DIET_TYPE_CHOICES = [
-        ("carnivore", "Carnivore"),
-        ("vegetarian", "Vegetarian"),
+        ("carnivore", _("Carnivore")),
+        ("vegetarian", _("Vegetarian")),
     ]
     diet_type = models.CharField(
         max_length=64, choices=DIET_TYPE_CHOICES, null=True, blank=True
     )
 
     COOKING_METHOD_CHOICES = [
-        ("wood", "Wood"),
-        ("charcoal", "Charcoal"),
-        ("gas", "Gas"),
-        ("electric", "Electric"),
+        ("wood", _("Wood")),
+        ("charcoal", _("Charcoal")),
+        ("gas", _("Gas")),
+        ("electric", _("Electric")),
     ]
     cooking_method = models.CharField(
         max_length=64, choices=COOKING_METHOD_CHOICES, null=True, blank=True
@@ -95,11 +104,17 @@ class UserLifeStyle(models.Model):
 
 
 class UserMommySymptoms(models.Model):
-    MOMMY_SYMPTOM_CHOICES = []
+    MOMMY_SYMPTOM_CHOICES = [
+        ("Headache", _("Headache")),
+        ("Nausea", _("Nausea")),
+        ("Fatigue", _("Fatigue")),
+        ("Back Pain", ("Back Pain")),
+        ("Mood Swings", _("Mood Swings")),
+    ]
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="mommy_symptoms"
     )
-    symptom = models.CharField(max_length=255)
+    symptom = models.CharField(max_length=255, choices=MOMMY_SYMPTOM_CHOICES)
     severity = models.IntegerField()  # 1-5 scale
     date_recorded = models.DateField(default=date.today)
 
@@ -112,10 +127,15 @@ class UserMommySymptoms(models.Model):
 
 
 class UserBabySymptoms(models.Model):
-    BABY_SYMPTOM_CHOICES = []
+    BABY_SYMPTOM_CHOICES = [
+        ("Kicking", _("Kicking")),
+        ("Hiccups", _("Hiccups")),
+        ("Fetal Movement", _("Fetal Movement")),
+        ("Reduced Movement", _("Reduced Movement")),
+    ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="symptoms")
-    symptom = models.CharField(max_length=255)
-    severity = models.IntegerField()  # 1-5 scale
+    symptom = models.CharField(max_length=255, choices=BABY_SYMPTOM_CHOICES)
+    severity = models.IntegerField(blank=True, null=True)  # 1-5 scale
     date_recorded = models.DateField(default=date.today)
 
     class Meta:
@@ -127,7 +147,7 @@ class UserBabySymptoms(models.Model):
 
 
 class Movement(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="movements")
     latitude = models.FloatField()
     longitude = models.FloatField()
@@ -149,8 +169,8 @@ class DailyExposureSummary(models.Model):
     no2_peak = models.FloatField()
     o3_peak = models.FloatField()
     exposure_hours = models.FloatField()
-    fetal_risk_score = models.FloatField()
-    pdf = models.FileField(upload_to="reports/", null=True, blank=True)
+    baby_risk_score = models.FloatField()
+    mommy_risk_score = models.FloatField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
