@@ -1,7 +1,10 @@
 # api/urls.py
 
 from django.urls import path
-from rest_framework.authtoken.views import obtain_auth_token
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 from .views import (
     UserProfileView,
     UserLifestyleView,
@@ -15,7 +18,8 @@ from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 urlpatterns = [
-    path("auth/login/", obtain_auth_token, name="login"),
+    path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("profile/", UserProfileView.as_view(), name="profile"),
     path("lifestyle/", UserLifestyleView.as_view(), name="lifestyle"),
     path("symptoms/mommy/", UserMommySymptomsView.as_view(), name="symptoms-mommy"),
