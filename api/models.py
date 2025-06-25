@@ -70,7 +70,7 @@ class UserLifeStyle(models.Model):
     WORK_TYPE_CHOICES = [
         ("Desk", _("Desk")),
         ("Standing", _("Standing")),
-        ("Physical", -("Physical")),
+        ("Physical", _("Physical")),
         ("Care", _("Care")),
         ("Field", _("Field")),
         ("Domestic", _("Domestic")),
@@ -161,21 +161,59 @@ class Movement(models.Model):
         return f"{self.user.email} @ {self.timestamp}"
 
 
-class DailyExposureSummary(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="summaries")
-    analysis_date = models.DateField()
-    pm25_avg = models.FloatField()
-    no2_peak = models.FloatField()
-    o3_peak = models.FloatField()
-    exposure_hours = models.FloatField()
-    baby_risk_score = models.FloatField()
-    mommy_risk_score = models.FloatField()
-    created_at = models.DateTimeField(auto_now_add=True)
+class AirExposureLog(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="air_exposure_logs"
+    )
+    timestamp = models.DateTimeField()  # когда получены данные
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+
+    aqi = models.FloatField()  # Air Quality Index
+    pm25 = models.FloatField(null=True, blank=True)
+    pm10 = models.FloatField(null=True, blank=True)
+    no2 = models.FloatField(null=True, blank=True)
+    so2 = models.FloatField(null=True, blank=True)
+    co = models.FloatField(null=True, blank=True)
+    o3 = models.FloatField(null=True, blank=True)  # ozone
+    aqi = models.IntegerField(null=True, blank=True)  # Air Quality Index
+    temperature = models.FloatField(null=True, blank=True)
+    humidity = models.FloatField(null=True, blank=True)
+    wind_speed = models.FloatField(null=True, blank=True)  # wind speed in m/s
+
+    exposure_minutes = models.IntegerField(
+        default=60
+    )  # сколько минут пользователь находился в этих условиях
+    activity_level = models.CharField(
+        max_length=32, blank=True, null=True
+    )  # "low", "moderate", "high"
+    indoor = models.BooleanField(default=False)  # если ты планируешь учитывать это
 
     class Meta:
-        db_table = "daily_exposure_summary"  # existing table name
-        ordering = ["-analysis_date"]
+        ordering = ["-timestamp"]
 
-    def __str__(self):
-        return f"{self.user.email} – {self.analysis_date}"
+
+class HealthInsightSnapshot(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="health_insights"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # риски по категориям
+    mommy_risk = models.JSONField()  # {"fatigue": 3, "headache": 2}
+    baby_risk = models.JSONField()  # {"reduced_movement": 2}
+
+    # рекомендации
+    recommendations = (
+        models.JSONField()
+    )  # список строк: ["Avoid charcoal cooking", "Increase rest"]
+
+    # метаинформация
+
+    source = models.CharField(max_length=32, default="engine")  # или "ml"
+    trigger_event = models.CharField(
+        max_length=64, blank=True, null=True
+    )  # "manual", "login", "auto"
+
+    class Meta:
+        ordering = ["-created_at"]
