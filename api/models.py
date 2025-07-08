@@ -7,6 +7,20 @@ from datetime import date
 
 from django.utils.translation import gettext_lazy as _
 
+from django.utils.translation import gettext_lazy as _
+
+
+EXPOSURE_LEVEL_CHOICES = [
+    ("Clean", _("Clean")),
+    ("Very Good", _("Very Good")),
+    ("Moderate", _("Moderate")),
+    ("Acceptable", _("Acceptable")),
+    ("Unhealthy", _("Unhealthy")),
+    ("High", _("High")),
+    ("Hazardous", _("Hazardous")),
+    ("Extreme", _("Extreme")),
+]
+
 
 class User(AbstractUser):
 
@@ -41,9 +55,7 @@ class User(AbstractUser):
         max_length=255, null=True, blank=True, choices=COUNTRY_CHOICES
     )
     is_first_pregnancy = models.BooleanField(null=True, blank=True)
-    trimester = models.IntegerField(
-        null=True, blank=True
-    )  # 1, 2, 3, or 4 (4 = postpartum)
+    week_of_pregnancy = models.IntegerField(null=True, blank=True)
 
     tracking_enabled = models.BooleanField(default=False)
     notifications_enabled = models.BooleanField(default=False)
@@ -217,3 +229,34 @@ class HealthInsightSnapshot(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class AdviceTemplate(models.Model):
+    title = models.CharField(max_length=255)
+    text = models.TextField()
+
+    # Optional metadata (can be used later)
+    category = models.CharField(max_length=100, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+
+class WeeklyExposure(models.Model):
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="weekly_exposures"
+    )
+    pregnancy_week = models.PositiveIntegerField()
+    exposure_level = models.CharField(max_length=32, choices=EXPOSURE_LEVEL_CHOICES)
+
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "pregnancy_week")
+        ordering = ["-pregnancy_week"]
+
+    def __str__(self):
+        return f"{self.user.email} - Week {self.pregnancy_week} - {self.exposure_level}"

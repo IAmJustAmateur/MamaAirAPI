@@ -7,6 +7,11 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 
 
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
@@ -27,7 +32,11 @@ from .serializers import (
     UserBabySymptomsSerializer,
     HealthInsightSerializer,
     AirExposureLogSerializer,
+    AdviceTemplateSerializer,
+    PasswordChangeSerializer,
 )
+
+from .services import get_current_advices
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -205,3 +214,61 @@ class EnvironmentView(APIView):
         if not latest_log:
             return Response({"detail": "No air exposure data found."}, status=204)
         return Response(AirExposureLogSerializer(latest_log).data)
+
+
+class CurrentAdviceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        week = request.query_params.get("week")
+
+        try:
+            pregnancy_week = int(week)
+        except (TypeError, ValueError):
+            pregnancy_week = None
+
+        advices = get_current_advices(request.user, pregnancy_week)
+        serializer = AdviceTemplateSerializer(advices, many=True)
+        return Response(serializer.data)
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data["refresh"]
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(
+                {"detail": "Successfully logged out."},
+                status=status.HTTP_205_RESET_CONTENT,
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordChangeView(generics.UpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PasswordChangeSerializer
+
+    def get_object(self):
+        return self.request.user
+
+    def update(self, request, *args, **kwargs):
+        user = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+
+        if not user.check_password(serializer.validated_data["old_password"]):
+            return Response(
+                {"old_password": "Wrong password."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        new_password = serializer.validated_data["new_password"]
+        validate_password(new_password, user)
+        user.set_password(new_password)
+        user.save()
+
+        return Response({"detail": "Password successfully changed."})

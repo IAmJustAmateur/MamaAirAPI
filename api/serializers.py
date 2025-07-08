@@ -9,7 +9,13 @@ from .models import (
     Movement,
     HealthInsightSnapshot,
     AirExposureLog,
+    AdviceTemplate,
 )
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -52,3 +58,9 @@ class AirExposureLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = AirExposureLog
         exclude = ["user"]
+
+
+class AdviceTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdviceTemplate
+        fields = ["id", "title", "text", "category"]

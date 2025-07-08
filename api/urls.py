@@ -13,6 +13,9 @@ from .views import (
     HealthInsightView,
     MovementCSVUploadView,
     EnvironmentView,
+    CurrentAdviceView,
+    LogoutView,
+    PasswordChangeView,
 )
 from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -20,12 +23,15 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 urlpatterns = [
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/logout/", LogoutView.as_view(), name="logout"),
+    path("auth/password-change/", PasswordChangeView.as_view(), name="password-change"),
     path("profile/", UserProfileView.as_view(), name="profile"),
     path("lifestyle/", UserLifestyleView.as_view(), name="lifestyle"),
     path("symptoms/mommy/", UserMommySymptomsView.as_view(), name="symptoms-mommy"),
     path("symptoms/baby/", UserBabySymptomsView.as_view(), name="symptoms-baby"),
     path("movements/upload", MovementCSVUploadView.as_view(), name="movements-upload"),
     path("advice/", HealthInsightView.as_view(), name="advice"),
+    path("info/current/", CurrentAdviceView.as_view(), name="current-advices"),
     path("air-exposure/", EnvironmentView.as_view(), name="air-exposure"),
     # Swagger/OpenAPI
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
