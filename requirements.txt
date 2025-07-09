@@ -22,3 +22,4 @@ sqlparse==0.5.3
 typing_extensions==4.14.0
 tzdata==2025.2
 uritemplate==4.2.0
+uvicorn==0.29.0
