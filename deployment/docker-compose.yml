@@ -20,10 +20,6 @@ services:
     container_name: agent_api_db
     volumes:
       - postgres_data:/var/lib/postgresql/data/
-    environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
     env_file:
       - .env.prod
     restart: always
