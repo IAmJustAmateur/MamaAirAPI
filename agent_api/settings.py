@@ -20,16 +20,13 @@ from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-# Load .env file
-# Priority: environment variable DJANGO_ENV determines which .env file to load
-ENV = os.getenv("DJANGO_ENV", "development")
-if ENV == "production":
-    env_path = BASE_DIR.parent / "deployment" / ".env.prod"
-else:
-    env_path = BASE_DIR.parent / "deployment" / ".env.dev"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-default-key")
 
-load_dotenv(dotenv_path=env_path)
+DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
+
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
 
 
 # Quick-start development settings - unsuitable for production
