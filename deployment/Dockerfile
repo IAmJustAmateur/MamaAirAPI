@@ -24,7 +24,7 @@ ENV PYTHONUNBUFFERED=1
 # Ensure output is logged immediately
 
 # Make entrypoint executable
-RUN chmod +x deployment/entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
 # Default command
 CMD ["deployment/entrypoint.sh"]
