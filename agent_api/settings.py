@@ -22,23 +22,21 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-default-key")
+SECRET_KEY = os.getenv("SECRET_KEY", "insecure-default-key")
 
-DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-p9d!a)b726f1^*3h=h+^xkz)a@x7*(%)#11_0qsl#oy^vsb$f@"
+# SECRET_KEY = "django-insecure-p9d!a)b726f1^*3h=h+^xkz)a@x7*(%)#11_0qsl#oy^vsb$f@"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
+# DEBUG = True
 
 AUTH_USER_MODEL = "api.User"
 
