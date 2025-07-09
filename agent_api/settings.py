@@ -17,10 +17,19 @@ from dotenv import load_dotenv
 
 from pathlib import Path
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-USE_SQLITE = os.getenv("USE_SQLITE", "true").lower() == "true"
+# Load .env file
+# Priority: environment variable DJANGO_ENV determines which .env file to load
+ENV = os.getenv("DJANGO_ENV", "development")
+if ENV == "production":
+    env_path = BASE_DIR.parent / "deployment" / ".env.prod"
+else:
+    env_path = BASE_DIR.parent / "deployment" / ".env.dev"
+
+load_dotenv(dotenv_path=env_path)
 
 
 # Quick-start development settings - unsuitable for production
@@ -64,7 +73,6 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "agent_api.urls"
 
 TEMPLATES = [
     {
@@ -81,13 +89,16 @@ TEMPLATES = [
     },
 ]
 
+ROOT_URLCONF = "agent_api.urls"
+
 WSGI_APPLICATION = "agent_api.wsgi.application"
+ASGI_APPLICATION = "agent_api.asgi.application"  # required for uvicorn
 
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if USE_SQLITE:
+if DEBUG:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -98,14 +109,13 @@ else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("POSTGRES_DB", "air_quality_db"),
-            "USER": os.getenv("POSTGRES_USER", "postgres"),
-            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
-            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "NAME": os.getenv("DB_NAME"),
+            "USER": os.getenv("DB_USER"),
+            "PASSWORD": os.getenv("DB_PASSWORD"),
+            "HOST": os.getenv("DB_HOST", "localhost"),
+            "PORT": os.getenv("DB_PORT", "5432"),
         }
     }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -164,3 +174,13 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": False,
 }
+
+# Static files (for nginx)
+STATIC_URL = "/static/"
+STATIC_ROOT = os.path.join(BASE_DIR, "static")
+
+# Time zone, language, etc. can stay default or be adjusted
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
+USE_I18N = True
+USE_TZ = True

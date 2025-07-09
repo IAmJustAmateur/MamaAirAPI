@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    container_name: agent_api_web
+    command: deployment/entrypoint.sh
+    env_file:
+      - deployment/.env.prod
+    volumes:
+      - static_volume:/app/static
+    depends_on:
+      - db
+    expose:
+      - "8000"
+    restart: always
+
+  db:
+    image: postgres:15
+    container_name: agent_api_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    env_file:
+      - deployment/.env.prod
+    restart: always
+
+  nginx:
+    image: nginx:latest
+    container_name: agent_api_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - static_volume:/app/static
+      - ./deployment/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - web
+    restart: always
+
+volumes:
+  postgres_data:
+  static_volume:

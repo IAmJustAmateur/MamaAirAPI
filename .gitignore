@@ -35,16 +35,19 @@ static/
 # If using PostgreSQL locally
 *.psql_history
 
-# Environments
-.env
+# .env files
+*.env
+.env.*
+**/*.env
+**/.env.*
+
+# Virtual environments
 venv/
 env/
 ENV/
 env.bak/
 venv.bak/
 
-# VS Code
-.vscode/
 
 # PyCharm
 .idea/
