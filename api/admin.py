@@ -15,8 +15,15 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ("email", "name", "country", "race", "trimester", "registered_at")
-    list_filter = ("country", "race", "trimester", "tracking_enabled")
+    list_display = (
+        "email",
+        "name",
+        "country",
+        "race",
+        "week_of_pregnancy",
+        "registered_at",
+    )
+    list_filter = ("country", "race", "week_of_pregnancy", "tracking_enabled")
     search_fields = ("email", "name")
     ordering = ("-registered_at",)
     fieldsets = (

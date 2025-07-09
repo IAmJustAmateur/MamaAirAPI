@@ -64,3 +64,81 @@ class AdviceTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdviceTemplate
         fields = ["id", "title", "text", "category"]
+
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+
+class ErrorResponseSerializer(serializers.Serializer):
+    error = serializers.CharField()
+
+
+class WeeklyExposureSerializer(serializers.Serializer):
+    pregnancy_week = serializers.IntegerField()
+    exposure_level = serializers.CharField()
+
+
+class PollutantSerializer(serializers.Serializer):
+    value = serializers.FloatField()
+    who_limit = serializers.FloatField(source="who limit")
+
+
+class AirQualityBlockSerializer(serializers.Serializer):
+    pm25 = PollutantSerializer()
+    pm10 = PollutantSerializer()
+    no2 = PollutantSerializer()
+    so2 = PollutantSerializer()
+    o3 = PollutantSerializer()
+    co = PollutantSerializer()
+    aqi = serializers.FloatField()
+
+
+class WeatherBlockSerializer(serializers.Serializer):
+    temperature = serializers.FloatField()
+    humidity = serializers.FloatField()
+    pressure = serializers.FloatField()
+    wind_speed = serializers.FloatField()
+    condition = serializers.CharField()
+
+
+class UVBlockSerializer(serializers.Serializer):
+    value = serializers.FloatField()
+    level = serializers.CharField()
+
+
+class ExposureLevelSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    level = serializers.IntegerField()
+
+
+class ExposureBlockSerializer(serializers.Serializer):
+    total_score = serializers.CharField()
+    last_updated = serializers.DateTimeField()
+    exposure_levels = ExposureLevelSerializer(many=True)
+
+
+class RisksDeltaSerializer(serializers.Serializer):
+    mom = serializers.FloatField()
+    baby = serializers.FloatField()
+
+
+class RecommendationsSerializer(serializers.Serializer):
+    mom = serializers.ListField(child=serializers.CharField())
+    baby = serializers.ListField(child=serializers.CharField())
+
+
+class JourneyBlockSerializer(serializers.Serializer):
+    length = serializers.FloatField()
+    time = serializers.FloatField()
+
+
+class SummaryResponseSerializer(serializers.Serializer):
+    air_quality = AirQualityBlockSerializer()
+    weather = WeatherBlockSerializer()
+    UV = UVBlockSerializer()
+    mom_exposure = ExposureBlockSerializer()
+    baby_exposure = ExposureBlockSerializer()
+    risks_delta = RisksDeltaSerializer()
+    recommendations = RecommendationsSerializer()
+    today_journey = JourneyBlockSerializer()

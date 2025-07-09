@@ -6,6 +6,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from drf_spectacular.types import OpenApiTypes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import (
@@ -24,6 +25,7 @@ from .models import (
     Movement,
     HealthInsightSnapshot,
     AirExposureLog,
+    WeeklyExposure,
 )
 from .serializers import (
     UserProfileSerializer,
@@ -34,9 +36,22 @@ from .serializers import (
     AirExposureLogSerializer,
     AdviceTemplateSerializer,
     PasswordChangeSerializer,
+    LogoutSerializer,
+    ErrorResponseSerializer,
+    WeeklyExposureSerializer,
+    SummaryResponseSerializer,
 )
 
-from .services import get_current_advices
+from .services import (
+    get_current_advices,
+    get_air_quality_summary,
+    get_weather_summary,
+    get_uv_index,
+    get_exposure_summary,
+    get_risks_delta,
+    get_current_recommendations,
+    get_today_journey,
+)
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -218,6 +233,7 @@ class EnvironmentView(APIView):
 
 class CurrentAdviceView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = AdviceTemplateSerializer
 
     def get(self, request):
         week = request.query_params.get("week")
@@ -234,12 +250,24 @@ class CurrentAdviceView(APIView):
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = LogoutSerializer
 
+    @extend_schema(
+        request=LogoutSerializer,
+        responses={
+            205: OpenApiTypes.NONE,
+            400: ErrorResponseSerializer,
+        },
+    )
     def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         try:
-            refresh_token = request.data["refresh"]
+            refresh_token = serializer.validated_data["refresh"]
             token = RefreshToken(refresh_token)
             token.blacklist()
+
             return Response(
                 {"detail": "Successfully logged out."},
                 status=status.HTTP_205_RESET_CONTENT,
@@ -272,3 +300,58 @@ class PasswordChangeView(generics.UpdateAPIView):
         user.save()
 
         return Response({"detail": "Password successfully changed."})
+
+
+@extend_schema(
+    summary="Get exposure levels per pregnancy week",
+    description="Returns weekly air quality exposure levels for the current user.",
+    responses={
+        200: OpenApiResponse(
+            response=WeeklyExposureSerializer(many=True),
+            description="A dictionary where each key is the pregnancy week and value is exposure level.",
+            examples=[
+                OpenApiExample(
+                    "Example output",
+                    value={
+                        "12": {"level": "moderate"},
+                        "13": {"level": "unhealthy"},
+                        "14": {"level": "clean"},
+                    },
+                    response_only=True,
+                )
+            ],
+        )
+    },
+)
+class WeeklyExposureView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        exposures = WeeklyExposure.objects.filter(user=request.user)
+        result = {
+            item.pregnancy_week: {"level": item.exposure_level} for item in exposures
+        }
+        return Response(result)
+
+
+@extend_schema(
+    summary="Get integrated summary",
+    description="Returns air quality, weather, exposure history, risk change and recommendations for mother and baby.",
+    responses={200: SummaryResponseSerializer},
+)
+class SummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        data = {
+            "air_quality": get_air_quality_summary(user),
+            "weather": get_weather_summary(user),
+            "UV": get_uv_index(user),
+            "mom_exposure": get_exposure_summary(user, target="mom"),
+            "baby_exposure": get_exposure_summary(user, target="baby"),
+            "risks_delta": get_risks_delta(user),
+            "recommendations": get_current_recommendations(user),
+            "today_journey": get_today_journey(user),
+        }
+        return Response(data)
