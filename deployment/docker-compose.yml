@@ -1,3 +1,4 @@
+env_file: ../.env
 services:
   web:
     build:
