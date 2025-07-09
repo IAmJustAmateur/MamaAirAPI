@@ -23,8 +23,11 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1         
 # Ensure output is logged immediately
 
-# Make entrypoint executable
+# Copy entrypoint.sh explicitly (from ./deployment to /app/)
+COPY deployment/entrypoint.sh ./entrypoint.sh
+
+# Make it executable
 RUN chmod +x ./entrypoint.sh
 
 # Default command
-CMD ["deployment/entrypoint.sh"]
+CMD ["./entrypoint.sh"]
