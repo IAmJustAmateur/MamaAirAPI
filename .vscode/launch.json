@@ -13,6 +13,18 @@
                 "runserver"
             ],
             "django": true
-        }
+        },
+        {
+            "name": "Tests debug",
+            "type": "debugpy",
+            "request": "launch",
+            "args": [
+                "test",
+                "api.tests.test_auth",
+            ],
+            "justMyCode": false,
+            "django": true,
+            "program": "${workspaceFolder}\\manage.py",
+        },
     ]
 }

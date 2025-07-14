@@ -4,7 +4,7 @@ import csv
 from io import TextIOWrapper
 from rest_framework.parsers import MultiPartParser
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.response import Response
@@ -15,7 +15,12 @@ from rest_framework_simplejwt.token_blacklist.models import (
 )
 
 
-from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
+from drf_spectacular.utils import (
+    extend_schema,
+    OpenApiResponse,
+    OpenApiExample,
+    OpenApiParameter,
+)
 
 from rest_framework import generics, permissions
 
@@ -29,6 +34,7 @@ from .models import (
     LANGUAGE_CHOICES,
 )
 from .serializers import (
+    RegisterSerializer,
     UserProfileSerializer,
     UserLifeStyleSerializer,
     UserMommySymptomsSerializer,
@@ -53,6 +59,46 @@ from .services import (
     get_current_recommendations,
     get_today_journey,
 )
+from .permissions import HasValidRegistrationAPIKey
+
+
+@extend_schema(
+    summary="Register a new user account",
+    description="Registers a new user. Requires a valid API key in the `X-API-Key` header.",
+    request=RegisterSerializer,
+    responses={
+        201: OpenApiExample(
+            name="User created",
+            value={"message": "User created successfully"},
+            response_only=True,
+        ),
+        403: OpenApiExample(
+            name="Invalid API key",
+            value={"detail": "Invalid or missing API key."},
+            response_only=True,
+        ),
+    },
+    parameters=[
+        OpenApiParameter(
+            name="X-API-Key",
+            type=str,
+            location=OpenApiParameter.HEADER,
+            required=True,
+            description="API key for registration",
+        )
+    ],
+)
+class RegisterView(generics.CreateAPIView):
+    serializer_class = RegisterSerializer
+    permission_classes = [AllowAny, HasValidRegistrationAPIKey]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(
+            {"message": "User created successfully"}, status=status.HTTP_201_CREATED
+        )
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):

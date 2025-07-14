@@ -6,6 +6,7 @@ from rest_framework import status
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
+from django.conf import settings
 
 
 class AuthTests(APITestCase):
@@ -127,4 +128,29 @@ class AuthTests(APITestCase):
 
     def test_set_language_requires_auth(self):
         response = self.client.post(reverse("set-language"), {"language": "fr"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_register_user_success_with_api_key(self):
+        headers = {"X-API-Key": settings.REGISTRATION_API_KEY}
+        response = self.client.post(
+            reverse("register"),
+            {
+                "email": "newuser@example.com",
+                "username": "newuser",
+                "password": "securepass123",
+            },
+            **{"HTTP_X_API_KEY": settings.REGISTRATION_API_KEY},
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(User.objects.filter(email="newuser@example.com").exists())
+
+    def test_register_user_without_api_key(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "email": "unauthorized@example.com",
+                "username": "unauth",
+                "password": "password123",
+            },
+        )
         self.assertEqual(response.status_code, 401)
