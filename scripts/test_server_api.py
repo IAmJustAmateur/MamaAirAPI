@@ -2,7 +2,7 @@
 
 import requests
 
-BASE_URL = "http://52.4.150.16"
+BASE_URL = "http://52.4.150.16/api"
 API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser@example.com"
 PASSWORD = "testpass123"
@@ -94,7 +94,7 @@ def test_logout(refresh_token, access_token):
 if __name__ == "__main__":
     print("🔍 Running remote API test against test server...")
 
-    # test_register()
+    test_register()
     access_token, refresh_token = login()
     test_profile(access_token)
     test_summary(access_token)
