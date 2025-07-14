@@ -18,13 +18,31 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+settings_path = Path(__file__).resolve()
+print(f"Settings file path: {settings_path}")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "insecure-default-key")
+intermediate_base_dir = settings_path.parent.parent
+print(f"Intermediate BASE_DIR: {intermediate_base_dir}")
 
-DEBUG = os.getenv("DEBUG", "False") == "True"
+load_dotenv(dotenv_path=intermediate_base_dir / ".env")
+
+DJANGO_ENV = os.getenv("DJANGO_ENV", "development")
+print(f"DJANGO_ENV: {DJANGO_ENV}")
+
+if DJANGO_ENV == "production":
+    BASE_DIR = settings_path.parent
+else:
+    BASE_DIR = settings_path.parent.parent
+
+load_dotenv(dotenv_path=BASE_DIR / ".env")
+
+
+print(f"BASE_DIR: {BASE_DIR}")
+DEBUG = os.getenv("DEBUG", True).lower() in ("true", "1", "yes")
+SECRET_KEY = os.getenv(
+    "SECRET_KEY", "django-insecure-p9d!a)b726f1^*3h=h+^xkz)a@x7*(%)#11_0qsl#oy^vsb$f@"
+)
+# SECURITY WARNING: don't run with debug turned on in production!
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 

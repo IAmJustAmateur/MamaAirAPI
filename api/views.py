@@ -26,6 +26,7 @@ from .models import (
     HealthInsightSnapshot,
     AirExposureLog,
     WeeklyExposure,
+    LANGUAGE_CHOICES,
 )
 from .serializers import (
     UserProfileSerializer,
@@ -248,6 +249,31 @@ class CurrentAdviceView(APIView):
         return Response(serializer.data)
 
 
+@extend_schema(
+    summary="Log out user and blacklist refresh token",
+    description="Logs out the authenticated user by blacklisting the provided refresh token.",
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "refresh": {"type": "string", "example": "your_refresh_token_here"}
+            },
+            "required": ["refresh"],
+        }
+    },
+    responses={
+        205: OpenApiExample(
+            "Successfully logged out",
+            value={"detail": "Successfully logged out"},
+            response_only=True,
+        ),
+        400: OpenApiExample(
+            "Invalid token",
+            value={"error": "Invalid refresh token"},
+            response_only=True,
+        ),
+    },
+)
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = LogoutSerializer
@@ -276,17 +302,68 @@ class LogoutView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class PasswordChangeView(generics.UpdateAPIView):
+# views.py
+
+
+@extend_schema(
+    summary="Delete current user account",
+    description="Deletes the authenticated user's account from the system. This action is irreversible.",
+    responses={
+        204: OpenApiExample(
+            "Account deleted",
+            value={"detail": "Account deleted successfully"},
+            response_only=True,
+        )
+    },
+)
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        user.delete()
+        return Response(
+            {"detail": "Account deleted successfully"},
+            status=status.HTTP_204_NO_CONTENT,
+        )
+
+
+@extend_schema(
+    summary="Change user password",
+    description="Allows an authenticated user to change their password by providing the current and new password.",
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "old_password": {"type": "string", "example": "testpass123"},
+                "new_password": {"type": "string", "example": "newpass456"},
+            },
+            "required": ["old_password", "new_password"],
+        }
+    },
+    responses={
+        200: OpenApiExample(
+            "Password changed",
+            value={"detail": "Password changed successfully"},
+            response_only=True,
+        ),
+        400: OpenApiExample(
+            "Wrong old password",
+            value={"old_password": "Wrong password."},
+            response_only=True,
+        ),
+    },
+)
+class PasswordChangeView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PasswordChangeSerializer
 
     def get_object(self):
         return self.request.user
 
-    def update(self, request, *args, **kwargs):
-        user = self.get_object()
-        serializer = self.get_serializer(data=request.data)
-
+    def post(self, request):
+        user = request.user
+        serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         if not user.check_password(serializer.validated_data["old_password"]):
@@ -294,12 +371,11 @@ class PasswordChangeView(generics.UpdateAPIView):
                 {"old_password": "Wrong password."}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        new_password = serializer.validated_data["new_password"]
-        validate_password(new_password, user)
-        user.set_password(new_password)
+        user.set_password(serializer.validated_data["new_password"])
         user.save()
-
-        return Response({"detail": "Password successfully changed."})
+        return Response(
+            {"detail": "Password changed successfully"}, status=status.HTTP_200_OK
+        )
 
 
 @extend_schema(
@@ -355,3 +431,52 @@ class SummaryView(APIView):
             "today_journey": get_today_journey(user),
         }
         return Response(data)
+
+
+@extend_schema(
+    summary="Set preferred language for current user",
+    description=(
+        "Allows the user to update their preferred interface language. "
+        "This language will be used by the backend to localize responses like advice, messages, etc."
+    ),
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "language": {
+                    "type": "string",
+                    "enum": [code for code, _ in LANGUAGE_CHOICES],
+                    "description": "Language code, e.g., 'en', 'fr', 'sw', 'ig'",
+                }
+            },
+            "required": ["language"],
+        }
+    },
+    responses={
+        200: OpenApiExample(
+            "Success",
+            value={"message": "Language updated", "language": "fr"},
+            response_only=True,
+        ),
+        400: OpenApiExample(
+            "Invalid language",
+            value={"error": "Invalid language code"},
+            response_only=True,
+        ),
+    },
+)
+class SetLanguageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        lang = request.data.get("language")
+
+        if lang not in dict(LANGUAGE_CHOICES):
+            return Response(
+                {"error": "Invalid language code"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        request.user.language = lang
+        request.user.save()
+
+        return Response({"message": "Language updated", "language": lang})

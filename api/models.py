@@ -21,6 +21,12 @@ EXPOSURE_LEVEL_CHOICES = [
     ("Extreme", _("Extreme")),
 ]
 
+LANGUAGE_CHOICES = [
+    ("en", "English"),
+    ("fr", "French"),
+    ("sw", "Swahili"),
+]
+
 
 class User(AbstractUser):
 
@@ -44,6 +50,8 @@ class User(AbstractUser):
 
     name = models.CharField(max_length=255, null=True, blank=True)
     registered_at = models.DateTimeField(auto_now_add=True)
+
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default="en")
 
     # demographic data
     date_of_birth = models.IntegerField(null=True, blank=True)

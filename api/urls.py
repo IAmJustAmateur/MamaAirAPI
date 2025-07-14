@@ -18,6 +18,8 @@ from .views import (
     PasswordChangeView,
     WeeklyExposureView,
     SummaryView,
+    SetLanguageView,
+    DeleteAccountView,
 )
 from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -27,7 +29,9 @@ urlpatterns = [
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/password-change/", PasswordChangeView.as_view(), name="password-change"),
+    path("auth/delete-account/", DeleteAccountView.as_view(), name="delete-account"),
     path("profile/", UserProfileView.as_view(), name="profile"),
+    path("api/set-language/", SetLanguageView.as_view(), name="set-language"),
     path("lifestyle/", UserLifestyleView.as_view(), name="lifestyle"),
     path("symptoms/mommy/", UserMommySymptomsView.as_view(), name="symptoms-mommy"),
     path("symptoms/baby/", UserBabySymptomsView.as_view(), name="symptoms-baby"),
