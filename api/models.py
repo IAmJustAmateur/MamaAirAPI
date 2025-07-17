@@ -44,9 +44,10 @@ class User(AbstractUser):
         ("other", "Other"),
     ]
     email = models.EmailField(unique=True)
+    username = None
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["username"]
+    REQUIRED_FIELDS = []
 
     name = models.CharField(max_length=255, null=True, blank=True)
     registered_at = models.DateTimeField(auto_now_add=True)

@@ -33,7 +33,6 @@ class UserAdmin(BaseUserAdmin):
             {
                 "fields": (
                     "name",
-                    "username",
                     "date_of_birth",
                     "height",
                     "weight_pre_pregnancy",
@@ -63,7 +62,7 @@ class UserAdmin(BaseUserAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("email", "username", "password1", "password2"),
+                "fields": ("email", "password1", "password2"),
             },
         ),
     )

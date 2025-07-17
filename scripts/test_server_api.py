@@ -123,6 +123,7 @@ if __name__ == "__main__":
 
     test_register()
     access_token, refresh_token = login()
+
     test_profile(access_token)
     test_summary(access_token)
     test_set_language(access_token)
