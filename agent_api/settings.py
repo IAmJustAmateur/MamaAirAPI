@@ -192,7 +192,9 @@ SIMPLE_JWT = {
 
 # Static files (for nginx)
 STATIC_URL = "/static/"
-STATIC_ROOT = os.path.join(BASE_DIR, "static")
+# STATIC_ROOT = os.path.join(BASE_DIR, "static")
+STATIC_ROOT = "/app/static"
+
 
 # Time zone, language, etc. can stay default or be adjusted
 LANGUAGE_CODE = "en-us"
