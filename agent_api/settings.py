@@ -183,6 +183,12 @@ REST_FRAMEWORK = {
     ],
 }
 
+AUTHENTICATION_BACKENDS = [
+    "api.authentication.EmailBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=48),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
