@@ -4,7 +4,7 @@ import requests
 
 BASE_URL = "http://52.4.150.16/api"
 API_KEY = "super-secret-mobile-key"  # from your .env
-EMAIL = "testuser@example.com"
+EMAIL = "testuser3@example.com"
 PASSWORD = "testpass123"
 
 
@@ -69,7 +69,7 @@ def test_set_language(access_token):
 def test_register():
     email = EMAIL
     password = PASSWORD
-    data = {"email": email, "username": "tempuser", "password": password}
+    data = {"email": email, "username": "tempuser3", "password": password}
     r = post(f"{BASE_URL}/auth/register/", data, headers={"X-API-Key": API_KEY})
     if r.status_code == 201:
         log("POST /auth/register OK")
@@ -91,6 +91,33 @@ def test_logout(refresh_token, access_token):
         fail(f"POST /logout failed with {r.status_code}")
 
 
+def test_upload_movements(csv_path, token):
+    url = f"{BASE_URL}/movements/upload"
+    headers = {"Authorization": f"Bearer {token}"}
+    files = {"file": open(csv_path, "rb")}
+
+    response = requests.post(url, files=files, headers=headers)
+    print(f"Status: {response.status_code}")
+    print("Response:", response.json())
+    return response
+
+
+def test_delete_account(token):
+    url = f"{BASE_URL}/auth/delete-account/"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = requests.delete(url, headers=headers)
+    print(f"Status: {response.status_code}")
+    print("Response:", response.text)
+
+    if response.status_code == 204:
+        print("[✓] Account deleted")
+    else:
+        print("[✗] Failed to delete account")
+
+    return response
+
+
 if __name__ == "__main__":
     print("🔍 Running remote API test against test server...")
 
@@ -99,6 +126,16 @@ if __name__ == "__main__":
     test_profile(access_token)
     test_summary(access_token)
     test_set_language(access_token)
+
+    print("\n✅ Uploading valid CSV:")
+    test_upload_movements("scripts/test_data/valid_movements.csv", access_token)
+
+    print("\n⚠️ Uploading invalid CSV:")
+    test_upload_movements("scripts/test_data/invalid_movements.csv", access_token)
+
     test_logout(refresh_token, access_token)
+
+    print("\n🗑️ Deleting user account:")
+    test_delete_account(access_token)
 
     print("\n✅ ALL TESTS PASSED.")
