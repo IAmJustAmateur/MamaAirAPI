@@ -129,7 +129,6 @@ All endpoints are prefixed with `/api/`.
      ```json
      {
        "email": "user@example.com",
-       "username": "user123",
        "password": "strongpassword"
      }
      ```
@@ -139,7 +138,6 @@ All endpoints are prefixed with `/api/`.
      {
        "id": 1,
        "email": "user@example.com",
-       "username": "user123"
      }
      ```
 

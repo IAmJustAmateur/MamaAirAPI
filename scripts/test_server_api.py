@@ -69,7 +69,7 @@ def test_set_language(access_token):
 def test_register():
     email = EMAIL
     password = PASSWORD
-    data = {"email": email, "username": "tempuser3", "password": password}
+    data = {"email": email, "password": password}
     r = post(f"{BASE_URL}/auth/register/", data, headers={"X-API-Key": API_KEY})
     if r.status_code == 201:
         log("POST /auth/register OK")

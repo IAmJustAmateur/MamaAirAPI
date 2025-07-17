@@ -41,7 +41,7 @@ class UserAdmin(BaseUserAdmin):
         ),
         (
             "Pregnancy",
-            {"fields": ("race", "country", "is_first_pregnancy", "trimester")},
+            {"fields": ("race", "country", "is_first_pregnancy", "week_of_pregnancy")},
         ),
         ("Settings", {"fields": ("tracking_enabled", "notifications_enabled")}),
         (

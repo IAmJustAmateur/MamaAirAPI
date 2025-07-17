@@ -12,7 +12,7 @@ from django.conf import settings
 class AuthTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            email="test@example.com", username="testuser", password="testpass123"
+            email="test@example.com", password="testpass123"
         )
         self.token_url = reverse("token_obtain_pair")
         self.refresh_url = reverse("token_refresh")
@@ -136,7 +136,6 @@ class AuthTests(APITestCase):
             reverse("register"),
             {
                 "email": "newuser@example.com",
-                "username": "newuser",
                 "password": "securepass123",
             },
             **{"HTTP_X_API_KEY": settings.REGISTRATION_API_KEY},
@@ -149,7 +148,6 @@ class AuthTests(APITestCase):
             reverse("register"),
             {
                 "email": "unauthorized@example.com",
-                "username": "unauth",
                 "password": "password123",
             },
         )
