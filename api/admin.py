@@ -21,9 +21,6 @@ class EmailAdminAuthenticationForm(AuthenticationForm):
         label=_("Email"), widget=forms.TextInput(attrs={"autofocus": True})
     )
 
-    def confirm_login_allowed(self, user):
-        pass
-
 
 # 👤 Кастомный сайт админки с формой логина по email
 class CustomAdminSite(AdminSite):

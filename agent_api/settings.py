@@ -11,12 +11,16 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
 from pathlib import Path
 
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 settings_path = Path(__file__).resolve()
 print(f"Settings file path: {settings_path}")
@@ -80,6 +84,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # my custom middleware
+    "api.middleware.AdminLoginDebugMiddleware",
+    # standard middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -207,3 +214,23 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} [{name}.{funcName}] - {message}",
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "stream": sys.stdout},
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}
