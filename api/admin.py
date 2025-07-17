@@ -13,6 +13,7 @@ from .models import (
     AirExposureLog,
     HealthInsightSnapshot,
 )
+from django.contrib.auth import authenticate, login
 
 
 # 👤 Форма логина по email для админки
@@ -20,6 +21,9 @@ class EmailAdminAuthenticationForm(AuthenticationForm):
     username = forms.EmailField(
         label=_("Email"), widget=forms.TextInput(attrs={"autofocus": True})
     )
+
+    def confirm_login_allowed(self, user):
+        login(self.request, user)
 
 
 # 👤 Кастомный сайт админки с формой логина по email
