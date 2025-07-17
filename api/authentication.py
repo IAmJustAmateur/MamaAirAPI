@@ -10,10 +10,10 @@ class EmailBackend(ModelBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
         try:
             user = UserModel.objects.get(email=username)
-            if request is not None:
-                from django.contrib.auth import login
+            # if request is not None:
+            #     from django.contrib.auth import login
 
-                login(request, user)
+            #     login(request, user)
         except UserModel.DoesNotExist:
             return None
 
