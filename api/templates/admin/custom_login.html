@@ -10,7 +10,7 @@
   {% endif %}
 
   {% comment %} <form method="post" novalidate> {% endcomment %}
-  <form method="post" action="{% url 'custom_admin_login' %}">
+  <form method="post" action="{{ request.path }}">
     {% csrf_token %}
     <div>
       <label for="id_email">Email:</label>
