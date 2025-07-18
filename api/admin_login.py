@@ -9,6 +9,8 @@ from django.urls import reverse
 
 import logging
 
+from .models import User
+
 logger = logging.getLogger(__name__)
 logger.info("=== Admin login debug ===")
 
@@ -53,6 +55,19 @@ class CustomAdminLoginView(View):
                 logger.info(f"Redirecting to: {response}")
                 logger.info(f"Response location: {response['Location']}")
                 return redirect("/admin/")
+        else:
+            logger.info(f"Invalid form data: {form.errors}")
+            email = request.POST.get("email")
+            password = request.POST.get("password")
+            logger.info(f"Email: {email}")
+            logger.info(f"Password: {password}")
+            user = User.objects.filter(email=email).first()
+            if user:
+                logger.info(f"User found: {user}")
+                logger.info(f"email: {user.email}")
+            else:
+                logger.info("User not found")
+
         return render(
             request,
             self.template_name,
