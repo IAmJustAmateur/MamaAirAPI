@@ -24,10 +24,10 @@ class CustomAdminLoginView(View):
     def get(self, request):
         logger.info(f"Custom admin login view. Request method: {request.method}")
         logger.info(f"Request path: {request.path}")
-        logger.info(
-            "Rendering custom_login.html with action:",
-            str(reverse("custom_admin_login")),
-        )
+        # logger.info(
+        #     "Rendering custom_login.html with action:",
+        #     str(reverse("custom_admin_login")),
+        # )
         form = EmailLoginForm()
         r = render(request, self.template_name, {"form": form})
         return r
@@ -53,6 +53,6 @@ class CustomAdminLoginView(View):
 
 
 # Подключение URL
-custom_admin_login_url = path(
-    "admin/login/", CustomAdminLoginView.as_view(), name="custom_admin_login"
-)
+# custom_admin_login_url = path(
+#     "admin/login/", CustomAdminLoginView.as_view(), name="custom_admin_login"
+# )
