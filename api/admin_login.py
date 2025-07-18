@@ -21,13 +21,14 @@ class CustomAdminLoginView(View):
     template_name = "admin/custom_login.html"
 
     def get(self, request):
+        logger.info(f"Custom admin login view. Request method: {request.method}")
         form = EmailLoginForm()
         r = render(request, self.template_name, {"form": form})
         return r
 
     def post(self, request):
-        form = EmailLoginForm(request.POST)
         logger.info(f"Custom admin login view. Request method: {request.method}")
+        form = EmailLoginForm(request.POST)
         logger.info(f"Form data: {request.POST}")
         if form.is_valid():
             email = form.cleaned_data["email"]
