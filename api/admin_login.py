@@ -42,7 +42,11 @@ class CustomAdminLoginView(View):
             user = authenticate(request, username=email, password=password)
             logger.info(f"User authentication: {user}")
             if user is not None and user.is_active and user.is_staff:
+                response = redirect("/admin/")
                 login(request, user)
+                for h, v in response.items():
+                    if h.lower() == "set-cookie":
+                        logger.info(f"Set-Cookie header: {v}")
                 logger.info(f"User logged in: {user}")
                 user.backend = "api.authentication.EmailBackend"
                 response = redirect("/admin/")

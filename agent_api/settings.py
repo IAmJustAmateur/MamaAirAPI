@@ -277,3 +277,4 @@ logger.info("Logging initialized")
 # ! TODO: remove this for https
 SESSION_COOKIE_SECURE = False  # если HTTP
 CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SAMESITE = "Lax"
