@@ -4,6 +4,9 @@ from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth import get_user_model
 
 UserModel = get_user_model()
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EmailBackend(ModelBackend):
@@ -15,8 +18,11 @@ class EmailBackend(ModelBackend):
 
             #     login(request, user)
         except UserModel.DoesNotExist:
+            logger.info(f"User with email {username} does not exist")
             return None
 
         if user.check_password(password):
+            logger.info(f"User authenticated: {user}")
             return user
+
         return None
