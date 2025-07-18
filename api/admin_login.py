@@ -5,6 +5,7 @@ from django.views import View
 from django import forms
 from django.urls import path
 from django.utils.translation import gettext_lazy as _
+from django.urls import reverse
 
 import logging
 
@@ -22,6 +23,10 @@ class CustomAdminLoginView(View):
 
     def get(self, request):
         logger.info(f"Custom admin login view. Request method: {request.method}")
+        logger.info(f"Request path: {request.path}")
+        logger.info(
+            "Rendering custom_login.html with action:", reverse("custom_admin_login")
+        )
         form = EmailLoginForm()
         r = render(request, self.template_name, {"form": form})
         return r
