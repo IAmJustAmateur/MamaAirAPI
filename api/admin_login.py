@@ -6,6 +6,7 @@ from django import forms
 from django.urls import path
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse
+from django.http import HttpResponse
 
 import logging
 
@@ -46,7 +47,8 @@ class CustomAdminLoginView(View):
             user = authenticate(request, username=email, password=password)
             logger.info(f"User authentication: {user}")
             if user is not None and user.is_active and user.is_staff:
-                response = redirect("/admin/")
+                # response = redirect("/admin/")
+                response = HttpResponse("Logged in!")
                 login(request, user)
                 for h, v in response.items():
                     if h.lower() == "set-cookie":
@@ -56,7 +58,7 @@ class CustomAdminLoginView(View):
                 response = redirect("/admin/")
                 logger.info(f"Redirecting to: {response}")
                 logger.info(f"Response location: {response['Location']}")
-                return redirect("/admin/")
+                return response
         else:
             logger.info(f"Invalid form data: {form.errors}")
             email = request.POST.get("email")
