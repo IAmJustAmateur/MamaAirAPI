@@ -227,7 +227,7 @@ LOGGING = {
         },
     },
     "handlers": {
-        "console": {"class": "logging.StreamHandler", "stream": sys.stdout},
+        "console": {"class": "logging.StreamHandler"},
     },
     "root": {
         "handlers": ["console"],

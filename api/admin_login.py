@@ -30,10 +30,10 @@ class CustomAdminLoginView(View):
             email = form.cleaned_data["email"]
             password = form.cleaned_data["password"]
             user = authenticate(request, username=email, password=password)
-            logger.debug(f"User authentication: {user}")
+            logger.info(f"User authentication: {user}")
             if user is not None and user.is_active and user.is_staff:
                 login(request, user)
-                logger.debug(f"User logged in: {user}")
+                logger.info(f"User logged in: {user}")
                 return redirect("/admin/")
         return render(
             request,
