@@ -24,5 +24,8 @@ if [ "$DJANGO_ENV" = "production" ]; then
   python manage.py collectstatic --noinput
 fi
 
-echo "Starting Uvicorn server..."
-exec uvicorn agent_api.asgi:application --host 0.0.0.0 --port 8000 --proxy-headers
+#echo "Starting Uvicorn server..."
+#exec uvicorn agent_api.asgi:application --host 0.0.0.0 --port 8000 --proxy-headers
+
+echo "Starting Gunicorn WSGI server..."
+exec gunicorn agent_api.wsgi:application --bind 0.0.0.0:8000
