@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 import logging
 
 logger = logging.getLogger(__name__)
+logger.info("=== Admin login debug ===")
 
 
 class EmailLoginForm(forms.Form):
