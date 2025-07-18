@@ -99,7 +99,10 @@ class User(AbstractUser):
     notifications_enabled = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"{self.name} ({self.email})"
+        if self.name:
+            return f"{self.name} ({self.email})"
+        else:
+            return f"{self.email}"
 
     @property
     def bmi(self):

@@ -25,4 +25,4 @@ if [ "$DJANGO_ENV" = "production" ]; then
 fi
 
 echo "Starting Uvicorn server..."
-exec uvicorn agent_api.asgi:application --host 0.0.0.0 --port 8000
+exec uvicorn agent_api.asgi:application --host 0.0.0.0 --port 8000 --proxy-headers

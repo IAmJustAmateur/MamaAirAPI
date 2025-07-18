@@ -14,7 +14,7 @@ class AdminLoginDebugMiddleware:
         response = self.get_response(request)
 
         if is_admin and is_post:
-            logger.info("=== Admin login debug ===")
+            logger.info("=== Middleware: Admin login debug ===")
             logger.info(f"User: {getattr(request, 'user', 'N/A')}")
             logger.info(
                 f"Is Authenticated: {getattr(request.user, 'is_authenticated', False)}"

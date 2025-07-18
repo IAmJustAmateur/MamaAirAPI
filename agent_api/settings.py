@@ -272,3 +272,8 @@ LOGGING = {
 
 logger = logging.getLogger(__name__)
 logger.info("Logging initialized")
+
+# http
+# ! TODO: remove this for https
+SESSION_COOKIE_SECURE = False  # если HTTP
+CSRF_COOKIE_SECURE = False
