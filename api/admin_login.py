@@ -44,6 +44,10 @@ class CustomAdminLoginView(View):
             if user is not None and user.is_active and user.is_staff:
                 login(request, user)
                 logger.info(f"User logged in: {user}")
+                user.backend = "api.authentication.EmailBackend"
+                response = redirect("/admin/")
+                logger.info(f"Redirecting to: {response}")
+                logger.info(f"Response location: {response['Location']}")
                 return redirect("/admin/")
         return render(
             request,
