@@ -49,12 +49,12 @@ class CustomAdminLoginView(View):
             if user is not None and user.is_active and user.is_staff:
                 # response = redirect("/admin/")
                 response = HttpResponse("Logged in!")
+                user.backend = "api.authentication.EmailBackend"
                 login(request, user)
                 for h, v in response.items():
                     if h.lower() == "set-cookie":
                         logger.info(f"Set-Cookie header: {v}")
                 logger.info(f"User logged in: {user}")
-                user.backend = "api.authentication.EmailBackend"
                 response = redirect("/admin/")
                 logger.info(f"Redirecting to: {response}")
                 logger.info(f"Response location: {response['Location']}")
