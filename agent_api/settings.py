@@ -42,13 +42,13 @@ load_dotenv(dotenv_path=BASE_DIR / ".env")
 
 
 print(f"BASE_DIR: {BASE_DIR}")
-DEBUG = os.getenv("DEBUG", True).lower() in ("true", "1", "yes")
+DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
 SECRET_KEY = os.getenv(
     "SECRET_KEY", "django-insecure-p9d!a)b726f1^*3h=h+^xkz)a@x7*(%)#11_0qsl#oy^vsb$f@"
 )
 # SECURITY WARNING: don't run with debug turned on in production!
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1").split(",")
 
 REGISTRATION_API_KEY = os.getenv("REGISTRATION_API_KEY")
 
@@ -99,7 +99,7 @@ MIDDLEWARE = [
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

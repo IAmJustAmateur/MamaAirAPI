@@ -14,6 +14,9 @@ from rest_framework_simplejwt.token_blacklist.models import (
     OutstandingToken,
 )
 
+from django.contrib.auth import authenticate, login
+from django.views import View
+from django.shortcuts import render, redirect
 
 from drf_spectacular.utils import (
     extend_schema,

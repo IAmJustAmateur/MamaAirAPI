@@ -21,8 +21,10 @@ from django.contrib import admin
 from django.urls import path
 
 from api.admin import admin_site
+from api.admin_login import custom_admin_login_url
 
 urlpatterns = [
+    custom_admin_login_url,
     path("admin/", admin_site.urls),
     path("api/", include("api.urls")),
 ]
