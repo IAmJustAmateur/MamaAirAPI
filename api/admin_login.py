@@ -41,6 +41,8 @@ class CustomAdminLoginView(View):
         if form.is_valid():
             email = form.cleaned_data["email"]
             password = form.cleaned_data["password"]
+            logger.info(f"Email: {email}")
+            logger.info(f"Password: {password}")
             user = authenticate(request, username=email, password=password)
             logger.info(f"User authentication: {user}")
             if user is not None and user.is_active and user.is_staff:
