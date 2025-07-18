@@ -225,12 +225,50 @@ LOGGING = {
             "style": "{",
             "datefmt": "%Y-%m-%d %H:%M:%S",
         },
+        "simple": {
+            "format": "[{levelname}] {message}",
+            "style": "{",
+        },
     },
     "handlers": {
-        "console": {"class": "logging.StreamHandler"},
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",  # or "simple" if you want
+        },
     },
     "root": {
         "handlers": ["console"],
-        "level": "INFO",
+        "level": "INFO",  # can be DEBUG in dev
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "uvicorn": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "uvicorn.error": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "uvicorn.access": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "api": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
     },
 }
+
+
+logger = logging.getLogger(__name__)
+logger.info("Logging initialized")

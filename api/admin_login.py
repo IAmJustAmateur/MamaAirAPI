@@ -26,6 +26,8 @@ class CustomAdminLoginView(View):
 
     def post(self, request):
         form = EmailLoginForm(request.POST)
+        logger.info(f"Custom admin login view. Request method: {request.method}")
+        logger.info(f"Form data: {request.POST}")
         if form.is_valid():
             email = form.cleaned_data["email"]
             password = form.cleaned_data["password"]
