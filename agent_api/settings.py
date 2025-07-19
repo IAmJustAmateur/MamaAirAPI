@@ -84,10 +84,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    # my custom middleware
-    "api.middleware.AdminLoginDebugMiddleware",
     # standard middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
+    # my custom middleware
+    "api.middleware.AdminLoginDebugMiddleware",
+    #
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
