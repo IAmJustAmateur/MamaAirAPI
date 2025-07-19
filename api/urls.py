@@ -21,6 +21,8 @@ from .views import (
     SetLanguageView,
     DeleteAccountView,
     RegisterView,
+    # remove later
+    test_login,
 )
 from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -52,4 +54,7 @@ urlpatterns = [
     # Swagger/OpenAPI
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+]
+urlpatterns += [
+    path("test-login/", test_login, name="test-login"),
 ]

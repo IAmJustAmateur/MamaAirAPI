@@ -529,3 +529,15 @@ class SetLanguageView(APIView):
         request.user.save()
 
         return Response({"message": "Language updated", "language": lang})
+
+
+from django.contrib.auth import authenticate, login
+from django.http import HttpResponse
+
+
+def test_login(request):
+    user = authenticate(request, username="admin@example.com", password="admin")
+    if user is not None:
+        login(request, user)
+        return HttpResponse("✅ Logged in. Check your cookies.")
+    return HttpResponse("❌ Login failed.")
