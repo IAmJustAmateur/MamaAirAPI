@@ -11,6 +11,8 @@ class AdminLoginDebugMiddleware:
         is_admin = request.path.startswith("/admin/")
         is_post = request.method == "POST"
 
+        request.session.modified = True
+
         response = self.get_response(request)
 
         if is_admin and is_post:
