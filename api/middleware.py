@@ -24,4 +24,8 @@ class AdminLoginDebugMiddleware:
             logger.info(f"Response status: {response.status_code}")
             logger.info(f"Set-Cookie headers: {response.headers.get('Set-Cookie')}")
 
+            logger.info("Response headers:")
+            for header, value in response.headers.items():
+                logger.info(f"{header}: {value}")
+
         return response
