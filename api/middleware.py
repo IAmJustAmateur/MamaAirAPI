@@ -27,7 +27,6 @@ class AdminLoginDebugMiddleware:
 
             # 🟡 Теперь форсируем сохранение изменённой сессии
             request.session.modified = True
-            request.session.save()
 
             logger.info(f"Response status: {response.status_code}")
             logger.info(f"Set-Cookie headers: {response.headers.get('Set-Cookie')}")
