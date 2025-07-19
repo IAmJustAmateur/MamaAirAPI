@@ -11,8 +11,10 @@ logger = logging.getLogger(__name__)
 
 class EmailBackend(ModelBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
+        logger.info(f"Authenticating user with email: {username}")
         try:
             user = UserModel.objects.get(email=username)
+            logger.info(f"User found: {user}")
             # if request is not None:
             #     from django.contrib.auth import login
 
@@ -28,6 +30,7 @@ class EmailBackend(ModelBackend):
         return None
 
     def get_user(self, user_id):
+        logger.info(f"Retrieving user with ID: {user_id}")
         try:
             user = UserModel.objects.get(pk=user_id)
             logger.info(f"User retrieved: {user}")

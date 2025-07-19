@@ -24,7 +24,7 @@ from django.urls import path
 
 # from api.admin_login import custom_admin_login_url
 
-from api.admin_login import CustomAdminLoginView
+# from api.admin_login import CustomAdminLoginView
 
 # admin_site.login = CustomAdminLoginView.as_view()
 
