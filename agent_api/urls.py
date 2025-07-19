@@ -29,6 +29,6 @@ from api.admin_login import CustomAdminLoginView
 admin_site.login = CustomAdminLoginView.as_view()
 
 urlpatterns = [
-    path("admin/", admin_site.urls),
+    path("admin/", admin.site.urls),
     path("api/", include("api.urls")),
 ]

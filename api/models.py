@@ -12,7 +12,20 @@ from django.utils.translation import gettext_lazy as _
 
 # models.py
 
-from django.contrib.auth.models import BaseUserManager
+from django.contrib.auth.models import (
+    BaseUserManager,
+    AbstractBaseUser,
+    PermissionsMixin,
+)
+
+
+class MyUser(AbstractBaseUser):
+    USERNAME_FIELD = "email"
+    email = models.EmailField(
+        "email", unique=True
+    )  # changes email to unique and blank to false
+    REQUIRED_FIELDS = []  # removes email from REQUIRED_FIELDS
+    username = None
 
 
 class CustomUserManager(BaseUserManager):
@@ -55,7 +68,7 @@ LANGUAGE_CHOICES = [
 ]
 
 
-class User(AbstractUser):
+class User(MyUser, PermissionsMixin):
 
     objects = CustomUserManager()
 
@@ -72,11 +85,9 @@ class User(AbstractUser):
         ("ghana", "Ghana"),
         ("other", "Other"),
     ]
-    email = models.EmailField(unique=True)
-    username = None
 
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = []
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
 
     name = models.CharField(max_length=255, null=True, blank=True)
     registered_at = models.DateTimeField(auto_now_add=True)
