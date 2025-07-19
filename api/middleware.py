@@ -12,6 +12,7 @@ class AdminLoginDebugMiddleware:
         is_post = request.method == "POST"
 
         request.session.modified = True
+        request.session.save()
 
         response = self.get_response(request)
 
@@ -23,6 +24,11 @@ class AdminLoginDebugMiddleware:
             )
             logger.info(f"Session key: {request.session.session_key}")
             logger.info(f"Session data: {dict(request.session.items())}")
+
+            # 🟡 Теперь форсируем сохранение изменённой сессии
+            request.session.modified = True
+            request.session.save()
+
             logger.info(f"Response status: {response.status_code}")
             logger.info(f"Set-Cookie headers: {response.headers.get('Set-Cookie')}")
 
