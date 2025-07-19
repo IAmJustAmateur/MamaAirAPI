@@ -26,3 +26,9 @@ class EmailBackend(ModelBackend):
             return user
 
         return None
+
+    def get_user(self, user_id):
+        try:
+            return UserModel.objects.get(pk=user_id)
+        except UserModel.DoesNotExist:
+            return None
