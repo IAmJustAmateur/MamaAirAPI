@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib import admin
-from django.contrib.admin import AdminSite
+
+# from django.contrib.admin import AdminSite
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import AuthenticationForm
 from django.utils.translation import gettext_lazy as _
@@ -27,15 +28,16 @@ class EmailAdminAuthenticationForm(AuthenticationForm):
 
 
 # 👤 Кастомный сайт админки с формой логина по email
-class CustomAdminSite(AdminSite):
-    login_form = EmailAdminAuthenticationForm
+# class CustomAdminSite(AdminSite):
+#     login_form = EmailAdminAuthenticationForm
 
 
-admin_site = CustomAdminSite(name="custom_admin")
+# admin_site = CustomAdminSite(name="custom_admin")
 
 
 # 👤 UserAdmin без username
-@admin.register(User, site=admin_site)
+
+
 class UserAdmin(BaseUserAdmin):
     list_display = (
         "email",
@@ -95,7 +97,9 @@ class UserAdmin(BaseUserAdmin):
     filter_horizontal = ("groups", "user_permissions")
 
 
-@admin.register(UserLifeStyle, site=admin_site)
+admin.site.register(User, UserAdmin)
+
+
 class UserLifeStyleAdmin(admin.ModelAdmin):
     list_display = (
         "user",
@@ -107,36 +111,49 @@ class UserLifeStyleAdmin(admin.ModelAdmin):
     search_fields = ("user__email",)
 
 
-@admin.register(UserMommySymptoms, site=admin_site)
+admin.site.register(UserLifeStyle, UserLifeStyleAdmin)
+
+
 class UserMommySymptomsAdmin(admin.ModelAdmin):
     list_display = ("user", "symptom", "severity", "date_recorded")
     list_filter = ("symptom", "date_recorded")
     search_fields = ("user__email",)
 
 
-@admin.register(UserBabySymptoms, site=admin_site)
+admin.site.register(UserMommySymptoms, UserMommySymptomsAdmin)
+
+
 class UserBabySymptomsAdmin(admin.ModelAdmin):
     list_display = ("user", "symptom", "severity", "date_recorded")
     list_filter = ("symptom", "date_recorded")
     search_fields = ("user__email",)
 
 
-@admin.register(Movement, site=admin_site)
+admin.site.register(UserBabySymptoms, UserBabySymptomsAdmin)
+
+
 class MovementAdmin(admin.ModelAdmin):
     list_display = ("user", "latitude", "longitude", "timestamp")
     search_fields = ("user__email",)
     list_filter = ("timestamp",)
 
 
-@admin.register(AirExposureLog, site=admin_site)
+admin.site.register(Movement, MovementAdmin)
+
+
 class AirExposureLogAdmin(admin.ModelAdmin):
     list_display = ("user", "timestamp", "aqi", "pm25", "pm10", "indoor")
     list_filter = ("indoor", "timestamp")
     search_fields = ("user__email",)
 
 
-@admin.register(HealthInsightSnapshot, site=admin_site)
+admin.site.register(AirExposureLog, AirExposureLogAdmin)
+
+
 class HealthInsightSnapshotAdmin(admin.ModelAdmin):
     list_display = ("user", "created_at", "source")
     list_filter = ("source", "created_at")
     search_fields = ("user__email",)
+
+
+admin.site.register(HealthInsightSnapshot, HealthInsightSnapshotAdmin)
