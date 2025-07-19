@@ -87,7 +87,7 @@ MIDDLEWARE = [
     # standard middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     # my custom middleware
-    "api.middleware.AdminLoginDebugMiddleware",
+    # "api.middleware.AdminLoginDebugMiddleware",
     #
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
