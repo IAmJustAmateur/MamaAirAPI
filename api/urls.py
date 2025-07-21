@@ -27,7 +27,7 @@ from .views import (
 from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
-app_name = "api"
+# app_name = "api"
 
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
