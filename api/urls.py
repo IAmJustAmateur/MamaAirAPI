@@ -22,10 +22,12 @@ from .views import (
     DeleteAccountView,
     RegisterView,
     # remove later
-    test_login,
+    login_view,
 )
 from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+app_name = "api"
 
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
@@ -56,5 +58,5 @@ urlpatterns = [
     path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]
 urlpatterns += [
-    path("test-login/", test_login, name="test-login"),
+    path("login/", login_view, name="login"),
 ]

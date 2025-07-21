@@ -541,3 +541,16 @@ def test_login(request):
         login(request, user)
         return HttpResponse("✅ Logged in. Check your cookies.")
     return HttpResponse("❌ Login failed.")
+
+
+def login_view(request):
+    if request.method == "POST":
+        email = request.POST.get("email")
+        password = request.POST.get("password")
+        user = authenticate(request, username=email, password=password)
+        if user is not None:
+            login(request, user)
+            return HttpResponse("Logged in successfully")
+        else:
+            return HttpResponse("Invalid credentials", status=401)
+    return render(request, "api/custom_login.html")  # Render a simple login form
