@@ -102,6 +102,20 @@ def test_upload_movements(csv_path, token):
     return response
 
 
+def test_upload_mommy_symptoms(data, token):
+    url = f"{BASE_URL}/symptoms/mommy/"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = requests.post(url, json=data, headers=headers)
+    print(f"Status: {response.status_code}")
+    print("Response:", response.json())
+    if response.status_code == 201:
+        print("[✓] Mommy symptom recorded successfully")
+    else:
+        print("[✗] Failed to record mommy symptom")
+    return response
+
+
 def test_delete_account(token):
     url = f"{BASE_URL}/auth/delete-account/"
     headers = {"Authorization": f"Bearer {token}"}
@@ -130,6 +144,15 @@ if __name__ == "__main__":
 
     print("\n✅ Uploading valid CSV:")
     test_upload_movements("scripts/test_data/valid_movements.csv", access_token)
+
+    payload = {
+        "symptom": "Headache",
+        "user": 1,  # Assuming user ID 1 exists
+        "severity": 3,
+        "date_recorded": "2025-07-18",
+    }
+    print("\n✅ Uploading valid mommy symptom:")
+    test_upload_mommy_symptoms(payload, access_token)
 
     print("\n⚠️ Uploading invalid CSV:")
     test_upload_movements("scripts/test_data/invalid_movements.csv", access_token)
