@@ -38,7 +38,7 @@ if DJANGO_ENV == "production":
     TEMPLATE_DIR = BASE_DIR / "templates"
 else:
     BASE_DIR = settings_path.parent.parent
-    TEMPLATE_DIR = settings_path.parent / "templates"
+    TEMPLATE_DIR = settings_path / "templates"
 
 
 load_dotenv(dotenv_path=BASE_DIR / ".env")
