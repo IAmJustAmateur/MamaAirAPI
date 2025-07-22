@@ -35,8 +35,11 @@ print(f"DJANGO_ENV: {DJANGO_ENV}")
 
 if DJANGO_ENV == "production":
     BASE_DIR = settings_path.parent
+    TEMPLATE_DIR = BASE_DIR / "templates"
 else:
     BASE_DIR = settings_path.parent.parent
+    TEMPLATE_DIR = settings_path.parent / "templates"
+
 
 load_dotenv(dotenv_path=BASE_DIR / ".env")
 
@@ -101,7 +104,7 @@ MIDDLEWARE = [
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [TEMPLATE_DIR],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
