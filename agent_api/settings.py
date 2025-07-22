@@ -21,12 +21,13 @@ from pathlib import Path
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 settings_path = Path(__file__).resolve()
-print(f"Settings file path: {settings_path}")
+logger.info(f"Settings file path: {settings_path}")
 
 intermediate_base_dir = settings_path.parent.parent
-print(f"Intermediate BASE_DIR: {intermediate_base_dir}")
+logger.info(f"Intermediate BASE_DIR: {intermediate_base_dir}")
 
 load_dotenv(dotenv_path=intermediate_base_dir / ".env")
 
@@ -35,10 +36,10 @@ print(f"DJANGO_ENV: {DJANGO_ENV}")
 
 if DJANGO_ENV == "production":
     BASE_DIR = settings_path.parent
-    TEMPLATE_DIR = BASE_DIR / "templates"
 else:
     BASE_DIR = settings_path.parent.parent
-    TEMPLATE_DIR = settings_path / "templates"
+TEMPLATE_DIR = BASE_DIR / "templates"
+logger.info(f"BASE_DIR: {BASE_DIR}, TEMPLATE_DIR: {TEMPLATE_DIR}")
 
 
 load_dotenv(dotenv_path=BASE_DIR / ".env")
@@ -125,7 +126,7 @@ ASGI_APPLICATION = "agent_api.asgi.application"  # required for uvicorn
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if DEBUG:
+if DJANGO_ENV != "production":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
