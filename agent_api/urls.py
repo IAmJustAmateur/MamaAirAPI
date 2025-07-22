@@ -25,4 +25,5 @@ from api.admin import admin_site
 urlpatterns = [
     path("admin/", admin_site.urls),
     path("api/", include("api.urls")),
+    path("demo/", include("demo_interface.urls")),
 ]

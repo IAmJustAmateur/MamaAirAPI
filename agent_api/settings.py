@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "api",
+    "demo_interface",
     # third-party apps
     "drf_spectacular",
 ]
@@ -99,7 +100,7 @@ MIDDLEWARE = [
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [os.path.join(BASE_DIR, "templates")],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -234,3 +235,5 @@ LOGGING = {
         "level": "INFO",
     },
 }
+
+LOGOUT_REDIRECT_URL = "/api/login/"

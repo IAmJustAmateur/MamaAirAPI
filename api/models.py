@@ -165,7 +165,6 @@ class UserMommySymptoms(models.Model):
         User, on_delete=models.CASCADE, related_name="mommy_symptoms"
     )
     symptom = models.CharField(max_length=255, choices=MOMMY_SYMPTOM_CHOICES)
-    severity = models.IntegerField()  # 1-5 scale
     date_recorded = models.DateField(default=date.today)
 
     class Meta:
@@ -173,7 +172,7 @@ class UserMommySymptoms(models.Model):
         ordering = ["-date_recorded"]
 
     def __str__(self):
-        return f"{self.user.email} - {self.symptom} ({self.severity})"
+        return f"{self.user.email} - {self.symptom}"
 
 
 class UserBabySymptoms(models.Model):
@@ -185,7 +184,6 @@ class UserBabySymptoms(models.Model):
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="symptoms")
     symptom = models.CharField(max_length=255, choices=BABY_SYMPTOM_CHOICES)
-    severity = models.IntegerField(blank=True, null=True)  # 1-5 scale
     date_recorded = models.DateField(default=date.today)
 
     class Meta:
@@ -193,7 +191,7 @@ class UserBabySymptoms(models.Model):
         ordering = ["-date_recorded"]
 
     def __str__(self):
-        return f"{self.user.email} - {self.symptom} ({self.severity})"
+        return f"{self.user.email} - {self.symptom}"
 
 
 class Movement(models.Model):

@@ -109,14 +109,14 @@ class UserLifeStyleAdmin(admin.ModelAdmin):
 
 @admin.register(UserMommySymptoms, site=admin_site)
 class UserMommySymptomsAdmin(admin.ModelAdmin):
-    list_display = ("user", "symptom", "severity", "date_recorded")
+    list_display = ("user", "symptom", "date_recorded")
     list_filter = ("symptom", "date_recorded")
     search_fields = ("user__email",)
 
 
 @admin.register(UserBabySymptoms, site=admin_site)
 class UserBabySymptomsAdmin(admin.ModelAdmin):
-    list_display = ("user", "symptom", "severity", "date_recorded")
+    list_display = ("user", "symptom", "date_recorded")
     list_filter = ("symptom", "date_recorded")
     search_fields = ("user__email",)
 

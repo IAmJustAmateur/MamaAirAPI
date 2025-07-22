@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}User List{% endblock %}
+
+{% block content %}
+
+<h2>Add Mommy Symptom</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ mommy_form.as_p }}
+  <button name="submit_mommy" type="submit">Submit Mommy Symptom</button>
+</form>
+
+<h2>Add Baby Symptom</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ baby_form.as_p }}
+  <button name="submit_baby" type="submit">Submit Baby Symptom</button>
+</form>
+
+<h2>Upload Movement CSV</h2>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  {{ movement_upload_form.as_p }}
+  <button name="upload_movements" type="submit">Upload Movements</button>
+</form>
+
+<h2>Generate Random Movements</h2>
+<form method="post">
+  {% csrf_token %}
+  <select name="generate_user">
+    {% for user in users %}
+      <option value="{{ user.id }}">{{ user.email }}</option>
+    {% endfor %}
+  </select>
+  <button name="generate_movements" type="submit">Generate</button>
+</form>
+
+{% endblock %}
