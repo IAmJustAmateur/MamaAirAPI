@@ -14,7 +14,7 @@ from django.contrib.auth.decorators import user_passes_test
 
 @user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
 def user_list(request):
-    users = User.objects.exclude(id=request.user.id)
+    users = User.objects.exclude(is_superuser=True).order_by("email")
     return render(request, "demo_interface/user_list.html", {"users": users})
 
 
