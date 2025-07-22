@@ -95,7 +95,7 @@ class User(MyUser, PermissionsMixin):
     language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default="en")
 
     # demographic data
-    date_of_birth = models.IntegerField(null=True, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
     height = models.FloatField(null=True, blank=True)
     weight_pre_pregnancy = models.FloatField(null=True, blank=True)
 
