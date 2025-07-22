@@ -9,14 +9,16 @@ from datetime import datetime, timedelta
 from io import TextIOWrapper
 import csv
 
+from django.contrib.auth.decorators import user_passes_test
 
-@staff_member_required
+
+@user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
 def user_list(request):
     users = User.objects.exclude(id=request.user.id)
     return render(request, "demo_interface/user_list.html", {"users": users})
 
 
-@staff_member_required
+@user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
 def create_user(request):
     if request.method == "POST":
         user_form = UserCreateForm(request.POST)
@@ -41,7 +43,7 @@ def create_user(request):
     )
 
 
-@staff_member_required
+@user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
 def edit_user(request, user_id):
     user = get_object_or_404(User, id=user_id)
     lifestyle, _ = UserLifeStyle.objects.get_or_create(user=user)
@@ -70,7 +72,7 @@ def edit_user(request, user_id):
     )
 
 
-@staff_member_required
+@user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
 def perform_actions(request):
     mommy_form = MommySymptomForm()
     baby_form = BabySymptomForm()
