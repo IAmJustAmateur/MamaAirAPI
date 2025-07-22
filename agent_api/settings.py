@@ -286,3 +286,5 @@ SESSION_COOKIE_SAMESITE = "Lax"
 
 
 LOGOUT_REDIRECT_URL = "/api/login/"
+
+LOGIN_URL = "/api/login/"
