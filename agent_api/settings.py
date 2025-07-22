@@ -36,9 +36,10 @@ print(f"DJANGO_ENV: {DJANGO_ENV}")
 
 if DJANGO_ENV == "production":
     BASE_DIR = settings_path.parent
+    TEMPLATE_DIR = settings_path.parent.parent / "templates"
 else:
     BASE_DIR = settings_path.parent.parent
-TEMPLATE_DIR = BASE_DIR / "templates"
+    TEMPLATE_DIR = BASE_DIR / "templates"
 logger.info(f"BASE_DIR: {BASE_DIR}, TEMPLATE_DIR: {TEMPLATE_DIR}")
 
 
