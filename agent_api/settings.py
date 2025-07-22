@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "api",
+    "demo_interface",
     # third-party apps
     "drf_spectacular",
 ]
