@@ -280,3 +280,6 @@ logger.info("Logging initialized")
 SESSION_COOKIE_SECURE = False  # если HTTP
 CSRF_COOKIE_SECURE = False
 SESSION_COOKIE_SAMESITE = "Lax"
+
+
+LOGOUT_REDIRECT_URL = "/api/login/"
