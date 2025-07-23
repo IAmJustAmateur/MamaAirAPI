@@ -22,6 +22,25 @@ class UserCreateForm(forms.ModelForm):
             "weight_pre_pregnancy",
         ]
 
+        widgets = {
+            "date_of_birth": forms.DateInput(attrs={"type": "date"}),
+            "email": forms.EmailInput(
+                attrs={
+                    "autofocus": True,
+                    "placeholder": "Email",
+                    "autocomplete": "email@example.com",
+                }
+            ),
+            "password": forms.PasswordInput(
+                attrs={"placeholder": "Password", "autocomplete": "new-password"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in ["email", "password"]:
+            self.fields[field].initial = ""
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.set_password(self.cleaned_data["password"])  # hash password
@@ -62,18 +81,17 @@ class UserLifestyleForm(forms.ModelForm):
 class MommySymptomForm(forms.ModelForm):
     class Meta:
         model = UserMommySymptoms
-        fields = ["user", "symptom", "date_recorded"]
+        fields = ["symptom", "date_recorded"]
 
 
 class BabySymptomForm(forms.ModelForm):
     class Meta:
         model = UserBabySymptoms
-        fields = ["user", "symptom", "date_recorded"]
+        fields = ["symptom", "date_recorded"]
 
 
 class MovementUploadForm(forms.Form):
-    user = forms.ModelChoiceField(queryset=User.objects.all())
-    file = forms.FileField()
+    file = forms.FileField(required=False)
 
     def clean_file(self):
         file = self.cleaned_data["file"]

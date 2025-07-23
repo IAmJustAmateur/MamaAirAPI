@@ -1,39 +1,66 @@
 {% extends "base.html" %}
-
-{% block title %}User List{% endblock %}
+{% block title %}Actions{% endblock %}
 
 {% block content %}
 
-<h2>Add Mommy Symptom</h2>
-<form method="post">
-  {% csrf_token %}
-  {{ mommy_form.as_p }}
-  <button name="submit_mommy" type="submit">Submit Mommy Symptom</button>
+<h2 class="mb-4">Perform Actions</h2>
+
+<!-- User Selection Form (not submitting on its own) -->
+<form method="get" class="mb-4">
+  <div class="mb-3">
+    <label for="selected_user" class="form-label">Select User:</label>
+    <select name="selected_user" id="selected_user" class="form-select" onchange="this.form.submit()">
+      <option value="">Choose user</option>
+      {% for user in users %}
+        <option value="{{ user.id }}"
+          {% if selected_user and user.id == selected_user.id %}selected{% endif %}
+        >{{ user.email }}</option>
+      {% endfor %}
+    </select>
+  </div>
 </form>
 
-<h2>Add Baby Symptom</h2>
-<form method="post">
-  {% csrf_token %}
-  {{ baby_form.as_p }}
-  <button name="submit_baby" type="submit">Submit Baby Symptom</button>
-</form>
+{% if selected_user %}
+  <div class="alert alert-info">Selected user: <strong>{{ selected_user.email }}</strong></div>
 
-<h2>Upload Movement CSV</h2>
-<form method="post" enctype="multipart/form-data">
-  {% csrf_token %}
-  {{ movement_upload_form.as_p }}
-  <button name="upload_movements" type="submit">Upload Movements</button>
-</form>
+  <!-- Mommy Symptom Form -->
+  <h4>Add Mommy Symptom</h4>
+  <form method="post" class="mb-4">
+    {% csrf_token %}
+    <input type="hidden" name="selected_user" value="{{ selected_user.id }}">
+    {{ mommy_form.as_p }}
+    <button name="submit_mommy" type="submit" class="btn btn-primary">Add Mommy Symptom</button>
+  </form>
 
-<h2>Generate Random Movements</h2>
-<form method="post">
-  {% csrf_token %}
-  <select name="generate_user">
-    {% for user in users %}
-      <option value="{{ user.id }}">{{ user.email }}</option>
-    {% endfor %}
-  </select>
-  <button name="generate_movements" type="submit">Generate</button>
-</form>
+  <!-- Baby Symptom Form -->
+  <h4>Add Baby Symptom</h4>
+  <form method="post" class="mb-4">
+    {% csrf_token %}
+    <input type="hidden" name="selected_user" value="{{ selected_user.id }}">
+    {{ baby_form.as_p }}
+    <button name="submit_baby" type="submit" class="btn btn-primary">Add Baby Symptom</button>
+  </form>
+
+  <!-- Upload Movement CSV -->
+  <h4>Upload Movement Data (CSV)</h4>
+  <form method="post" enctype="multipart/form-data" class="mb-4">
+    {% csrf_token %}
+    <input type="hidden" name="selected_user" value="{{ selected_user.id }}">
+    {{ movement_upload_form.as_p }}
+    <button name="upload_movements" type="submit" class="btn btn-success">Upload CSV</button>
+  </form>
+
+  <!-- Generate Random Movements -->
+  <h4>Generate Random Movements</h4>
+  <form method="post" class="mb-4">
+    {% csrf_token %}
+    <input type="hidden" name="selected_user" value="{{ selected_user.id }}">
+    <button name="generate_movements" type="submit" class="btn btn-warning">Generate</button>
+  </form>
+{% else %}
+  <div class="alert alert-warning">
+    Please select a user to perform actions.
+  </div>
+{% endif %}
 
 {% endblock %}

@@ -73,45 +73,68 @@ def edit_user(request, user_id):
 
 
 @user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
+@user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
 def perform_actions(request):
     mommy_form = MommySymptomForm()
     baby_form = BabySymptomForm()
     movement_upload_form = MovementUploadForm()
+    selected_user = None
 
+    # 1. GET-запрос для выбора пользователя
+    selected_user_id = request.GET.get("selected_user") or request.POST.get(
+        "selected_user"
+    )
+    if selected_user_id:
+        try:
+            selected_user = User.objects.get(id=selected_user_id)
+        except User.DoesNotExist:
+            messages.error(request, "Invalid user selected.")
+            return redirect("perform_actions")
+
+    # 2. POST-запросы на действия
     if request.method == "POST":
+        if not selected_user:
+            messages.error(request, "No user selected.")
+            return redirect("perform_actions")
+
         if "submit_mommy" in request.POST:
             mommy_form = MommySymptomForm(request.POST)
             if mommy_form.is_valid():
-                mommy_form.save()
+                mommy = mommy_form.save(commit=False)
+                mommy.user = selected_user
+                mommy.save()
                 messages.success(request, "Mommy symptom added.")
 
         elif "submit_baby" in request.POST:
             baby_form = BabySymptomForm(request.POST)
             if baby_form.is_valid():
-                baby_form.save()
+                baby = baby_form.save(commit=False)
+                baby.user = selected_user
+                baby.save()
                 messages.success(request, "Baby symptom added.")
 
         elif "upload_movements" in request.POST:
             movement_upload_form = MovementUploadForm(request.POST, request.FILES)
             if movement_upload_form.is_valid():
-                user = movement_upload_form.cleaned_data["user"]
-                file = TextIOWrapper(request.FILES["file"].file, encoding="utf-8")
-                reader = csv.DictReader(file)
-                for row in reader:
-                    Movement.objects.create(
-                        user=user,
-                        latitude=float(row["latitude"]),
-                        longitude=float(row["longitude"]),
-                        timestamp=datetime.fromisoformat(row["timestamp"]),
-                    )
-                messages.success(request, "Movement data uploaded.")
+                uploaded_file = movement_upload_form.cleaned_data.get("file")
+                if uploaded_file:
+                    file = TextIOWrapper(uploaded_file.file, encoding="utf-8")
+                    reader = csv.DictReader(file)
+                    for row in reader:
+                        Movement.objects.create(
+                            user=selected_user,
+                            latitude=float(row["latitude"]),
+                            longitude=float(row["longitude"]),
+                            timestamp=datetime.fromisoformat(row["timestamp"]),
+                        )
+                    messages.success(request, "Movement data uploaded.")
+                else:
+                    messages.info(request, "No file uploaded.")
 
         elif "generate_movements" in request.POST:
-            user_id = request.POST.get("generate_user")
-            user = User.objects.get(pk=user_id)
             for i in range(10):
                 Movement.objects.create(
-                    user=user,
+                    user=selected_user,
                     latitude=random.uniform(-90, 90),
                     longitude=random.uniform(-180, 180),
                     timestamp=datetime.now() - timedelta(minutes=i * 10),
@@ -125,6 +148,7 @@ def perform_actions(request):
             "mommy_form": mommy_form,
             "baby_form": baby_form,
             "movement_upload_form": movement_upload_form,
-            "users": User.objects.all(),
+            "users": User.objects.all().exclude(is_staff=True),
+            "selected_user": selected_user,
         },
     )
