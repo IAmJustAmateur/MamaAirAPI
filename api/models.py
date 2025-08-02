@@ -18,6 +18,12 @@ from django.contrib.auth.models import (
     PermissionsMixin,
 )
 
+USER_RISK_FACTORS = [
+    "bmi",
+    "full_year",
+    "race",
+]
+
 
 class MyUser(AbstractBaseUser):
     USERNAME_FIELD = "email"
@@ -120,8 +126,42 @@ class User(MyUser, PermissionsMixin):
         return self.weight_pre_pregnancy / ((self.height / 100) ** 2)
 
     @property
+    def full_year(self):
+        return (
+            date.today().year - self.date_of_birth.year if self.date_of_birth else None
+        )
+
+    @property
     def MVPA(self):
         pass
+
+    def calculate_risk_factors(self):
+        # Placeholder for risk factor calculation logic
+        pass
+
+    def calculate_risk_factor_based_on_user_fields(self):
+
+        risks = RiskDefinition.objects.filter(is_enabled=True)
+        risks_dictionary = {}
+        for risk in risks:
+            base_risk = 1.0  # Base risk factor
+            user_risk_factors = UserRiskFactor.objects.filter(risk=risk)
+            for risk_factor in user_risk_factors:
+                for factor in USER_RISK_FACTORS:
+                    if factor in risk_factor.condition:
+                        if hasattr(self, factor):
+                            value = getattr(self, factor)
+                            condition = risk_factor.condition.replace(
+                                factor, str(value)
+                            )
+                            try:
+                                if eval(condition):
+                                    base_risk *= risk_factor.multiplier
+                            except:
+                                pass
+            risks_dictionary[risk.name] = base_risk
+
+        return risks_dictionary
 
 
 class UserLifeStyle(models.Model):
@@ -173,7 +213,7 @@ class RiskDefinition(models.Model):
         unique=True,
         help_text="",
     )
-    description = models.TextField(blank=True)
+    description = models.TextField(blank=True, null=True)
     is_enabled = models.BooleanField(default=True)
 
     def __str__(self):
@@ -332,3 +372,32 @@ class WeeklyExposure(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - Week {self.pregnancy_week} - {self.exposure_level}"
+
+
+class AbstractRiskFactor(models.Model):
+    risk = models.ForeignKey(RiskDefinition, on_delete=models.CASCADE)
+    multiplier = models.FloatField()
+
+    class Meta:
+        abstract = True
+
+
+class SymptomRiskFactor(AbstractRiskFactor):
+    symptom = models.ForeignKey(MommySymptom, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.risk.name} - {self.symptom.name}"
+
+
+class UserRiskFactor(AbstractRiskFactor):
+    condition = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.risk.name} - {self.condition}"
+
+
+class LifestyleRiskFactor(AbstractRiskFactor):
+    condition = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.risk.name} - {self.condition}"

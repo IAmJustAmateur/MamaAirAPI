@@ -15,6 +15,10 @@ from .models import (
     HealthInsightSnapshot,
     MommySymptom,
     BabySymptom,
+    RiskDefinition,
+    UserRiskFactor,
+    LifestyleRiskFactor,
+    SymptomRiskFactor,
 )
 from django.contrib.auth import authenticate, login
 
@@ -160,5 +164,19 @@ class HealthInsightSnapshotAdmin(admin.ModelAdmin):
 
 admin.site.register(HealthInsightSnapshot, HealthInsightSnapshotAdmin)
 
+
 admin.site.register(MommySymptom)
 admin.site.register(BabySymptom)
+
+
+@admin.register(RiskDefinition)
+class RiskDefinitionAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_enabled")
+    search_fields = ("name",)
+
+
+@admin.register(UserRiskFactor)
+class UserRiskFactorAdmin(admin.ModelAdmin):
+    list_display = ("risk", "condition", "multiplier")
+    search_fields = ("risk__name", "condition")
+    list_filter = ("risk", "condition", "multiplier")
