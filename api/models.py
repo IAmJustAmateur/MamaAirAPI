@@ -167,6 +167,19 @@ class UserLifeStyle(models.Model):
         return f"{self.user.email} Lifestyle"
 
 
+class RiskDefinition(models.Model):
+    name = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="",
+    )
+    description = models.TextField(blank=True)
+    is_enabled = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+
 class MommySymptom(models.Model):
     name = models.CharField(max_length=255, unique=True)
 
