@@ -167,18 +167,32 @@ class UserLifeStyle(models.Model):
         return f"{self.user.email} Lifestyle"
 
 
+class MommySymptom(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class BabySymptom(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class UserMommySymptoms(models.Model):
-    MOMMY_SYMPTOM_CHOICES = [
-        ("Headache", _("Headache")),
-        ("Nausea", _("Nausea")),
-        ("Fatigue", _("Fatigue")),
-        ("Back Pain", ("Back Pain")),
-        ("Mood Swings", _("Mood Swings")),
-    ]
+
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="mommy_symptoms"
     )
-    symptom = models.CharField(max_length=255, choices=MOMMY_SYMPTOM_CHOICES)
+    symptom = models.ForeignKey(MommySymptom, on_delete=models.CASCADE)
     date_recorded = models.DateField(default=date.today)
 
     class Meta:
@@ -190,14 +204,9 @@ class UserMommySymptoms(models.Model):
 
 
 class UserBabySymptoms(models.Model):
-    BABY_SYMPTOM_CHOICES = [
-        ("Kicking", _("Kicking")),
-        ("Hiccups", _("Hiccups")),
-        ("Fetal Movement", _("Fetal Movement")),
-        ("Reduced Movement", _("Reduced Movement")),
-    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="symptoms")
-    symptom = models.CharField(max_length=255, choices=BABY_SYMPTOM_CHOICES)
+    symptom = models.ForeignKey(BabySymptom, on_delete=models.CASCADE)
     date_recorded = models.DateField(default=date.today)
 
     class Meta:

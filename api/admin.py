@@ -13,6 +13,8 @@ from .models import (
     Movement,
     AirExposureLog,
     HealthInsightSnapshot,
+    MommySymptom,
+    BabySymptom,
 )
 from django.contrib.auth import authenticate, login
 
@@ -157,3 +159,6 @@ class HealthInsightSnapshotAdmin(admin.ModelAdmin):
 
 
 admin.site.register(HealthInsightSnapshot, HealthInsightSnapshotAdmin)
+
+admin.site.register(MommySymptom)
+admin.site.register(BabySymptom)
