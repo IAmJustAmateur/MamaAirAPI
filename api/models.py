@@ -163,6 +163,41 @@ class User(MyUser, PermissionsMixin):
 
         return risks_dictionary
 
+    def calculate_risk_factor_based_on_lifestyle(self):
+
+        user_life_style = UserLifeStyle.objects.get(user=self.id)
+        risks = RiskDefinition.objects.filter(is_enabled=True)
+        risks_dictionary = {}
+        for risk in risks:
+            base_risk = 1.0  # Base risk factor
+            life_style_risk_factors = LifestyleRiskFactor.objects.filter(risk=risk)
+            for risk_factor in life_style_risk_factors:
+                life_style_fields = UserLifeStyle.meta.fields
+                for factor in life_style_fields:
+                    if factor in risk_factor.condition:
+                        if hasattr(user_life_style, factor):
+                            value = getattr(self, factor)
+                            condition = risk_factor.condition.replace(
+                                factor, str(value)
+                            )
+                            try:
+                                if eval(condition):
+                                    base_risk *= risk_factor.multiplier
+                            except:
+                                pass
+                if factor in risk.condition:
+                    if hasattr(self, factor):
+                        value = getattr(self, factor)
+                        condition = risk.condition.replace(factor, str(value))
+                        try:
+                            if eval(condition):
+                                base_risk *= risk.multiplier
+                        except:
+                            pass
+            risks_dictionary[risk.risk.name] = base_risk
+
+        return risks_dictionary
+
 
 class UserLifeStyle(models.Model):
     user = models.OneToOneField(
@@ -178,6 +213,7 @@ class UserLifeStyle(models.Model):
         ("Care", _("Care")),
         ("Field", _("Field")),
         ("Domestic", _("Domestic")),
+        ("Night Shift", _("Night Shift")),
     ]
     work_type = models.CharField(
         max_length=64, choices=WORK_TYPE_CHOICES, null=True, blank=True
