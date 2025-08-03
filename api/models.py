@@ -25,6 +25,27 @@ USER_RISK_FACTORS = [
 ]
 
 
+def _calculate_risks(risks, fields, object, RiskModel):
+    risks_dictionary = {}
+    for risk in risks:
+        base_risk = 1.0  # Base risk factor
+        risk_factors = RiskModel.objects.filter(risk=risk)
+
+        for risk_factor in risk_factors:
+            for factor in fields:
+                if factor in risk_factor.condition:
+                    if hasattr(object, factor):
+                        value = getattr(object, factor)
+                        condition = risk_factor.condition.replace(factor, str(value))
+                        try:
+                            if eval(condition):
+                                base_risk *= risk_factor.multiplier
+                        except:
+                            pass
+        risks_dictionary[risk.risk.name] = base_risk
+    return risks_dictionary
+
+
 class MyUser(AbstractBaseUser):
     USERNAME_FIELD = "email"
     email = models.EmailField(
@@ -172,7 +193,7 @@ class User(MyUser, PermissionsMixin):
             base_risk = 1.0  # Base risk factor
             life_style_risk_factors = LifestyleRiskFactor.objects.filter(risk=risk)
             for risk_factor in life_style_risk_factors:
-                life_style_fields = UserLifeStyle.meta.fields
+                life_style_fields = [field.name for field in UserLifeStyle._meta.fields]
                 for factor in life_style_fields:
                     if factor in risk_factor.condition:
                         if hasattr(user_life_style, factor):
@@ -185,15 +206,6 @@ class User(MyUser, PermissionsMixin):
                                     base_risk *= risk_factor.multiplier
                             except:
                                 pass
-                if factor in risk.condition:
-                    if hasattr(self, factor):
-                        value = getattr(self, factor)
-                        condition = risk.condition.replace(factor, str(value))
-                        try:
-                            if eval(condition):
-                                base_risk *= risk.multiplier
-                        except:
-                            pass
             risks_dictionary[risk.risk.name] = base_risk
 
         return risks_dictionary
