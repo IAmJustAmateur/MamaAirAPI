@@ -23,6 +23,10 @@ def populate_risk_definitions(apps, schema_editor):
             "name": "Low Birth Weight",
             "description": "",
         },
+        {
+            "name": "Placental abruption",
+            "description": "",
+        },
     ]
 
     for definition in risk_definitions:

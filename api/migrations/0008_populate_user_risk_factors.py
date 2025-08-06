@@ -26,7 +26,7 @@ def populate_user_risk_factors(apps, schema_editor):
         },
         {
             "risk": preeclampsia_risk,
-            "condition": "race==african",
+            "condition": "'race'=='african'",
             "multiplier": 1.6,
         },
         # Preterm birth risk factors
@@ -68,12 +68,12 @@ def populate_user_risk_factors(apps, schema_editor):
         },
         {
             "risk": gdm_risk,
-            "condition": "race==african",
+            "condition": "'race'=='african'",
             "multiplier": 2.0,
         },
         {
             "risk": gdm_risk,
-            "condition": "race==asian",
+            "condition": "'race'=='asian'",
             "multiplier": 2.0,
         },
         # Low Birth Weight risk factors
@@ -89,7 +89,7 @@ def populate_user_risk_factors(apps, schema_editor):
         },
         {
             "risk": low_birth_weight_risk,
-            "condition": "race<african",
+            "condition": "'race'=='african'",
             "multiplier": 2,
         },
     ]

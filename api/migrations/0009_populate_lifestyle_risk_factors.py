@@ -26,12 +26,12 @@ def populate_life_style_risk_factors(apps, schema_editor):
         },
         {
             "risk": preeclampsia_risk,
-            "condition": "work_type==Night Shift",
+            "condition": "'work_type'=='Night Shift'",
             "multiplier": 1.75,
         },
         {
             "risk": preeclampsia_risk,
-            "condition": "cooking_method==wood or cooking_method==charcoal",
+            "condition": "'cooking_method'=='wood' or 'cooking_method'=='charcoal'",
             "multiplier": 2.2,
         },
         # Preterm birth
@@ -42,12 +42,12 @@ def populate_life_style_risk_factors(apps, schema_editor):
         },
         {
             "risk": preterm_birth_risk,
-            "condition": "work_type==Night Shift",
+            "condition": "'work_type'=='Night Shift'",
             "multiplier": 1.21,
         },
         {
             "risk": preterm_birth_risk,
-            "condition": "cooking_method==wood or cooking_method==charcoal",
+            "condition": "'cooking_method'=='wood' or 'cooking_method'=='charcoal'",
             "multiplier": 1.3,
         },
         # GDM
@@ -58,7 +58,7 @@ def populate_life_style_risk_factors(apps, schema_editor):
         },
         {
             "risk": gdm_risk,
-            "condition": "work_type==Night Shift",
+            "condition": "'work_type'=='Night Shift'",
             "multiplier": 1.75,
         },
         {
@@ -68,16 +68,18 @@ def populate_life_style_risk_factors(apps, schema_editor):
         },
         {
             "risk": gdm_risk,
-            "condition": "diet_type==vegetarian",
+            "condition": "'diet_type'=='vegetarian'",
             "multiplier": 16.0 / 9.0,
         },
         # Low Birth Weight
         {
             "risk": low_birth_weight_risk,
-            "condition": "cooking_method==wood or cooking_method==charcoal",
+            "condition": "'cooking_method'=='wood' or 'cooking_method'=='charcoal'",
             "multiplier": 1.5,
         },
     ]
+    for risk_factor in life_style_risk_factors:
+        LifestyleRiskFactor.objects.create(**risk_factor)
 
 
 class Migration(migrations.Migration):
@@ -86,4 +88,8 @@ class Migration(migrations.Migration):
         ("api", "0008_populate_user_risk_factors"),
     ]
 
-    operations = []
+    operations = [
+        migrations.RunPython(
+            populate_life_style_risk_factors, reverse_code=migrations.RunPython.noop
+        ),
+    ]
