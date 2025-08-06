@@ -220,6 +220,13 @@ class User(MyUser, PermissionsMixin):
         )
         return risk_dictionary
 
+    def get_simptoms_for_checking(self):
+        risks = self.calculate_risk_factors()
+        risk_list = [(key, value) for key, value in risks.items()]
+        risk_list.sort(key=lambda x: x[1], reverse=True)
+        # add symptoms here
+        return risk_list
+
 
 class UserLifeStyle(models.Model):
     user = models.OneToOneField(
@@ -279,6 +286,9 @@ class RiskDefinition(models.Model):
     description = models.TextField(blank=True, null=True)
     is_enabled = models.BooleanField(default=True)
 
+    class Meta:
+        ordering = ["name"]
+
     def __str__(self):
         return self.name
 
@@ -301,6 +311,26 @@ class BabySymptom(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class RiskDefinitionMommySymptom(models.Model):
+    risk_definition = models.ForeignKey(
+        RiskDefinition, on_delete=models.CASCADE, related_name="mommy_symptom_links"
+    )
+    symptom = models.ForeignKey("MommySymptom", on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ("risk_definition", "symptom")
+
+
+class RiskDefinitionBabySymptom(models.Model):
+    risk_definition = models.ForeignKey(
+        RiskDefinition, on_delete=models.CASCADE, related_name="baby_symptom_links"
+    )
+    symptom = models.ForeignKey("BabySymptom", on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ("risk_definition", "symptom")
 
 
 class UserMommySymptoms(models.Model):
