@@ -475,13 +475,6 @@ class AbstractRiskFactor(models.Model):
         abstract = True
 
 
-class SymptomRiskFactor(AbstractRiskFactor):
-    symptom = models.ForeignKey(MommySymptom, on_delete=models.CASCADE)
-
-    def __str__(self):
-        return f"{self.risk.name} - {self.symptom.name}"
-
-
 class UserRiskFactor(AbstractRiskFactor):
     condition = models.CharField(max_length=255)
 

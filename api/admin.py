@@ -18,7 +18,8 @@ from .models import (
     RiskDefinition,
     UserRiskFactor,
     LifestyleRiskFactor,
-    SymptomRiskFactor,
+    RiskDefinitionBabySymptom,
+    RiskDefinitionMommySymptom,
 )
 from django.contrib.auth import authenticate, login
 
@@ -177,6 +178,27 @@ class RiskDefinitionAdmin(admin.ModelAdmin):
 
 @admin.register(UserRiskFactor)
 class UserRiskFactorAdmin(admin.ModelAdmin):
+    list_display = ("risk", "condition", "multiplier")
+    search_fields = ("risk__name", "condition")
+    list_filter = ("risk", "condition", "multiplier")
+
+
+@admin.register(RiskDefinitionMommySymptom)
+class RiskDefinitionMommySymptomAdmin(admin.ModelAdmin):
+    list_display = ("risk_definition", "symptom")
+    search_fields = ("risk_definition__name", "symptom__name")
+    list_filter = ("risk_definition", "symptom")
+
+
+@admin.register(RiskDefinitionBabySymptom)
+class RiskDefinitionBabySymptomAdmin(admin.ModelAdmin):
+    list_display = ("risk_definition", "symptom")
+    search_fields = ("risk_definition__name", "symptom__name")
+    list_filter = ("risk_definition", "symptom")
+
+
+@admin.register(LifestyleRiskFactor)
+class LifestyleRiskFactorAdmin(admin.ModelAdmin):
     list_display = ("risk", "condition", "multiplier")
     search_fields = ("risk__name", "condition")
     list_filter = ("risk", "condition", "multiplier")

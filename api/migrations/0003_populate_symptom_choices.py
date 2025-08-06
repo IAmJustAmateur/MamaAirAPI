@@ -27,6 +27,21 @@ def populate_symptom_choices(apps, schema_editor):
         "chest pain",
         "visual changes",
         "shortness of breath",
+        # others
+        "high blood pressure",
+        "upper updominal pain",
+        "increase heart rate",
+        "fever",
+        "vaginal bleeding",
+        "increased thirst",
+        "increased urination",
+        "blurred eyesight",
+        "dried mouth",
+        "tiredness",
+        "no belly growth",
+        "poor appetite",
+        "updominal pain",
+        "lower back pain",
     ]
 
     baby_symptoms = [
@@ -42,6 +57,8 @@ def populate_symptom_choices(apps, schema_editor):
         # black
         "stillness 6hr",
         "fetal distress",
+        # others
+        "reduced fetal movement",
     ]
 
     for name in mommy_symptoms:
