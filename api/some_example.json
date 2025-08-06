@@ -1,0 +1,44 @@
+{
+    "Preeclampsia": {
+        "value": 6.2,
+        "symptoms": [
+            "headache",
+            "high blood pressure",
+            "upper updominal pain"
+        ]
+    },
+    "Low Birth Weight": {
+        "value": 1.5,
+        "symptoms": [
+            "poor appetite",
+            "dizziness",
+            "no belly growth"
+        ]
+    },
+    "Preterm birth": {
+        "value": 1.3,
+        "symptoms": [
+            "increase heart rate",
+            "fever",
+            "vaginal bleeding"
+        ]
+    },
+    "GDM": {
+        "value": 1.0,
+        "symptoms": [
+            "increased thirst",
+            "increased urination",
+            "blurred eyesight",
+            "dried mouth",
+            "tiredness"
+        ]
+    },
+    "Placental abruption": {
+        "value": 1.0,
+        "symptoms": [
+            "vaginal bleeding",
+            "updominal pain",
+            "lower back pain"
+        ]
+    }
+}

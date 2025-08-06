@@ -220,12 +220,22 @@ class User(MyUser, PermissionsMixin):
         )
         return risk_dictionary
 
-    def get_simptoms_for_checking(self):
+    def get_mommy_symptoms_for_checking(self):
         risks = self.calculate_risk_factors()
         risk_list = [(key, value) for key, value in risks.items()]
         risk_list.sort(key=lambda x: x[1], reverse=True)
-        # add symptoms here
-        return risk_list
+        all_risk_symptoms_for_mommy = {}
+        for risk_tuple in risk_list:
+            risk = RiskDefinition.objects.get(name=risk_tuple[0])
+            risk_symptoms = RiskDefinitionMommySymptom.objects.filter(
+                risk_definition=risk
+            )
+            all_risk_symptoms_for_mommy[risk_tuple[0]] = {
+                "value": risk_tuple[1],
+                "symptoms": [symptom.symptom.name for symptom in risk_symptoms],
+            }
+
+        return all_risk_symptoms_for_mommy
 
 
 class UserLifeStyle(models.Model):

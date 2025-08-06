@@ -53,3 +53,8 @@ class UserRiskCalculationTest(TestCase):
     #         result = user.calculate_risk_factor_based_on_user_fields()
     #     except Exception as e:
     #         self.fail(f"Function raised an error with missing fields: {e}")
+
+    def test_get_mommy_symptoms_for_checking(self):
+        risks_symptoms = self.user.get_mommy_symptoms_for_checking()
+
+        self.assertIn("Preeclampsia", risks_symptoms)
