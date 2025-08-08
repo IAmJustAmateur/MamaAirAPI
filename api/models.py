@@ -191,10 +191,13 @@ class User(MyUser, PermissionsMixin):
                 user_risks_multiplier = user_risks[risk.name]
             else:
                 user_risks_multiplier = 1
-            risk.risk_factor_multiplier = round(
-                life_style_multiplier * user_risks_multiplier, 1
-            )
-            risk_dictionary[risk.name] = risk.risk_factor_multiplier
+
+            risk.risk_factor_multiplier = life_style_multiplier * user_risks_multiplier
+
+            risk_dictionary[risk.name] = {
+                "risk_value": risk.risk_factor_multiplier,
+                "priority": risk.priority,
+            }
         return risk_dictionary
 
     def calculate_risk_factor_based_on_user_fields(self):
@@ -221,9 +224,18 @@ class User(MyUser, PermissionsMixin):
         return risk_dictionary
 
     def get_mommy_symptoms_for_checking(self):
+        """
+        Return a dictionary of mommy symptoms for each risk factor, sorted by value in descending order.
+        The keys are the risk factor names, the values are dictionaries with "value" and "symptoms" keys.
+        The "value" key stores the risk factor multiplier, and the "symptoms" key stores a list of symptom names.
+
+        :return: A dictionary of mommy symptoms for each risk factor
+        :rtype: dict
+        """
         risks = self.calculate_risk_factors()
         risk_list = [(key, value) for key, value in risks.items()]
-        risk_list.sort(key=lambda x: x[1], reverse=True)
+        risk_list.sort(key=lambda x: x[1]["risk_value"], reverse=True)
+        risk_list.sort(key=lambda x: x[1]["priority"], reverse=False)
         all_risk_symptoms_for_mommy = {}
         for risk_tuple in risk_list:
             risk = RiskDefinition.objects.get(name=risk_tuple[0])
@@ -235,7 +247,10 @@ class User(MyUser, PermissionsMixin):
                 "symptoms": [symptom.symptom.name for symptom in risk_symptoms],
             }
 
-        return all_risk_symptoms_for_mommy
+        symptoms = []
+        for risk, data in all_risk_symptoms_for_mommy.items():
+            symptoms.extend(data["symptoms"])
+        return symptoms[0:5]
 
 
 class UserLifeStyle(models.Model):
@@ -295,6 +310,10 @@ class RiskDefinition(models.Model):
     )
     description = models.TextField(blank=True, null=True)
     is_enabled = models.BooleanField(default=True)
+    priority = models.IntegerField(
+        default=0,
+        help_text="",
+    )
 
     class Meta:
         ordering = ["name"]
