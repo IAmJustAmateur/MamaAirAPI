@@ -86,6 +86,8 @@ INSTALLED_APPS = [
     "demo_interface",
     # third-party apps
     "drf_spectacular",
+    #
+    "debug_toolbar",
 ]
 
 MIDDLEWARE = [
@@ -290,3 +292,9 @@ SESSION_COOKIE_SAMESITE = "Lax"
 LOGOUT_REDIRECT_URL = "/api/login/"
 
 LOGIN_URL = "/api/login/"
+
+INTERNAL_IPS = [
+    # ...
+    "127.0.0.1",
+    # ...
+]

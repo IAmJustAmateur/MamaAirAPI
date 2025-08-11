@@ -35,6 +35,7 @@ from .models import (
     AirExposureLog,
     WeeklyExposure,
     LANGUAGE_CHOICES,
+    User,
 )
 from .serializers import (
     RegisterSerializer,
@@ -125,7 +126,9 @@ class UserMommySymptomsView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return self.request.user.mommy_symptoms.all()
+        user: User = self.request.user
+        symptoms = user.get_mommy_symptoms_for_checking()
+        return symptoms
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
