@@ -11,6 +11,44 @@
     {{ lifestyle_form.as_p }}
     <button type="submit">Save</button>
     </form>
+
+    <h3>User risks (test view)</h3>
+    {% if user_risks %}
+        <table border="1" cellpadding="6" cellspacing="0">
+        <thead>
+            <tr>
+            <th>#</th>
+            <th>Risk</th>
+            <th>Priority</th>
+            <th>Multiplier</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in user_risks %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ r.name }}</td>
+                <td>{{ r.priority }}</td>
+                <td>{{ r.risk_value|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        </table>
+    {% else %}
+        <p>No risk data.</p>
+    {% endif %}
+
+    <h3 class="mt-3">Mommy symptoms to check (test view)</h3>
+    {% if mommy_symptoms_for_checking %}
+        <ul>
+        {% for s in mommy_symptoms_for_checking %}
+            <li>{{ s }}</li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No symptoms suggested.</p>
+    {% endif %}
+
     <a href="{% url 'user_list' %}">Back to user list</a>
 
 {% endblock %}

@@ -70,6 +70,36 @@ def edit_user(request, user_id):
         user_form = UserEditForm(instance=user)
         user_form.fields["password"].required = False  # don't force password update
         lifestyle_form = UserLifeStyleForm(instance=lifestyle)
+
+    try:
+        user_risks_dict = (
+            user.calculate_risk_factors()
+        )  # { risk_name: {"risk_value": x, "priority": p}, ... }
+    except Exception as e:
+        user_risks_dict = {}
+        messages.warning(request, f"Risk calc error: {e}")
+
+    # Преобразуем в отсортированный список для удобного вывода
+    user_risks = []
+    for name, data in user_risks_dict.items():
+        user_risks.append(
+            {
+                "name": name,
+                "risk_value": data.get("risk_value", 1),
+                "priority": data.get("priority", 9999),
+            }
+        )
+    # сортировка: сначала по priority (asc), затем по value (desc)
+    user_risks.sort(key=lambda r: (r["priority"], -float(r["risk_value"] or 0)))
+
+    try:
+        mommy_symptoms_for_checking = (
+            user.get_mommy_symptoms_for_checking()
+        )  # список топ-5 симптомов
+    except Exception as e:
+        mommy_symptoms_for_checking = []
+        messages.warning(request, f"Symptoms selection error: {e}")
+
     return render(
         request,
         "demo_interface/edit_user.html",
@@ -77,6 +107,8 @@ def edit_user(request, user_id):
             "user_form": user_form,
             "lifestyle_form": lifestyle_form,
             "user_obj": user,
+            "user_risks": user_risks,
+            "mommy_symptoms_for_checking": mommy_symptoms_for_checking,
         },
     )
 
