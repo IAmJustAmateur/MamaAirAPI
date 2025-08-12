@@ -46,7 +46,32 @@
                 "--auth",
                 "token",
                 "--token",
-                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU1MTUzMjg3LCJpYXQiOjE3NTQ5ODA0ODcsImp0aSI6IjhiNzhmNmRhODRmYzQ0ZGVhMmE2YTk1N2U3YjE4ODA4IiwidXNlcl9pZCI6MX0.qrT-Aco09LTWdNCxV9yjfBW31BvJy5NBYUFItdyXDfA"
+                ""
+            ],
+            "env": {
+                "PYTHONUNBUFFERED": "1"
+            }
+        },
+        {
+            "name": "Seed: WEB (Token, 10 users)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/seed_fake_users.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--base-url",
+                "http://52.4.150.16/",
+                "--users-endpoint",
+                "/demo/api/users/",
+                "--lifestyle-endpoint",
+                "/demo/api/user-lifestyles/",
+                "--count",
+                "10",
+                "--auth",
+                "token",
+                "--token",
+                ""
             ],
             "env": {
                 "PYTHONUNBUFFERED": "1"
