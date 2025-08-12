@@ -72,10 +72,20 @@ class UserEditForm(forms.ModelForm):
         return user
 
 
-class UserLifestyleForm(forms.ModelForm):
+class UserLifeStyleForm(forms.ModelForm):
     class Meta:
         model = UserLifeStyle
-        exclude = ["user"]
+        fields = [
+            "average_sleep_hours",
+            "work_type",
+            "diet_type",
+            "cooking_method",
+            "activity_duration_minutes",
+        ]
+        widgets = {
+            "average_sleep_hours": forms.NumberInput(attrs={"step": "0.1", "min": "0"}),
+            "activity_duration_minutes": forms.NumberInput(attrs={"min": "0"}),
+        }
 
 
 class MommySymptomForm(forms.ModelForm):

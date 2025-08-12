@@ -1,3 +1,6 @@
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.shortcuts import get_object_or_404, redirect, render
 from django.shortcuts import render, redirect
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
@@ -9,7 +12,13 @@ from datetime import datetime, timedelta
 from io import TextIOWrapper
 import csv
 
+from .forms import UserLifeStyleForm
+
 from django.contrib.auth.decorators import user_passes_test
+
+
+def staff_required(user):
+    return user.is_staff  # tweak if you use a different permission scheme
 
 
 @user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
@@ -22,7 +31,7 @@ def user_list(request):
 def create_user(request):
     if request.method == "POST":
         user_form = UserCreateForm(request.POST)
-        lifestyle_form = UserLifestyleForm(request.POST)
+        lifestyle_form = UserLifeStyleForm(request.POST)
         if user_form.is_valid() and lifestyle_form.is_valid():
             user = user_form.save()
             lifestyle = lifestyle_form.save(commit=False)
@@ -32,7 +41,7 @@ def create_user(request):
             return redirect("user_list")
     else:
         user_form = UserCreateForm()
-        lifestyle_form = UserLifestyleForm()
+        lifestyle_form = UserLifeStyleForm()
     return render(
         request,
         "demo_interface/create_user.html",
@@ -49,7 +58,7 @@ def edit_user(request, user_id):
     lifestyle, _ = UserLifeStyle.objects.get_or_create(user=user)
     if request.method == "POST":
         user_form = UserEditForm(request.POST, instance=user)
-        lifestyle_form = UserLifestyleForm(request.POST, instance=lifestyle)
+        lifestyle_form = UserLifeStyleForm(request.POST, instance=lifestyle)
         if user_form.is_valid() and lifestyle_form.is_valid():
             user = user_form.save()
             lifestyle = lifestyle_form.save(commit=False)
@@ -60,7 +69,7 @@ def edit_user(request, user_id):
     else:
         user_form = UserEditForm(instance=user)
         user_form.fields["password"].required = False  # don't force password update
-        lifestyle_form = UserLifestyleForm(instance=lifestyle)
+        lifestyle_form = UserLifeStyleForm(instance=lifestyle)
     return render(
         request,
         "demo_interface/edit_user.html",
@@ -72,7 +81,6 @@ def edit_user(request, user_id):
     )
 
 
-@user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
 @user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
 def perform_actions(request):
     mommy_form = MommySymptomForm()
@@ -151,4 +159,30 @@ def perform_actions(request):
             "users": User.objects.all().exclude(is_staff=True),
             "selected_user": selected_user,
         },
+    )
+
+
+@login_required
+@user_passes_test(staff_required)
+def edit_lifestyle(request, user_id):
+    """
+    Create or update a user's lifestyle. One-to-one is created on the fly if missing.
+    """
+    target_user = get_object_or_404(User, pk=user_id)
+    lifestyle, _created = UserLifeStyle.objects.get_or_create(user=target_user)
+
+    if request.method == "POST":
+        form = UserLifeStyleForm(request.POST, instance=lifestyle)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Lifestyle saved successfully.")
+            return redirect("edit_lifestyle", user_id=target_user.id)
+        messages.error(request, "Please correct the errors below.")
+    else:
+        form = UserLifeStyleForm(instance=lifestyle)
+
+    return render(
+        request,
+        "demo_interface/edit_lifestyle.html",
+        {"form": form, "target_user": target_user},
     )
