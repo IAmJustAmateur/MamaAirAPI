@@ -60,7 +60,8 @@ def _calculate_risks(risks, fields, object, RiskModel):
                             )
                             try:
                                 if eval(condition):
-                                    base_risk *= risk_factor.multiplier
+                                    multiplier = risk_factor.get_multiplier(str(value))
+                                    base_risk *= multiplier
                             except:
                                 pass
         risks_dictionary[risk.name] = base_risk
@@ -220,6 +221,17 @@ class User(MyUser, PermissionsMixin):
             object=user_life_style,
             fields=field_names,
             RiskModel=LifestyleRiskFactor,
+        )
+        return risk_dictionary
+
+    def calculate_risk_factor_based_on_aq(self, aq_data=None):
+        risks = RiskDefinition.objects.filter(is_enabled=True)
+        field_names = [field.name for field in aq_data.keys()]
+        risk_dictionary = _calculate_risks(
+            risks=risks,
+            object=aq_data,
+            fields=field_names,
+            RiskModel=AQRiskFactor,
         )
         return risk_dictionary
 
@@ -500,6 +512,12 @@ class AbstractRiskFactor(models.Model):
     risk = models.ForeignKey(RiskDefinition, on_delete=models.CASCADE)
     multiplier = models.FloatField()
 
+    def __str__(self):
+        return f"{self.risk.name} - {self.multiplier}"
+
+    def get_multiplier(self, param=None):
+        return self.multiplier
+
     class Meta:
         abstract = True
 
@@ -507,12 +525,18 @@ class AbstractRiskFactor(models.Model):
 class UserRiskFactor(AbstractRiskFactor):
     condition = models.CharField(max_length=255)
 
-    def __str__(self):
-        return f"{self.risk.name} - {self.condition}"
-
 
 class LifestyleRiskFactor(AbstractRiskFactor):
     condition = models.CharField(max_length=255)
 
-    def __str__(self):
-        return f"{self.risk.name} - {self.condition}"
+
+class AQRiskFactor(AbstractRiskFactor):
+    condition = models.CharField(max_length=255)
+    formula = models.CharField(max_length=255)
+
+    def get_multiplier(self, param):
+        multiplier = super().get_multiplier()
+        if param is None:
+            return multiplier
+        new_formua = self.formula.replace("param", str(param))
+        return multiplier * eval(new_formua)
