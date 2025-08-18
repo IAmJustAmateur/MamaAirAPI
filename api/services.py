@@ -1,12 +1,12 @@
 # api/services/advice_selector.py
-
-from .models import AdviceTemplate
 from datetime import timedelta, datetime
 import requests
 import pandas as pd
+import os
 
-OWM_BASE_URL = "https://api.openweathermap.org/data/2.5/history"
-OWM_API_KEY = "YOUR_API_KEY"
+OWM_BASE_URL = "http://api.openweathermap.org/data/2.5/air_pollution/history"
+
+OWM_API_KEY = os.getenv("OWM_API_KEY")
 
 
 def round_coord(val: float) -> float:
@@ -41,6 +41,8 @@ def get_current_advices(user, pregnancy_week=None):
     """
     Stub: later will filter based on user profile, pregnancy week, air exposure, etc.
     """
+    from api.models import AdviceTemplate
+
     return AdviceTemplate.objects.filter(is_active=True)
 
 

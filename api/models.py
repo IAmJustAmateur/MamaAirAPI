@@ -238,7 +238,8 @@ class User(MyUser, PermissionsMixin):
         if aq_data is None:
             aq_data = self.get_air_quality_inputs_for_risks()
         risks = RiskDefinition.objects.filter(is_enabled=True)
-        field_names = [field.name for field in aq_data.keys()]
+        # field_names = [field.name for field in aq_data.keys()]
+        field_names = aq_data.keys()
         risk_dictionary = _calculate_risks(
             risks=risks,
             object=aq_data,
@@ -297,10 +298,9 @@ class User(MyUser, PermissionsMixin):
         if df.empty:
             return df
 
-        # Приводим метку времени к наивному UTC (OWM history ожидает UNIX-штампы в UTC)
-        ts = pd.to_datetime(df["timestamp"], utc=True)
         # делаем наивные (без таймзоны) UTC-метки — удобно для .timestamp()
-        df["timestamp"] = ts.tz_convert("UTC").dt.tz_localize(None)
+        ts = pd.to_datetime(df["timestamp"], utc=True)
+        df["timestamp"] = ts.dt.tz_localize(None)
         return df
 
     def get_air_quality_inputs_for_risks(

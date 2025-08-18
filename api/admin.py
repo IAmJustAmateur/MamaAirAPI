@@ -143,7 +143,7 @@ admin.site.register(UserBabySymptoms, UserBabySymptomsAdmin)
 class MovementAdmin(admin.ModelAdmin):
     list_display = ("user", "latitude", "longitude", "timestamp")
     search_fields = ("user__email",)
-    list_filter = ("timestamp",)
+    list_filter = ("timestamp", "user")
 
 
 admin.site.register(Movement, MovementAdmin)

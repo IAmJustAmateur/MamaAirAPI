@@ -13,6 +13,7 @@ from io import TextIOWrapper
 import csv
 
 from .forms import UserLifeStyleForm
+from .utils import generate_plausible_movements_24h
 
 from django.contrib.auth.decorators import user_passes_test
 
@@ -172,13 +173,7 @@ def perform_actions(request):
                     messages.info(request, "No file uploaded.")
 
         elif "generate_movements" in request.POST:
-            for i in range(10):
-                Movement.objects.create(
-                    user=selected_user,
-                    latitude=random.uniform(-90, 90),
-                    longitude=random.uniform(-180, 180),
-                    timestamp=datetime.now() - timedelta(minutes=i * 10),
-                )
+            generate_plausible_movements_24h(selected_user)
             messages.success(request, "Random movements generated.")
 
     return render(
