@@ -533,6 +533,7 @@ class LifestyleRiskFactor(AbstractRiskFactor):
 class AQRiskFactor(AbstractRiskFactor):
     condition = models.CharField(max_length=255)
     formula = models.CharField(max_length=255)
+    pollutant = models.CharField(max_length=255)
 
     def get_multiplier(self, param):
         multiplier = super().get_multiplier()

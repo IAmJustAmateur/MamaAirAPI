@@ -7,20 +7,36 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0013_populate_risk_definitions_prioriies'),
+        ("api", "0013_populate_risk_definitions_prioriies"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='AQRiskFactor',
+            name="AQRiskFactor",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('multiplier', models.FloatField()),
-                ('condition', models.CharField(max_length=255)),
-                ('risk', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='api.riskdefinition')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("multiplier", models.FloatField()),
+                ("condition", models.CharField(max_length=255)),
+                (
+                    "risk",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="api.riskdefinition",
+                    ),
+                ),
+                ("pollutant", models.CharField(max_length=255)),
+                ("formula", models.CharField(max_length=255)),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
     ]
