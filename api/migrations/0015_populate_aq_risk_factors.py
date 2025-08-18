@@ -14,17 +14,115 @@ def populate_aq_risk_factors(apps, schema_editor):
     placental_abruption_risk = RiskDefinition.objects.get(name="Placental abruption")
 
     aq_risk_factors = [
-        # Preeclampsia
+        # ====== Preeclampsia ======
         {
-            "risk": preeclampsia_risk,
-            "condition": "pm2.5 >= 15",
-            "formula": "1.1 ** ((pm2.5 - 15)/10)",
-            "multiplier": 1.1,
-        }
-        # Preterm birth
-        # GDM
-        # Low Birth Weight
-        # Placental abruption
+            "risk": "preeclampsia",
+            "pollutant": "pm25_mg_m3",
+            "condition": "pm25_mg_m3 >= 0.015",  # 15 µg/m³
+            "formula": "1.018 ** ((pm25_mg_m3 - 0.015)/0.01)",
+            "multiplier": 1.018,
+            "reference": "PM2.5 first-trimester exposure increases preeclampsia risk by 1.8% per +10 µg/m³",
+        },
+        {
+            "risk": "preeclampsia",
+            "pollutant": "o3_ppm",
+            "condition": "o3_ppm >= 0.060",  # 60 µg/m³ ≈ 0.06 ppm
+            "formula": "1.018 ** ((o3_ppm - 0.060)/0.01)",
+            "multiplier": 1.018,
+            "reference": "Ozone first-trimester exposure increases gestational hypertension / preeclampsia risk by ~1.8% per +10 ppb",
+        },
+        {
+            "risk": "preeclampsia",
+            "pollutant": "so2_ppm",
+            "condition": "so2_ppm >= 0.010",  # ~10 ppb
+            "formula": "1.05 ** ((so2_ppm - 0.010)/0.01)",
+            "multiplier": 1.05,
+            "reference": "SO2 associated with increased preeclampsia risk; modeled as +5% per +10 ppb",
+        },
+        {
+            "risk": "preeclampsia",
+            "pollutant": "co_ppm",
+            "condition": "co_ppm >= 5.5",
+            "formula": "1.22 ** ((co_ppm - 5.5)/5.5)",
+            "multiplier": 1.22,
+            "reference": "Third-trimester CO >5.5 ppm increases preeclampsia / stillbirth risk (~22%)",
+        },
+        # ====== Preterm birth ======
+        {
+            "risk": "preterm_birth",
+            "pollutant": "pm25_mg_m3",
+            "condition": "pm25_mg_m3 >= 0.010",
+            "formula": "1.12 ** ((pm25_mg_m3 - 0.010)/0.01)",
+            "multiplier": 1.12,
+            "reference": "Each +10 µg/m³ PM2.5 increases preterm birth risk by ~12%",
+        },
+        {
+            "risk": "preterm_birth",
+            "pollutant": "o3_ppm",
+            "condition": "o3_ppm >= 0.060",
+            "formula": "1.06 ** ((o3_ppm - 0.060)/0.01)",
+            "multiplier": 1.06,
+            "reference": "Each +10 ppb O3 increases preterm birth risk by ~6% (T1) / ~5% (T2)",
+        },
+        # ====== GDM ======
+        {
+            "risk": "gdm",
+            "pollutant": "pm25_mg_m3",
+            "condition": "pm25_mg_m3 >= 0.010",
+            "formula": "1.05 ** ((pm25_mg_m3 - 0.010)/0.01)",
+            "multiplier": 1.05,
+            "reference": "PM2.5 exposure increases GDM risk by ~5% per +10 µg/m³",
+        },
+        {
+            "risk": "gdm",
+            "pollutant": "no2_ppm",
+            "condition": "no2_ppm >= 0.0133",  # 25 µg/m³ ≈ 0.0133 ppm
+            "formula": "1.05 ** ((no2_ppm - 0.0133)/0.0053)",
+            "multiplier": 1.05,
+            "reference": "First-trimester NO2 exposure increases GDM risk; modeled as +5% per +10 µg/m³",
+        },
+        # ====== Low Birth Weight ======
+        {
+            "risk": "low_birth_weight",
+            "pollutant": "pm25_mg_m3",
+            "condition": "pm25_mg_m3 >= 0.010",
+            "formula": "1.09 ** ((pm25_mg_m3 - 0.010)/0.01)",
+            "multiplier": 1.09,
+            "reference": "Derived from −22 g per +10 µg/m³ → ~+9% LBW risk (μ=3300g, σ=500g)",
+        },
+        {
+            "risk": "low_birth_weight",
+            "pollutant": "no2_ppm",
+            "condition": "no2_ppm >= 0.0106",  # 10 µg/m³ ≈ 0.0053 ppm
+            "formula": "1.15 ** ((no2_ppm - 0.0106)/0.0053)",
+            "multiplier": 1.15,
+            "reference": "Derived from −37 g per +10 µg/m³ → ~+15% LBW risk (μ=3300g, σ=500g)",
+        },
+        {
+            "risk": "low_birth_weight",
+            "pollutant": "so2_ppm",
+            "condition": "so2_ppm >= 0.0114",  # 11.4 ppb
+            "formula": "1.26 ** ((so2_ppm - 0.0114)/0.01)",
+            "multiplier": 1.26,
+            "reference": "SO2 >11.4 ppb (T3) increases LBW risk by ~26%",
+        },
+        {
+            "risk": "low_birth_weight",
+            "pollutant": "co_ppm",
+            "condition": "co_ppm >= 5.5",
+            "formula": "1.22 ** ((co_ppm - 5.5)/5.5)",
+            "multiplier": 1.22,
+            "reference": "Third-trimester CO >5.5 ppm increases LBW risk by ~22%",
+        },
+        # ====== Placental abruption ======
+        {
+            "risk": "placental_abruption",
+            "pollutant": "pm25_mg_m3",
+            "condition": "pm25_mg_m3 >= 0.010",
+            "formula": "1.15 ** ((pm25_mg_m3 - 0.010)/0.01)",
+            "multiplier": 1.15,
+            "reference": "PM2.5 associated with increased placental abruption risk; modeled as +15% per +10 µg/m³",
+        },
     ]
 
 
@@ -34,4 +132,8 @@ class Migration(migrations.Migration):
         ("api", "0014_aqriskfactor"),
     ]
 
-    operations = []
+    operations = [
+        migrations.RunPython(
+            populate_aq_risk_factors, reverse_code=migrations.RunPython.noop
+        ),
+    ]
