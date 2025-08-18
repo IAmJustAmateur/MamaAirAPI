@@ -113,7 +113,6 @@ def populate_aq_risk_factors(apps, schema_editor):
     ]
     for aq_risk_factor in aq_risk_factors:
         risk = aq_risk_factor["risk"]
-        pollutant = aq_risk_factor["pollutant"]
         condition = aq_risk_factor["condition"]
         formula = aq_risk_factor["formula"]
         multiplier = aq_risk_factor["multiplier"]

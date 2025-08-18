@@ -3,13 +3,14 @@
 import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
-from datetime import date
+from datetime import date, timedelta
 
 from django.utils.translation import gettext_lazy as _
-
-from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 
 from logging import getLogger
+
+import pandas as pd
 
 logger = getLogger(__name__)
 
@@ -20,6 +21,8 @@ from django.contrib.auth.models import (
     AbstractBaseUser,
     PermissionsMixin,
 )
+
+from api.services import round_coord, fetch_air_quality_data_interval
 
 USER_RISK_FACTORS = [
     "bmi",
@@ -181,6 +184,7 @@ class User(MyUser, PermissionsMixin):
     def calculate_risk_factors(self):
         life_style_risks = self.calculate_risk_factor_based_on_lifestyle()
         user_risks = self.calculate_risk_factor_based_on_user_fields()
+        aq_risks = self.calculate_risk_factor_based_on_aq()
         risks = RiskDefinition.objects.filter(is_enabled=True)
         risk_dictionary = {}
         for risk in risks:
@@ -192,8 +196,14 @@ class User(MyUser, PermissionsMixin):
                 user_risks_multiplier = user_risks[risk.name]
             else:
                 user_risks_multiplier = 1
+            if risk.name in aq_risks:
+                aq_risks_multiplier = aq_risks[risk.name]
+            else:
+                aq_risks_multiplier = 1
 
-            risk.risk_factor_multiplier = life_style_multiplier * user_risks_multiplier
+            risk.risk_factor_multiplier = (
+                life_style_multiplier * user_risks_multiplier * aq_risks_multiplier
+            )
 
             risk_dictionary[risk.name] = {
                 "risk_value": risk.risk_factor_multiplier,
@@ -225,6 +235,8 @@ class User(MyUser, PermissionsMixin):
         return risk_dictionary
 
     def calculate_risk_factor_based_on_aq(self, aq_data=None):
+        if aq_data is None:
+            aq_data = self.get_air_quality_inputs_for_risks()
         risks = RiskDefinition.objects.filter(is_enabled=True)
         field_names = [field.name for field in aq_data.keys()]
         risk_dictionary = _calculate_risks(
@@ -263,6 +275,122 @@ class User(MyUser, PermissionsMixin):
         for risk, data in all_risk_symptoms_for_mommy.items():
             symptoms.extend(data["symptoms"])
         return symptoms[0:5]
+
+    def get_user_movements_df(
+        self, start=None, end=None, hours: int = 24
+    ) -> pd.DataFrame:
+        """
+        Возвращает DataFrame с колонками: latitude, longitude, timestamp
+        за указанный период. По умолчанию — последние `hours` часов (24).
+        """
+        end = end or timezone.now()
+        if start is None:
+            start = end - timedelta(hours=hours)
+
+        qs = (
+            Movement.objects.filter(user=self, timestamp__gte=start, timestamp__lte=end)
+            .order_by("timestamp")
+            .values("latitude", "longitude", "timestamp")
+        )
+
+        df = pd.DataFrame.from_records(qs)
+        if df.empty:
+            return df
+
+        # Приводим метку времени к наивному UTC (OWM history ожидает UNIX-штампы в UTC)
+        ts = pd.to_datetime(df["timestamp"], utc=True)
+        # делаем наивные (без таймзоны) UTC-метки — удобно для .timestamp()
+        df["timestamp"] = ts.tz_convert("UTC").dt.tz_localize(None)
+        return df
+
+    def get_air_quality_inputs_for_risks(
+        self, start=None, end=None, hours: int = 24
+    ) -> dict:
+        """
+        Возвращает входы для risk-движка за окно (по умолчанию 24 ч):
+          - pm25, no2, so2 — 24h средние (mg/m³)
+          - o3, co         — 8h-max за сутки (mg/m³)
+        Плюс справочные поля: o3_24h, co_24h, покрытие и качество данных.
+        """
+        df = self.get_user_movements_df(start=start, end=end, hours=hours)
+        if df.empty:
+            return {
+                "pm25": 0.0,
+                "no2": 0.0,
+                "so2": 0.0,
+                "o3": 0.0,
+                "co": 0.0,
+                "o3_24h": 0.0,
+                "co_24h": 0.0,
+                "hours_covered": 0,
+                "n_movements": 0,
+                "data_quality": "no_data",
+            }
+
+        # 1) кластеры по координатам и подтяжка OWM
+        df = df.copy()
+        df["lat_r"] = df["latitude"].apply(round_coord)
+        df["lon_r"] = df["longitude"].apply(round_coord)
+
+        results = {}
+        for (lat_r, lon_r), group in df.groupby(["lat_r", "lon_r"]):
+            ts = pd.to_datetime(group["timestamp"])
+            pollution_map = fetch_air_quality_data_interval(lat_r, lon_r, ts)
+            for idx, tstamp in zip(group.index, ts):
+                if pollution_map:
+                    closest = min(pollution_map.keys(), key=lambda t: abs(t - tstamp))
+                    results[idx] = pollution_map.get(closest, {})
+                else:
+                    results[idx] = {}
+
+        # 2) извлекаем и конвертируем: OWM даёт µg/m³ → делим на 1000 → mg/m³
+        df["pm25"] = [results.get(i, {}).get("pm2_5", 0.0) / 1000.0 for i in df.index]
+        df["no2"] = [results.get(i, {}).get("no2", 0.0) / 1000.0 for i in df.index]
+        df["so2"] = [results.get(i, {}).get("so2", 0.0) / 1000.0 for i in df.index]
+        df["o3"] = [results.get(i, {}).get("o3", 0.0) / 1000.0 for i in df.index]
+        df["co"] = [results.get(i, {}).get("co", 0.0) / 1000.0 for i in df.index]
+
+        # 3) агрегируем к почасовому и считаем метрики окна
+        df = df.sort_values("timestamp")
+        hourly = (
+            df.set_index(pd.to_datetime(df["timestamp"]))
+            .resample("1H")
+            .mean(numeric_only=True)
+        )
+
+        def _safe_mean(s: pd.Series) -> float:
+            return float(s.mean()) if (s is not None and not s.empty) else 0.0
+
+        def _rolling_8h_max(s: pd.Series) -> float:
+            if s is None or s.empty:
+                return 0.0
+            if len(s) < 8:
+                return float(s.mean())
+            return float(s.rolling(window=8, min_periods=8).mean().max())
+
+        pm25_24h = _safe_mean(hourly["pm25"])
+        no2_24h = _safe_mean(hourly["no2"])
+        so2_24h = _safe_mean(hourly["so2"])
+        o3_24h = _safe_mean(hourly["o3"])
+        co_24h = _safe_mean(hourly["co"])
+
+        o3_8hmax = _rolling_8h_max(hourly["o3"])
+        co_8hmax = _rolling_8h_max(hourly["co"])
+
+        return {
+            # значения для формул рисков (mg/м³), без суффиксов
+            "pm25": pm25_24h,
+            "no2": no2_24h,
+            "so2": so2_24h,
+            "o3": o3_8hmax,
+            "co": co_8hmax,
+            # справочно
+            "o3_24h": o3_24h,
+            "co_24h": co_24h,
+            "hours_covered": int(hourly.shape[0]),
+            "n_movements": int(df.shape[0]),
+            "data_quality": "ok" if hourly.shape[0] >= 8 else "low",
+        }
 
 
 class UserLifeStyle(models.Model):

@@ -20,6 +20,7 @@ from .models import (
     LifestyleRiskFactor,
     RiskDefinitionBabySymptom,
     RiskDefinitionMommySymptom,
+    AQRiskFactor,
 )
 from django.contrib.auth import authenticate, login
 
@@ -202,3 +203,10 @@ class LifestyleRiskFactorAdmin(admin.ModelAdmin):
     list_display = ("risk", "condition", "multiplier")
     search_fields = ("risk__name", "condition")
     list_filter = ("risk", "condition", "multiplier")
+
+
+@admin.register(AQRiskFactor)
+class AQRiskFactorAdmin(admin.ModelAdmin):
+    list_display = ("risk", "condition", "multiplier", "formula")
+    search_fields = ("risk__name", "condition", "formula")
+    list_filter = ("risk", "condition", "multiplier", "formula")

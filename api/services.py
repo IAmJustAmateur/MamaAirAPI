@@ -1,6 +1,40 @@
 # api/services/advice_selector.py
 
 from .models import AdviceTemplate
+from datetime import timedelta, datetime
+import requests
+import pandas as pd
+
+OWM_BASE_URL = "https://api.openweathermap.org/data/2.5/history"
+OWM_API_KEY = "YOUR_API_KEY"
+
+
+def round_coord(val: float) -> float:
+    return round(val, 2)  # ~1 км
+
+
+def fetch_air_quality_data_interval(
+    lat: float, lon: float, timestamps: pd.Series
+) -> dict:
+    """
+    Тянем OWM историю по часовым меткам [start..end].
+    Возвращаем dict: { datetime -> components_dict }
+    """
+    start_time = pd.to_datetime(timestamps.min()).to_pydatetime()
+    end_time = pd.to_datetime(timestamps.max()).to_pydatetime()
+    if end_time - start_time < timedelta(hours=1):
+        start_time = end_time - timedelta(hours=1)
+
+    start_ts = int(start_time.timestamp())
+    end_ts = int(end_time.timestamp())
+
+    url = f"{OWM_BASE_URL}?lat={lat}&lon={lon}&start={start_ts}&end={end_ts}&appid={OWM_API_KEY}"
+    resp = requests.get(url)
+    if resp.status_code != 200:
+        raise RuntimeError(f"OWM error {resp.status_code}: {resp.text}")
+
+    items = resp.json().get("list", [])
+    return {datetime.fromtimestamp(it["dt"]): it["components"] for it in items}
 
 
 def get_current_advices(user, pregnancy_week=None):
