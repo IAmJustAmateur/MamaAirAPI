@@ -24,6 +24,8 @@ from django.contrib.auth.models import (
 
 from api.services import round_coord, fetch_air_quality_data_interval
 
+from api.utils import calculate_exposure
+
 USER_RISK_FACTORS = [
     "bmi",
     "full_year",
@@ -185,6 +187,8 @@ class User(MyUser, PermissionsMixin):
         life_style_risks = self.calculate_risk_factor_based_on_lifestyle()
         user_risks = self.calculate_risk_factor_based_on_user_fields()
         aq_risks = self.calculate_risk_factor_based_on_aq()
+        exposure_value = calculate_exposure(aq_risks)
+        Exposure.objects.create(user=self, exposure_level=exposure_value)
         risks = RiskDefinition.objects.filter(is_enabled=True)
         risk_dictionary = {}
         for risk in risks:
@@ -344,11 +348,11 @@ class User(MyUser, PermissionsMixin):
                     results[idx] = {}
 
         # 2) извлекаем и конвертируем: OWM даёт µg/m³ → делим на 1000 → mg/m³
-        df["pm25"] = [results.get(i, {}).get("pm2_5", 0.0) / 1000.0 for i in df.index]
-        df["no2"] = [results.get(i, {}).get("no2", 0.0) / 1000.0 for i in df.index]
-        df["so2"] = [results.get(i, {}).get("so2", 0.0) / 1000.0 for i in df.index]
-        df["o3"] = [results.get(i, {}).get("o3", 0.0) / 1000.0 for i in df.index]
-        df["co"] = [results.get(i, {}).get("co", 0.0) / 1000.0 for i in df.index]
+        df["pm25"] = [results.get(i, {}).get("pm2_5", 0.0) for i in df.index]
+        df["no2"] = [results.get(i, {}).get("no2", 0.0) for i in df.index]
+        df["so2"] = [results.get(i, {}).get("so2", 0.0) for i in df.index]
+        df["o3"] = [results.get(i, {}).get("o3", 0.0) for i in df.index]
+        df["co"] = [results.get(i, {}).get("co", 0.0) for i in df.index]
 
         # 3) агрегируем к почасовому и считаем метрики окна
         df = df.sort_values("timestamp")
@@ -669,3 +673,9 @@ class AQRiskFactor(AbstractRiskFactor):
             return multiplier
         new_formua = self.formula.replace("param", str(param))
         return multiplier * eval(new_formua)
+
+
+class Exposure(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    timestamp = models.DateField(auto_now_add=True)
+    exposure_level = models.FloatField()

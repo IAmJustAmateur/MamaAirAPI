@@ -18,96 +18,96 @@ def populate_aq_risk_factors(apps, schema_editor):
         {
             "risk": preeclampsia_risk,
             "pollutant": "pm25",
-            "condition": "pm25 >= 0.015",  # 15 µg/m³
-            "formula": "1.018 ** ((pm25 - 0.015)/0.01)",
+            "condition": "pm25 >= 15",  # 15 µg/m³
+            "formula": "1.018 ** ((pm25 - 15)/10)",
             "multiplier": 1.018,
         },
         {
             "risk": preeclampsia_risk,
             "pollutant": "o3",
             "condition": "o3 >= 0.060",  # 60 µg/m³ ≈ 0.06 ppm
-            "formula": "1.018 ** ((o3 - 0.060)/0.01)",
+            "formula": "1.018 ** ((o3 - 60)/20)",
             "multiplier": 1.018,
         },
         {
             "risk": preeclampsia_risk,
             "pollutant": "so2",
-            "condition": "so2 >= 0.010",  # ~10 ppb
-            "formula": "1.05 ** ((so2 - 0.010)/0.01)",
+            "condition": "so2 >= 40",  # ~10
+            "formula": "1.05 ** ((so2 - 40)/26)",
             "multiplier": 1.05,
         },
         {
             "risk": preeclampsia_risk,
             "pollutant": "co",
-            "condition": "co >= 5.5",
-            "formula": "1.22 ** ((co - 5.5)/5.5)",
+            "condition": "co >= 4000",
+            "formula": "1.22 ** ((co - 4000)/4000)",
             "multiplier": 1.22,
         },
         # ====== Preterm birth ======
         {
             "risk": preterm_birth_risk,
             "pollutant": "pm25",
-            "condition": "pm25 >= 0.010",
-            "formula": "1.12 ** ((pm25 - 0.010)/0.01)",
+            "condition": "pm25 >= 10",
+            "formula": "1.12 ** ((pm25 - 10)/10)",
             "multiplier": 1.12,
         },
         {
             "risk": preterm_birth_risk,
             "pollutant": "o3",
-            "condition": "o3 >= 0.060",
-            "formula": "1.06 ** ((o3 - 0.060)/0.01)",
+            "condition": "o3 >= 60",
+            "formula": "1.06 ** ((o3 - 60)/10)",
             "multiplier": 1.06,
         },
         # ====== GDM ======
         {
             "risk": gdm_risk,
             "pollutant": "pm25",
-            "condition": "pm25 >= 0.010",
-            "formula": "1.05 ** ((pm25 - 0.010)/0.01)",
+            "condition": "pm25 >= 10",
+            "formula": "1.05 ** ((pm25 - 10)/10)",
             "multiplier": 1.05,
         },
         {
             "risk": gdm_risk,
             "pollutant": "no2",
-            "condition": "no2 >= 0.0133",  # 25 µg/m³ ≈ 0.0133 ppm
-            "formula": "1.05 ** ((no2 - 0.0133)/0.0053)",
+            "condition": "no2 >= 133",  # 25 µg/m³ ≈ 0.0133 ppm
+            "formula": "1.05 ** ((no2 - 133)/53)",
             "multiplier": 1.05,
         },
         # ====== Low Birth Weight ======
         {
             "risk": low_birth_weight_risk,
             "pollutant": "pm25",
-            "condition": "pm25 >= 0.010",
-            "formula": "1.09 ** ((pm25 - 0.010)/0.01)",
+            "condition": "pm25 >= 10",
+            "formula": "1.09 ** ((pm25 - 10)/10)",
             "multiplier": 1.09,
         },
         {
             "risk": low_birth_weight_risk,
             "pollutant": "no2",
-            "condition": "no2 >= 0.0106",  # 10 µg/m³ ≈ 0.0053 ppm
-            "formula": "1.15 ** ((no2 - 0.0106)/0.0053)",
+            "condition": "no2 >= 106",  # 10 µg/m³ ≈ 0.0053 ppm
+            "formula": "1.15 ** ((no2 - 106)/53)",
             "multiplier": 1.15,
         },
         {
             "risk": low_birth_weight_risk,
             "pollutant": "so2",
-            "condition": "so2 >= 0.0114",  # 11.4 ppb
-            "formula": "1.26 ** ((so2 - 0.0114)/0.01)",
+            "condition": "so2 >= 114",  # 11.4 ppb
+            "formula": "1.26 ** ((so2 - 114)/10)",
             "multiplier": 1.26,
         },
         {
             "risk": low_birth_weight_risk,
             "pollutant": "co",
-            "condition": "co >= 5.5",
-            "formula": "1.22 ** ((co - 5.5)/5.5)",
+            "condition": "co >= 5500",
+            "formula": "1.22 ** ((co - 5500)/5500)",
             "multiplier": 1.22,
         },
         # ====== Placental abruption ======
         {
             "risk": placental_abruption_risk,
             "pollutant": "pm25",
-            "condition": "pm25 >= 0.010",
-            "formula": "1.15 ** ((pm25 - 0.010)/0.01)",
+            "condition": "pm25 >= 10",
+            "formula": "1.15 ** ((pm25 - 10)/10)",
             "multiplier": 1.15,
         },
     ]

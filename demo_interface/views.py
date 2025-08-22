@@ -6,7 +6,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from .forms import *
 from django.shortcuts import get_object_or_404
-from api.models import Movement
+from api.models import Movement, User, Exposure
 import random
 from datetime import datetime, timedelta
 from io import TextIOWrapper
@@ -100,6 +100,7 @@ def edit_user(request, user_id):
     except Exception as e:
         mommy_symptoms_for_checking = []
         messages.warning(request, f"Symptoms selection error: {e}")
+    user_exposure_history = Exposure.objects.filter(user=user).order_by("-date")
 
     return render(
         request,
@@ -110,6 +111,7 @@ def edit_user(request, user_id):
             "user_obj": user,
             "user_risks": user_risks,
             "mommy_symptoms_for_checking": mommy_symptoms_for_checking,
+            "user_exposure_history": user_exposure_history,
         },
     )
 

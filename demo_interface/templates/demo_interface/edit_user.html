@@ -37,6 +37,27 @@
     {% else %}
         <p>No risk data.</p>
     {% endif %}
+    {% if user_exposure_history %}
+        <h3>Exposure</h3>
+        <table border="1" cellpadding="6" cellspacing="0">
+            <thead>
+                <th>Date</th>
+                <th>Exposure</th>
+            </thead>
+            <tbody>
+                {% for exposure in user_exposure_history %}
+                    <tr>
+                        <td>
+                            {{exposure.timestamp}}
+                        </td>
+                        <td>
+                            {{exposure.exposure_level}}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
 
     <h3 class="mt-3">Mommy symptoms to check (test view)</h3>
     {% if mommy_symptoms_for_checking %}
