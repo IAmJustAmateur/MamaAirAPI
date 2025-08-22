@@ -154,6 +154,7 @@ if __name__ == "__main__":
     print("\n✅ Uploading valid mommy symptom:")
     test_upload_mommy_symptoms(payload, access_token)
 
+
     print("\n⚠️ Uploading invalid CSV:")
     test_upload_movements("scripts/test_data/invalid_movements.csv", access_token)
 
