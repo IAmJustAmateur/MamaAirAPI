@@ -53,10 +53,12 @@ def create_user(request):
     )
 
 
+# views.py
 @user_passes_test(lambda u: u.is_authenticated and u.is_staff, login_url="/login/")
 def edit_user(request, user_id):
     user = get_object_or_404(User, id=user_id)
     lifestyle, _ = UserLifeStyle.objects.get_or_create(user=user)
+
     if request.method == "POST":
         user_form = UserEditForm(request.POST, instance=user)
         lifestyle_form = UserLifeStyleForm(request.POST, instance=lifestyle)
@@ -69,18 +71,16 @@ def edit_user(request, user_id):
             return redirect("user_list")
     else:
         user_form = UserEditForm(instance=user)
-        user_form.fields["password"].required = False  # don't force password update
+        user_form.fields["password"].required = False
         lifestyle_form = UserLifeStyleForm(instance=lifestyle)
 
+    # risks
     try:
-        user_risks_dict = (
-            user.calculate_risk_factors()
-        )  # { risk_name: {"risk_value": x, "priority": p}, ... }
+        user_risks_dict = user.calculate_risk_factors()
     except Exception as e:
         user_risks_dict = {}
         messages.warning(request, f"Risk calc error: {e}")
 
-    # Преобразуем в отсортированный список для удобного вывода
     user_risks = []
     for name, data in user_risks_dict.items():
         user_risks.append(
@@ -90,17 +90,31 @@ def edit_user(request, user_id):
                 "priority": data.get("priority", 9999),
             }
         )
-    # сортировка: сначала по priority (asc), затем по value (desc)
     user_risks.sort(key=lambda r: (r["priority"], -float(r["risk_value"] or 0)))
 
+    # mommy symptoms
     try:
-        mommy_symptoms_for_checking = (
-            user.get_mommy_symptoms_for_checking()
-        )  # список топ-5 симптомов
+        mommy_symptoms_for_checking = user.get_mommy_symptoms_for_checking()
     except Exception as e:
         mommy_symptoms_for_checking = []
         messages.warning(request, f"Symptoms selection error: {e}")
-    user_exposure_history = Exposure.objects.filter(user=user).order_by("-date")
+
+    # exposure history -> подготовим строки с поллютантами
+    exposures_qs = Exposure.objects.filter(user=user).order_by("-timestamp")
+    exposure_rows = []
+    for exp in exposures_qs:
+        p = exp.pollutants or {}
+        exposure_rows.append(
+            {
+                "date": exp.timestamp,
+                "exposure": exp.exposure_level,
+                "pm25": p.get("pm25"),
+                "no2": p.get("no2"),
+                "so2": p.get("so2"),
+                "o3": p.get("o3"),
+                "co": p.get("co"),
+            }
+        )
 
     return render(
         request,
@@ -111,7 +125,7 @@ def edit_user(request, user_id):
             "user_obj": user,
             "user_risks": user_risks,
             "mommy_symptoms_for_checking": mommy_symptoms_for_checking,
-            "user_exposure_history": user_exposure_history,
+            "exposure_rows": exposure_rows,  # <- передаём в шаблон
         },
     )
 

@@ -21,6 +21,7 @@ from .models import (
     RiskDefinitionBabySymptom,
     RiskDefinitionMommySymptom,
     AQRiskFactor,
+    Exposure,
 )
 from django.contrib.auth import authenticate, login
 
@@ -210,3 +211,10 @@ class AQRiskFactorAdmin(admin.ModelAdmin):
     list_display = ("risk", "condition", "multiplier", "formula")
     search_fields = ("risk__name", "condition", "formula")
     list_filter = ("risk", "condition", "multiplier", "formula")
+
+
+@admin.register(Exposure)
+class ExposureAdmin(admin.ModelAdmin):
+    list_display = ("user", "timestamp", "exposure_level")
+    list_filter = ("user", "timestamp")
+    search_fields = ("user__email",)
