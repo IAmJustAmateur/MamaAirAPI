@@ -573,6 +573,10 @@ def _map_choices(choices):
     return [{"value": v, "label": str(lbl)} for v, lbl in choices]
 
 
+@extend_schema(
+    summary="Get meta information",
+    description="Returns choices for available languages, races, countries, work types, diet types, cooking methods, and exposure levels.",
+)
 class MetaChoicesView(APIView):
     authentication_classes = []  # публично (можно включить JWT, если нужно)
     permission_classes = []
