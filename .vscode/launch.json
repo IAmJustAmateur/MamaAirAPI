@@ -20,8 +20,9 @@
             "request": "launch",
             "args": [
                 "test",
+                "api.tests.test_meta_choices",
                 //"api.tests.test_auth",
-                "api.tests.test_user_risk_calculations"
+                //"api.tests.test_user_risk_calculations"
             ],
             "justMyCode": false,
             "django": true,

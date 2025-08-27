@@ -7,15 +7,18 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from drf_spectacular.types import OpenApiTypes
-from rest_framework.response import Response
+
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import (
     BlacklistedToken,
     OutstandingToken,
 )
 
+from django.utils.translation import gettext as _
+from django.contrib.auth import get_user_model
+
 from django.contrib.auth import authenticate, login
-from django.views import View
+
 from django.shortcuts import render, redirect
 
 from drf_spectacular.utils import (
@@ -64,6 +67,12 @@ from .services import (
     get_today_journey,
 )
 from .permissions import HasValidRegistrationAPIKey
+
+from api.models import (
+    LANGUAGE_CHOICES,
+    EXPOSURE_LEVEL_CHOICES,
+    UserLifeStyle,
+)
 
 
 @extend_schema(
@@ -557,3 +566,29 @@ def login_view(request):
         else:
             return HttpResponse("Invalid credentials", status=401)
     return render(request, "api/custom_login.html")  # Render a simple login form
+
+
+def _map_choices(choices):
+    """[(value, label), ...] -> [{'value': v, 'label': str(label)}, ...]"""
+    return [{"value": v, "label": str(lbl)} for v, lbl in choices]
+
+
+class MetaChoicesView(APIView):
+    authentication_classes = []  # публично (можно включить JWT, если нужно)
+    permission_classes = []
+
+    def get(self, request):
+        # Можно также доставать choices через поля модели, чтобы не дублировать:
+        # user_model = get_user_model()
+        # race_choices = user_model._meta.get_field("race").choices
+        # но ниже — напрямую из констант (эквивалентно и быстрее)
+        data = {
+            "languages": _map_choices(LANGUAGE_CHOICES),
+            "races": _map_choices(User.RACE_CHOICES),
+            "countries": _map_choices(User.COUNTRY_CHOICES),
+            "work_types": _map_choices(UserLifeStyle.WORK_TYPE_CHOICES),
+            "diet_types": _map_choices(UserLifeStyle.DIET_TYPE_CHOICES),
+            "cooking_methods": _map_choices(UserLifeStyle.COOKING_METHOD_CHOICES),
+            "exposure_levels": _map_choices(EXPOSURE_LEVEL_CHOICES),
+        }
+        return Response(data)
