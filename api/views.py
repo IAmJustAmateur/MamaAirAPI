@@ -127,7 +127,8 @@ class UserLifestyleView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        return self.request.user.lifestyle
+        obj, _created = UserLifeStyle.objects.get_or_create(user=self.request.user)
+        return obj
 
 
 class UserMommySymptomsView(generics.ListCreateAPIView):
