@@ -8,7 +8,8 @@ from rest_framework_simplejwt.views import (
 from .views import (
     UserProfileView,
     UserLifestyleView,
-    UserMommySymptomsView,
+    MommySymptomsChecklistView,
+    UserMommySymptomsSelectionView,
     UserBabySymptomsView,
     HealthInsightView,
     MovementCSVUploadView,
@@ -40,7 +41,16 @@ urlpatterns = [
     path("profile/", UserProfileView.as_view(), name="profile"),
     path("set-language/", SetLanguageView.as_view(), name="set-language"),
     path("lifestyle/", UserLifestyleView.as_view(), name="lifestyle"),
-    path("symptoms/mommy/", UserMommySymptomsView.as_view(), name="symptoms-mommy"),
+    path(
+        "symptoms/mommy/checklist/",
+        MommySymptomsChecklistView.as_view(),
+        name="symptoms-mommy-checklist",
+    ),
+    path(
+        "symptoms/mommy/selection/",
+        UserMommySymptomsSelectionView.as_view(),
+        name="symptoms-mommy-selection",
+    ),
     path("symptoms/baby/", UserBabySymptomsView.as_view(), name="symptoms-baby"),
     path("movements/upload", MovementCSVUploadView.as_view(), name="movements-upload"),
     #

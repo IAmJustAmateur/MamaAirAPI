@@ -6,6 +6,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError
 from drf_spectacular.types import OpenApiTypes
 
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -20,6 +21,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate, login
 
 from django.shortcuts import render, redirect
+from django.db import transaction
 
 from drf_spectacular.utils import (
     extend_schema,
@@ -39,6 +41,8 @@ from .models import (
     WeeklyExposure,
     LANGUAGE_CHOICES,
     User,
+    UserMommySymptoms,
+    MommySymptom,
 )
 from .serializers import (
     RegisterSerializer,
@@ -131,17 +135,75 @@ class UserLifestyleView(generics.RetrieveUpdateAPIView):
         return obj
 
 
-class UserMommySymptomsView(generics.ListCreateAPIView):
-    serializer_class = UserMommySymptomsSerializer
+class MommySymptomsChecklistView(APIView):
+    """
+    Чек-лист для контроля.
+    Возвращает объекты с id и name, чтобы клиент мог выбрать и потом отправить id.
+    """
+
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        user: User = self.request.user
-        symptoms = user.get_mommy_symptoms_for_checking()
-        return symptoms
+    def get(self, request):
+        user: User = request.user
+        names = user.get_mommy_symptoms_for_checking()  # list[str]
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        # Маппим имена на объекты справочника.
+        # Если какие-то имена не найдены в БД, всё равно вернём их с id=None —
+        # это поможет обнаружить несоответствия на этапе теста/данных.
+        qs = MommySymptom.objects.filter(name__in=names).values("id", "name")
+        found_by_name = {row["name"]: row for row in qs}
+
+        items = []
+        for nm in names:
+            row = found_by_name.get(nm)
+            if row:
+                items.append({"id": row["id"], "name": row["name"]})
+            else:
+                items.append({"id": None, "name": nm})
+
+        return Response({"symptoms": items})
+
+
+class UserMommySymptomsSelectionView(APIView):
+    """
+    Сохранение выбора пользователя (replace-all).
+    - GET -> текущий выбор: {"symptom_ids": [int, ...]}
+    - POST -> заменить выбор: {"symptom_ids": [int, ...]} -> 200 + текущий набор
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user: User = request.user
+        ids = list(
+            UserMommySymptoms.objects.filter(user=user).values_list(
+                "symptom_id", flat=True
+            )
+        )
+        return Response({"symptom_ids": ids})
+
+    @transaction.atomic
+    def post(self, request):
+        user: User = request.user
+        ids = request.data.get("symptom_ids", [])
+        if not isinstance(ids, list):
+            raise ValidationError({"symptom_ids": "Must be a list of integers."})
+
+        # Валидация существования всех ID
+        exists = set(
+            MommySymptom.objects.filter(id__in=ids).values_list("id", flat=True)
+        )
+        missing = sorted(set(ids) - exists)
+        if missing:
+            raise ValidationError({"symptom_ids": f"Unknown ids: {missing}"})
+
+        # Полная замена набора
+        UserMommySymptoms.objects.filter(user=user).delete()
+        bulk = [UserMommySymptoms(user=user, symptom_id=sid) for sid in exists]
+        if bulk:
+            UserMommySymptoms.objects.bulk_create(bulk)
+
+        return Response({"symptom_ids": sorted(list(exists))})
 
 
 class UserBabySymptomsView(generics.ListCreateAPIView):
