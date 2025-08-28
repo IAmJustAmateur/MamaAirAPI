@@ -85,7 +85,7 @@ class AuthTests(APITestCase):
 
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
         response = self.client.post(reverse("logout"), {"refresh": refresh})
-        self.assertEqual(response.status_code, status.HTTP_205_RESET_CONTENT)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
 
     def test_delete_account(self):
         tokens = self.client.post(
