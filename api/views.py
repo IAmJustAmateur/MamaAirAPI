@@ -889,7 +889,7 @@ def _map_choices(choices):
     return [{"value": v, "label": str(lbl)} for v, lbl in choices]
 
 
-extend_schema(
+@extend_schema(
     tags=["Meta"],
     summary="Meta choices for dropdowns",
     responses={200: MetaChoicesResponseSchema},
@@ -909,8 +909,6 @@ extend_schema(
         )
     ],
 )
-
-
 class MetaChoicesView(APIView):
     authentication_classes = []  # публично (можно включить JWT, если нужно)
     permission_classes = []
