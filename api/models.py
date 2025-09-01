@@ -490,7 +490,7 @@ class MommySymptom(Symptom):
     pass
 
 
-class BabySymptom(models.Model):
+class BabySymptom(Symptom):
     pass
 
 

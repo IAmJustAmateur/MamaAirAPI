@@ -28,9 +28,10 @@ from drf_spectacular.utils import (
     OpenApiResponse,
     OpenApiExample,
     OpenApiParameter,
+    inline_serializer,
 )
 
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, serializers
 
 from rest_framework.response import Response
 from django.utils import timezone
@@ -119,6 +120,47 @@ def _target_date_from_request(request):
     return _parse_recorded_at_param(request).date()
 
 
+class ChoiceSchema(serializers.Serializer):
+    value = serializers.CharField()
+    label = serializers.CharField()
+
+
+class MetaChoicesResponseSchema(serializers.Serializer):
+    languages = ChoiceSchema(many=True)
+    races = ChoiceSchema(many=True)
+    countries = ChoiceSchema(many=True)
+    work_types = ChoiceSchema(many=True)
+    diet_types = ChoiceSchema(many=True)
+    cooking_methods = ChoiceSchema(many=True)
+    exposure_levels = ChoiceSchema(many=True)
+
+
+# ---- Symptom checklists & selection ----
+class ChecklistItemSchema(serializers.Serializer):
+    id = serializers.IntegerField(allow_null=True)
+    name = serializers.CharField()
+
+
+class ChecklistResponseSchema(serializers.Serializer):
+    symptoms = ChecklistItemSchema(many=True)
+
+
+class SymptomSelectionRequestSchema(serializers.Serializer):
+    symptom_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), allow_empty=True
+    )
+    recorded_at = serializers.DateTimeField(
+        required=False,
+        help_text="ISO-8601. If timezone is omitted, interpreted in server TIME_ZONE.",
+    )
+
+
+class SymptomSelectionResponseSchema(serializers.Serializer):
+    date = serializers.DateField()
+    recorded_at = serializers.DateTimeField(required=False, allow_null=True)
+    symptom_ids = serializers.ListField(child=serializers.IntegerField())
+
+
 @extend_schema(
     summary="Register a new user account",
     description="Registers a new user. Requires a valid API key in the `X-API-Key` header.",
@@ -166,6 +208,19 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
+@extend_schema(
+    tags=["Lifestyle"],
+    summary="Get current user lifestyle (auto-created if missing)",
+    responses={200: UserLifeStyleSerializer},
+    methods=["GET"],
+)
+@extend_schema(
+    tags=["Lifestyle"],
+    summary="Update current user lifestyle",
+    request=UserLifeStyleSerializer,
+    responses={200: UserLifeStyleSerializer},
+    methods=["PATCH"],
+)
 class UserLifestyleView(generics.RetrieveUpdateAPIView):
     serializer_class = UserLifeStyleSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -178,6 +233,23 @@ class UserLifestyleView(generics.RetrieveUpdateAPIView):
 # ---------- MOMMY ----------
 
 
+@extend_schema(
+    tags=["Symptoms – Mommy"],
+    summary="Mommy symptoms checklist (id + name)",
+    responses={200: ChecklistResponseSchema},
+    examples=[
+        OpenApiExample(
+            "Checklist",
+            value={
+                "symptoms": [
+                    {"id": 10, "name": "Headache"},
+                    {"id": 12, "name": "Nausea"},
+                ]
+            },
+            response_only=True,
+        )
+    ],
+)
 class MommySymptomsChecklistView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -195,6 +267,51 @@ class MommySymptomsChecklistView(APIView):
         return Response({"symptoms": data})
 
 
+@extend_schema(
+    tags=["Symptoms – Mommy"],
+    summary="Get mommy selection for a date",
+    parameters=[
+        OpenApiParameter(
+            name="date",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Calendar date (YYYY-MM-DD). Overrides recorded_at if both provided.",
+            type=str,
+        ),
+        OpenApiParameter(
+            name="recorded_at",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="ISO-8601 datetime. If timezone omitted, interpreted in server TIME_ZONE.",
+            type=str,
+        ),
+    ],
+    responses={200: SymptomSelectionResponseSchema},
+    methods=["GET"],
+)
+@extend_schema(
+    tags=["Symptoms – Mommy"],
+    summary="Replace mommy selection for recorded_at day",
+    request=SymptomSelectionRequestSchema,
+    responses={200: SymptomSelectionResponseSchema},
+    examples=[
+        OpenApiExample(
+            "Request",
+            value={"symptom_ids": [10, 12], "recorded_at": "2025-09-01T08:30:00+03:00"},
+            request_only=True,
+        ),
+        OpenApiExample(
+            "Response",
+            value={
+                "date": "2025-09-01",
+                "recorded_at": "2025-09-01T08:30:00+03:00",
+                "symptom_ids": [10, 12],
+            },
+            response_only=True,
+        ),
+    ],
+    methods=["POST"],
+)
 class UserMommySymptomsSelectionView(APIView):
     """
     Replace-all за день, определяемый:
@@ -255,6 +372,11 @@ class UserMommySymptomsSelectionView(APIView):
 # ---------- BABY ----------
 
 
+@extend_schema(
+    tags=["Symptoms – Baby"],
+    summary="Baby symptoms checklist (id + name)",
+    responses={200: ChecklistResponseSchema},
+)
 class BabySymptomsChecklistView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -271,6 +393,35 @@ class BabySymptomsChecklistView(APIView):
         return Response({"symptoms": data})
 
 
+@extend_schema(
+    tags=["Symptoms – Baby"],
+    summary="Get baby selection for a date",
+    parameters=[
+        OpenApiParameter(
+            name="date",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            type=str,
+            description="Calendar date (YYYY-MM-DD). Overrides recorded_at if both provided.",
+        ),
+        OpenApiParameter(
+            name="recorded_at",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            type=str,
+            description="ISO-8601 datetime. If timezone omitted, interpreted in server TIME_ZONE.",
+        ),
+    ],
+    responses={200: SymptomSelectionResponseSchema},
+    methods=["GET"],
+)
+@extend_schema(
+    tags=["Symptoms – Baby"],
+    summary="Replace baby selection for recorded_at day",
+    request=SymptomSelectionRequestSchema,
+    responses={200: SymptomSelectionResponseSchema},
+    methods=["POST"],
+)
 class UserBabySymptomsSelectionView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -738,10 +889,28 @@ def _map_choices(choices):
     return [{"value": v, "label": str(lbl)} for v, lbl in choices]
 
 
-@extend_schema(
-    summary="Get meta information",
-    description="Returns choices for available languages, races, countries, work types, diet types, cooking methods, and exposure levels.",
+extend_schema(
+    tags=["Meta"],
+    summary="Meta choices for dropdowns",
+    responses={200: MetaChoicesResponseSchema},
+    examples=[
+        OpenApiExample(
+            "Example",
+            value={
+                "languages": [{"value": "en", "label": "English"}],
+                "races": [{"value": "caucasian", "label": "Caucasian"}],
+                "countries": [{"value": "nigeria", "label": "Nigeria"}],
+                "work_types": [{"value": "Desk", "label": "Desk"}],
+                "diet_types": [{"value": "carnivore", "label": "Carnivore"}],
+                "cooking_methods": [{"value": "gas", "label": "Gas"}],
+                "exposure_levels": [{"value": "Clean", "label": "Clean"}],
+            },
+            response_only=True,
+        )
+    ],
 )
+
+
 class MetaChoicesView(APIView):
     authentication_classes = []  # публично (можно включить JWT, если нужно)
     permission_classes = []
