@@ -13,6 +13,8 @@ from .models import (
 )
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 User = get_user_model()
 
@@ -43,6 +45,54 @@ class UserLifeStyleSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserLifeStyle
         fields = "__all__"
+
+
+class SymptomSelectionSerializer(serializers.Serializer):
+    """
+    Универсальный сериалайзер для selection POST:
+    - symptom_ids: список ID симптомов
+    - recorded_at: дата-время пользователя (ISO-8601), опционально
+    """
+
+    symptom_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=True,
+        required=True,
+    )
+    recorded_at = serializers.CharField(required=False, allow_blank=False)
+
+    def validate_recorded_at(self, value: str):
+        if not value:
+            return value
+        dt = parse_datetime(value)
+        if dt is None:
+            raise serializers.ValidationError(
+                "Invalid datetime. Use ISO-8601, e.g. 2025-09-01T08:30:00+03:00"
+            )
+        if timezone.is_naive(dt):
+            # Локализуем в settings.TIME_ZONE, если не указана таймзона
+            tz = timezone.get_fixed_timezone(
+                timezone.get_current_timezone().utcoffset(None).total_seconds() / 60
+            )
+            # На самом деле лучше settings.TIME_ZONE:
+            tz = timezone.get_default_timezone()  # эквивалент settings.TIME_ZONE
+            dt = timezone.make_aware(dt, tz)
+        return dt
+
+    def to_internal_value(self, data):
+        ret = super().to_internal_value(data)
+        # Преобразуем recorded_at в aware datetime или None
+        ra = data.get("recorded_at")
+        if ra:
+            ret["recorded_at"] = self.validate_recorded_at(ra)
+        else:
+            ret["recorded_at"] = timezone.now()
+        return ret
+
+
+class ChecklistItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField(allow_null=True)
+    name = serializers.CharField()
 
 
 class UserMommySymptomsSerializer(serializers.ModelSerializer):

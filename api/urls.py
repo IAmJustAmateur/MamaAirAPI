@@ -10,7 +10,8 @@ from .views import (
     UserLifestyleView,
     MommySymptomsChecklistView,
     UserMommySymptomsSelectionView,
-    UserBabySymptomsView,
+    BabySymptomsChecklistView,
+    UserBabySymptomsSelectionView,
     HealthInsightView,
     MovementCSVUploadView,
     EnvironmentView,
@@ -46,12 +47,23 @@ urlpatterns = [
         MommySymptomsChecklistView.as_view(),
         name="symptoms-mommy-checklist",
     ),
+    # Mommy
     path(
         "symptoms/mommy/selection/",
         UserMommySymptomsSelectionView.as_view(),
         name="symptoms-mommy-selection",
     ),
-    path("symptoms/baby/", UserBabySymptomsView.as_view(), name="symptoms-baby"),
+    # Baby
+    path(
+        "symptoms/baby/checklist/",
+        BabySymptomsChecklistView.as_view(),
+        name="symptoms-baby-checklist",
+    ),
+    path(
+        "symptoms/baby/selection/",
+        UserBabySymptomsSelectionView.as_view(),
+        name="symptoms-baby-selection",
+    ),
     path("movements/upload", MovementCSVUploadView.as_view(), name="movements-upload"),
     #
     path("advice/", HealthInsightView.as_view(), name="advice"),

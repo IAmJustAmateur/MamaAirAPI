@@ -124,8 +124,8 @@ admin.site.register(UserLifeStyle, UserLifeStyleAdmin)
 
 
 class UserMommySymptomsAdmin(admin.ModelAdmin):
-    list_display = ("user", "symptom", "date_recorded")
-    list_filter = ("symptom", "date_recorded")
+    list_display = ("user", "symptom", "recorded_at")
+    list_filter = ("symptom", "recorded_at")
     search_fields = ("user__email",)
 
 
@@ -133,8 +133,8 @@ admin.site.register(UserMommySymptoms, UserMommySymptomsAdmin)
 
 
 class UserBabySymptomsAdmin(admin.ModelAdmin):
-    list_display = ("user", "symptom", "date_recorded")
-    list_filter = ("symptom", "date_recorded")
+    list_display = ("user", "symptom", "recorded_at")
+    list_filter = ("symptom", "recorded_at")
     search_fields = ("user__email",)
 
 

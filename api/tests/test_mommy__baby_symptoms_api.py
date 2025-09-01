@@ -1,11 +1,13 @@
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
 from api.models import MommySymptom, UserMommySymptoms, UserLifeStyle
+from .utils import create_defaults
+from django.urls import reverse
 
 User = get_user_model()
 
 
-class UserMommySymptomsSelectionTests(APITestCase):
+class UserSymptomsSelectionTests(APITestCase):
     """
     Новый контракт:
     1) Чек-лист (read-only): GET /api/symptoms/mommy/checklist/
@@ -20,27 +22,10 @@ class UserMommySymptomsSelectionTests(APITestCase):
 
     def setUp(self):
         # user + auth
-        self.email = "mom1@example.com"
-        self.password = "Testpass123!"
-        self.user = User.objects.create_user(
-            email=self.email,
-            password=self.password,
-            name="Mommy",
-            date_of_birth="1995-08-02",
-            height=170,
-            weight_pre_pregnancy=60,
-            is_first_pregnancy=True,
-            race="caucasian",
-            week_of_pregnancy=3,
-        )
-        UserLifeStyle.objects.create(
-            user=self.user,
-            cooking_method="charcoal",
-            diet_type="carnivore",
-            work_type="desk",
-            average_sleep_hours=7,
-            activity_duration_minutes=120,
-        )
+        defaults = create_defaults()
+        self.email = defaults["user"].email
+        self.password = defaults["password"]
+
         resp = self.client.post(
             self.BASE + "auth/token/",
             {"email": self.email, "password": self.password},
@@ -50,12 +35,18 @@ class UserMommySymptomsSelectionTests(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {resp.data['access']}")
 
         # dictionary symptoms
-        self.s1 = MommySymptom.objects.get_or_create(name="Headache")[0]
-        self.s2 = MommySymptom.objects.get_or_create(name="Nausea")[0]
-        self.s3 = MommySymptom.objects.get_or_create(name="Vomiting")[0]
+        self.ms1 = defaults["mommy_symptoms"][0]
+        self.ms2 = defaults["mommy_symptoms"][1]
+        self.ms3 = defaults["mommy_symptoms"][2]
 
-        self.checklist_url = self.BASE + "symptoms/mommy/checklist/"
-        self.selection_url = self.BASE + "symptoms/mommy/selection/"
+        self.bs1 = defaults["baby_symptoms"][0]
+        self.bs2 = defaults["baby_symptoms"][1]
+        self.bs3 = defaults["baby_symptoms"][2]
+
+        self.mommy_checklist_url = reverse("api:symptoms-mommy-checklist")
+        self.mommy_selection_url = reverse("api:symptoms-mommy-selection")
+        self.baby_checklist_url = reverse("api:symptoms-baby-checklist")
+        self.baby_selection_url = reverse("api:symptoms-baby-selection")
 
     # ---------- Checklist (read-only) ----------
     def test_checklist_returns_objects_with_id_and_name(self):

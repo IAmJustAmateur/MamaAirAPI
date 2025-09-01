@@ -43,13 +43,13 @@ from .models import (
     User,
     UserMommySymptoms,
     MommySymptom,
+    BabySymptom,
+    UserBabySymptoms,
 )
 from .serializers import (
     RegisterSerializer,
     UserProfileSerializer,
     UserLifeStyleSerializer,
-    UserMommySymptomsSerializer,
-    UserBabySymptomsSerializer,
     HealthInsightSerializer,
     AirExposureLogSerializer,
     AdviceTemplateSerializer,
@@ -58,6 +58,8 @@ from .serializers import (
     ErrorResponseSerializer,
     WeeklyExposureSerializer,
     SummaryResponseSerializer,
+    SymptomSelectionSerializer,
+    ChecklistItemSerializer,
 )
 
 from .services import (
@@ -77,6 +79,44 @@ from api.models import (
     EXPOSURE_LEVEL_CHOICES,
     UserLifeStyle,
 )
+
+
+from datetime import date as date_cls
+from django.utils.dateparse import parse_datetime
+
+
+def _parse_recorded_at_param(request):
+    """
+    Извлекает recorded_at из query (?recorded_at=) или body, приводит к aware datetime.
+    Если нет — now() в settings.TIME_ZONE.
+    """
+    raw = request.query_params.get("recorded_at") or request.data.get("recorded_at")
+    if not raw:
+        return timezone.now()
+    dt = parse_datetime(raw)
+    if dt is None:
+        raise ValidationError(
+            {
+                "recorded_at": "Invalid datetime. Use ISO-8601, e.g. 2025-09-01T08:30:00+03:00"
+            }
+        )
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_default_timezone())
+    return dt
+
+
+def _target_date_from_request(request):
+    """
+    Принимает либо ?date=YYYY-MM-DD, либо recorded_at (query/body).
+    Приоритет: ?date → recorded_at → today.
+    """
+    raw_date = request.query_params.get("date")
+    if raw_date:
+        try:
+            return date_cls.fromisoformat(raw_date)
+        except ValueError:
+            raise ValidationError({"date": "Invalid date. Use YYYY-MM-DD."})
+    return _parse_recorded_at_param(request).date()
 
 
 @extend_schema(
@@ -135,86 +175,148 @@ class UserLifestyleView(generics.RetrieveUpdateAPIView):
         return obj
 
 
-class MommySymptomsChecklistView(APIView):
-    """
-    Чек-лист для контроля.
-    Возвращает объекты с id и name, чтобы клиент мог выбрать и потом отправить id.
-    """
+# ---------- MOMMY ----------
 
+
+class MommySymptomsChecklistView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user: User = request.user
         names = user.get_mommy_symptoms_for_checking()  # list[str]
-
-        # Маппим имена на объекты справочника.
-        # Если какие-то имена не найдены в БД, всё равно вернём их с id=None —
-        # это поможет обнаружить несоответствия на этапе теста/данных.
         qs = MommySymptom.objects.filter(name__in=names).values("id", "name")
-        found_by_name = {row["name"]: row for row in qs}
-
-        items = []
-        for nm in names:
-            row = found_by_name.get(nm)
-            if row:
-                items.append({"id": row["id"], "name": row["name"]})
-            else:
-                items.append({"id": None, "name": nm})
-
-        return Response({"symptoms": items})
+        by_name = {row["name"]: row for row in qs}
+        items = [
+            {"id": (by_name[n]["id"] if n in by_name else None), "name": n}
+            for n in names
+        ]
+        # сериалайзер для единообразия валидации/формата (не обязательно)
+        data = ChecklistItemSerializer(items, many=True).data
+        return Response({"symptoms": data})
 
 
 class UserMommySymptomsSelectionView(APIView):
     """
-    Сохранение выбора пользователя (replace-all).
-    - GET -> текущий выбор: {"symptom_ids": [int, ...]}
-    - POST -> заменить выбор: {"symptom_ids": [int, ...]} -> 200 + текущий набор
+    Replace-all за день, определяемый:
+    - либо ?date=YYYY-MM-DD,
+    - либо recorded_at (из body/query),
+    - иначе сегодня в settings.TIME_ZONE.
     """
 
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user: User = request.user
+        target_date = _target_date_from_request(request)
         ids = list(
-            UserMommySymptoms.objects.filter(user=user).values_list(
-                "symptom_id", flat=True
-            )
+            UserMommySymptoms.objects.filter(
+                user=user, recorded_at__date=target_date
+            ).values_list("symptom_id", flat=True)
         )
-        return Response({"symptom_ids": ids})
+        return Response({"date": target_date.isoformat(), "symptom_ids": ids})
 
     @transaction.atomic
     def post(self, request):
         user: User = request.user
-        ids = request.data.get("symptom_ids", [])
-        if not isinstance(ids, list):
-            raise ValidationError({"symptom_ids": "Must be a list of integers."})
+        ser = SymptomSelectionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = ser.validated_data["symptom_ids"]
+        recorded_at = ser.validated_data["recorded_at"]
+        target_date = recorded_at.date()
 
-        # Валидация существования всех ID
-        exists = set(
+        # Валидация существования ID
+        existing = set(
             MommySymptom.objects.filter(id__in=ids).values_list("id", flat=True)
         )
-        missing = sorted(set(ids) - exists)
+        missing = sorted(set(ids) - existing)
         if missing:
             raise ValidationError({"symptom_ids": f"Unknown ids: {missing}"})
 
-        # Полная замена набора
-        UserMommySymptoms.objects.filter(user=user).delete()
-        bulk = [UserMommySymptoms(user=user, symptom_id=sid) for sid in exists]
+        # Полная замена набора за день
+        UserMommySymptoms.objects.filter(
+            user=user, recorded_at__date=target_date
+        ).delete()
+        bulk = [
+            UserMommySymptoms(user=user, symptom_id=sid, recorded_at=recorded_at)
+            for sid in existing
+        ]
         if bulk:
             UserMommySymptoms.objects.bulk_create(bulk)
 
-        return Response({"symptom_ids": sorted(list(exists))})
+        return Response(
+            {
+                "date": target_date.isoformat(),
+                "recorded_at": recorded_at.isoformat(),
+                "symptom_ids": sorted(list(existing)),
+            }
+        )
 
 
-class UserBabySymptomsView(generics.ListCreateAPIView):
-    serializer_class = UserBabySymptomsSerializer
+# ---------- BABY ----------
+
+
+class BabySymptomsChecklistView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        return self.request.user.symptoms.all()
+    def get(self, request):
+        user: User = request.user
+        names = user.get_baby_symptoms_for_checking()  # list[str]
+        qs = BabySymptom.objects.filter(name__in=names).values("id", "name")
+        by_name = {row["name"]: row for row in qs}
+        items = [
+            {"id": (by_name[n]["id"] if n in by_name else None), "name": n}
+            for n in names
+        ]
+        data = ChecklistItemSerializer(items, many=True).data
+        return Response({"symptoms": data})
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+
+class UserBabySymptomsSelectionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user: User = request.user
+        target_date = _target_date_from_request(request)
+        ids = list(
+            UserBabySymptoms.objects.filter(
+                user=user, recorded_at__date=target_date
+            ).values_list("symptom_id", flat=True)
+        )
+        return Response({"date": target_date.isoformat(), "symptom_ids": ids})
+
+    @transaction.atomic
+    def post(self, request):
+        user: User = request.user
+        ser = SymptomSelectionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = ser.validated_data["symptom_ids"]
+        recorded_at = ser.validated_data["recorded_at"]
+        target_date = recorded_at.date()
+
+        existing = set(
+            BabySymptom.objects.filter(id__in=ids).values_list("id", flat=True)
+        )
+        missing = sorted(set(ids) - existing)
+        if missing:
+            raise ValidationError({"symptom_ids": f"Unknown ids: {missing}"})
+
+        UserBabySymptoms.objects.filter(
+            user=user, recorded_at__date=target_date
+        ).delete()
+        bulk = [
+            UserBabySymptoms(user=user, symptom_id=sid, recorded_at=recorded_at)
+            for sid in existing
+        ]
+        if bulk:
+            UserBabySymptoms.objects.bulk_create(bulk)
+
+        return Response(
+            {
+                "date": target_date.isoformat(),
+                "recorded_at": recorded_at.isoformat(),
+                "symptom_ids": sorted(list(existing)),
+            }
+        )
 
 
 @extend_schema(

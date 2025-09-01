@@ -281,6 +281,15 @@ class User(MyUser, PermissionsMixin):
             symptoms.extend(data["symptoms"])
         return symptoms[0:5]
 
+    def get_baby_symptoms_for_checking(self):
+        """
+        :return: A dictionary of baby symptoms for each risk factor
+        :rtype: dict
+        """
+        rdbs = RiskDefinitionBabySymptom.objects.all()
+        symptoms = [symptom.symptom.name for symptom in rdbs]
+        return symptoms
+
     def get_user_movements_df(
         self, start=None, end=None, hours: int = 24
     ) -> pd.DataFrame:
@@ -466,24 +475,23 @@ class RiskDefinition(models.Model):
         return self.name
 
 
-class MommySymptom(models.Model):
+class Symptom(models.Model):
     name = models.CharField(max_length=255, unique=True)
 
     class Meta:
+        abstract = True
         ordering = ["name"]
 
     def __str__(self):
         return self.name
+
+
+class MommySymptom(Symptom):
+    pass
 
 
 class BabySymptom(models.Model):
-    name = models.CharField(max_length=255, unique=True)
-
-    class Meta:
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
+    pass
 
 
 class RiskDefinitionMommySymptom(models.Model):
@@ -506,34 +514,35 @@ class RiskDefinitionBabySymptom(models.Model):
         unique_together = ("risk_definition", "symptom")
 
 
-class UserMommySymptoms(models.Model):
+class BaseUserSymptom(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    recorded_at = models.DateTimeField(default=timezone.now, editable=True)
+    symptom = models.ForeignKey(Symptom, on_delete=models.CASCADE)
 
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="mommy_symptoms"
-    )
+    class Meta:
+        abstract = True
+        ordering = ["-recorded_at"]
+
+    @property
+    def date_recorded(self):
+        return self.recorded_at.date()
+
+    def __str__(self):
+        return f"{self.user.email} - {self.date_recorded} - {self.symptom}"
+
+
+class UserMommySymptoms(BaseUserSymptom):
     symptom = models.ForeignKey(MommySymptom, on_delete=models.CASCADE)
-    date_recorded = models.DateField(default=date.today)
 
     class Meta:
         db_table = "user_mommy_symptoms"  # existing table name
-        ordering = ["-date_recorded"]
-
-    def __str__(self):
-        return f"{self.user.email} - {self.symptom}"
 
 
-class UserBabySymptoms(models.Model):
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="symptoms")
+class UserBabySymptoms(BaseUserSymptom):
     symptom = models.ForeignKey(BabySymptom, on_delete=models.CASCADE)
-    date_recorded = models.DateField(default=date.today)
 
     class Meta:
-        db_table = "user_symptoms"  # existing table name
-        ordering = ["-date_recorded"]
-
-    def __str__(self):
-        return f"{self.user.email} - {self.symptom}"
+        db_table = "user_baby_symptoms"  # existing table name
 
 
 class Movement(models.Model):

@@ -91,13 +91,13 @@ class UserLifeStyleForm(forms.ModelForm):
 class MommySymptomForm(forms.ModelForm):
     class Meta:
         model = UserMommySymptoms
-        fields = ["symptom", "date_recorded"]
+        fields = ["symptom", "recorded_at"]
 
 
 class BabySymptomForm(forms.ModelForm):
     class Meta:
         model = UserBabySymptoms
-        fields = ["symptom", "date_recorded"]
+        fields = ["symptom", "recorded_at"]
 
 
 class MovementUploadForm(forms.Form):
