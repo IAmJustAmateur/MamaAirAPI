@@ -63,7 +63,7 @@ from .serializers import (
     ChecklistItemSerializer,
 )
 
-from .services import (
+from .services.services import (
     get_current_advices,
     get_air_quality_summary,
     get_weather_summary,
@@ -73,6 +73,8 @@ from .services import (
     get_current_recommendations,
     get_today_journey,
 )
+from .services.air_exposure import ingest_movements_batch
+from services.helpers import parse_csv_to_records
 from .permissions import HasValidRegistrationAPIKey
 
 from api.models import (
@@ -530,29 +532,25 @@ class MovementCSVUploadView(APIView):
         if "file" not in request.FILES:
             return Response({"error": "No file provided."}, status=400)
 
-        file = request.FILES["file"]
-        decoded_file = TextIOWrapper(file, encoding="utf-8")
-        reader = csv.DictReader(decoded_file)
+        records, errors = parse_csv_to_records(request.FILES["file"])
 
-        count = 0
-        errors = []
+        if not records and errors:
+            return Response(
+                {"status": "error", "imported": 0, "errors": errors}, status=400
+            )
 
-        for i, row in enumerate(reader, start=1):
-            try:
-                movement = Movement(
-                    user=request.user,
-                    latitude=float(row["latitude"]),
-                    longitude=float(row["longitude"]),
-                    timestamp=row["timestamp"],
-                )
-                movement.save()
-                count += 1
-            except Exception as e:
-                errors.append({"row": i, "error": str(e)})
+        try:
+            summary = ingest_movements_batch(user_id=request.user.id, records=records)
+        except Exception as e:
+            return Response({"status": "error", "detail": str(e)}, status=500)
 
+        payload = {
+            "status": "ok",
+            **summary,
+            "errors": errors,
+        }
         return Response(
-            {"status": "ok", "imported": count, "errors": errors},
-            status=status.HTTP_201_CREATED if count > 0 else 400,
+            payload, status=status.HTTP_201_CREATED if summary["imported"] > 0 else 207
         )
 
 

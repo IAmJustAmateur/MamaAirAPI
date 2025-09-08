@@ -22,9 +22,7 @@ from django.contrib.auth.models import (
     PermissionsMixin,
 )
 
-from api.services import round_coord, fetch_air_quality_data_interval
-
-from api.utils import calculate_exposure
+from api.services.services import round_coord, fetch_air_quality_data_interval
 
 USER_RISK_FACTORS = [
     "bmi",
@@ -186,9 +184,7 @@ class User(MyUser, PermissionsMixin):
     def calculate_risk_factors(self):
         life_style_risks = self.calculate_risk_factor_based_on_lifestyle()
         user_risks = self.calculate_risk_factor_based_on_user_fields()
-        aq_risks, pollutants = self.calculate_risk_factor_based_on_aq()
-        exposure_value = calculate_exposure(aq_risks)
-        Exposure.set_for_date(user=self, level=exposure_value, pollutants=pollutants)
+        aq_risks = self.calculate_risk_factor_based_on_aq()
         risks = RiskDefinition.objects.filter(is_enabled=True)
         risk_dictionary = {}
         for risk in risks:
@@ -250,7 +246,7 @@ class User(MyUser, PermissionsMixin):
             fields=field_names,
             RiskModel=AQRiskFactor,
         )
-        return risk_dictionary, aq_data
+        return risk_dictionary
 
     def get_mommy_symptoms_for_checking(self):
         """
@@ -280,15 +276,6 @@ class User(MyUser, PermissionsMixin):
         for risk, data in all_risk_symptoms_for_mommy.items():
             symptoms.extend(data["symptoms"])
         return symptoms[0:5]
-
-    def get_baby_symptoms_for_checking(self):
-        """
-        :return: A dictionary of baby symptoms for each risk factor
-        :rtype: dict
-        """
-        rdbs = RiskDefinitionBabySymptom.objects.all()
-        symptoms = [symptom.symptom.name for symptom in rdbs]
-        return symptoms
 
     def get_user_movements_df(
         self, start=None, end=None, hours: int = 24
@@ -357,11 +344,11 @@ class User(MyUser, PermissionsMixin):
                     results[idx] = {}
 
         # 2) извлекаем и конвертируем: OWM даёт µg/m³ → делим на 1000 → mg/m³
-        df["pm25"] = [results.get(i, {}).get("pm2_5", 0.0) for i in df.index]
-        df["no2"] = [results.get(i, {}).get("no2", 0.0) for i in df.index]
-        df["so2"] = [results.get(i, {}).get("so2", 0.0) for i in df.index]
-        df["o3"] = [results.get(i, {}).get("o3", 0.0) for i in df.index]
-        df["co"] = [results.get(i, {}).get("co", 0.0) for i in df.index]
+        df["pm25"] = [results.get(i, {}).get("pm2_5", 0.0) / 1000.0 for i in df.index]
+        df["no2"] = [results.get(i, {}).get("no2", 0.0) / 1000.0 for i in df.index]
+        df["so2"] = [results.get(i, {}).get("so2", 0.0) / 1000.0 for i in df.index]
+        df["o3"] = [results.get(i, {}).get("o3", 0.0) / 1000.0 for i in df.index]
+        df["co"] = [results.get(i, {}).get("co", 0.0) / 1000.0 for i in df.index]
 
         # 3) агрегируем к почасовому и считаем метрики окна
         df = df.sort_values("timestamp")
@@ -475,23 +462,24 @@ class RiskDefinition(models.Model):
         return self.name
 
 
-class Symptom(models.Model):
+class MommySymptom(models.Model):
     name = models.CharField(max_length=255, unique=True)
 
     class Meta:
-        abstract = True
         ordering = ["name"]
 
     def __str__(self):
         return self.name
 
 
-class MommySymptom(Symptom):
-    pass
+class BabySymptom(models.Model):
+    name = models.CharField(max_length=255, unique=True)
 
+    class Meta:
+        ordering = ["name"]
 
-class BabySymptom(Symptom):
-    pass
+    def __str__(self):
+        return self.name
 
 
 class RiskDefinitionMommySymptom(models.Model):
@@ -514,35 +502,34 @@ class RiskDefinitionBabySymptom(models.Model):
         unique_together = ("risk_definition", "symptom")
 
 
-class BaseUserSymptom(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    recorded_at = models.DateTimeField(default=timezone.now, editable=True)
-    symptom = models.ForeignKey(Symptom, on_delete=models.CASCADE)
+class UserMommySymptoms(models.Model):
 
-    class Meta:
-        abstract = True
-        ordering = ["-recorded_at"]
-
-    @property
-    def date_recorded(self):
-        return self.recorded_at.date()
-
-    def __str__(self):
-        return f"{self.user.email} - {self.date_recorded} - {self.symptom}"
-
-
-class UserMommySymptoms(BaseUserSymptom):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="mommy_symptoms"
+    )
     symptom = models.ForeignKey(MommySymptom, on_delete=models.CASCADE)
+    date_recorded = models.DateField(default=date.today)
 
     class Meta:
         db_table = "user_mommy_symptoms"  # existing table name
+        ordering = ["-date_recorded"]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.symptom}"
 
 
-class UserBabySymptoms(BaseUserSymptom):
+class UserBabySymptoms(models.Model):
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="symptoms")
     symptom = models.ForeignKey(BabySymptom, on_delete=models.CASCADE)
+    date_recorded = models.DateField(default=date.today)
 
     class Meta:
-        db_table = "user_baby_symptoms"  # existing table name
+        db_table = "user_symptoms"  # existing table name
+        ordering = ["-date_recorded"]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.symptom}"
 
 
 class Movement(models.Model):
@@ -564,11 +551,10 @@ class AirExposureLog(models.Model):
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="air_exposure_logs"
     )
-    timestamp = models.DateTimeField()  # когда получены данные
+    timestamp = models.DateTimeField(db_index=True)
     latitude = models.FloatField()
     longitude = models.FloatField()
 
-    aqi = models.FloatField()  # Air Quality Index
     pm25 = models.FloatField(null=True, blank=True)
     pm10 = models.FloatField(null=True, blank=True)
     no2 = models.FloatField(null=True, blank=True)
@@ -580,13 +566,11 @@ class AirExposureLog(models.Model):
     humidity = models.FloatField(null=True, blank=True)
     wind_speed = models.FloatField(null=True, blank=True)  # wind speed in m/s
 
-    exposure_minutes = models.IntegerField(
-        default=60
-    )  # сколько минут пользователь находился в этих условиях
+    exposure_minutes = models.IntegerField(default=60)
     activity_level = models.CharField(
         max_length=32, blank=True, null=True
     )  # "low", "moderate", "high"
-    indoor = models.BooleanField(default=False)  # если ты планируешь учитывать это
+    indoor = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-timestamp"]
@@ -682,40 +666,3 @@ class AQRiskFactor(AbstractRiskFactor):
             return multiplier
         new_formua = self.formula.replace("param", str(param))
         return multiplier * eval(new_formua)
-
-
-class Exposure(models.Model):
-    user = models.ForeignKey(
-        "api.User", on_delete=models.CASCADE, related_name="exposures"
-    )
-    timestamp = models.DateField(default=timezone.localdate, editable=False)
-    exposure_level = models.FloatField()
-    updated_at = models.DateTimeField(auto_now=True)
-    pollutants = models.JSONField(default=dict)
-
-    class Meta:
-        ordering = ["-timestamp"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "timestamp"], name="uniq_exposure_user_date"
-            )
-        ]
-        indexes = [models.Index(fields=["user", "timestamp"])]
-
-    def __str__(self):
-        return f"{self.user_id} {self.timestamp}: {self.exposure_level}"
-
-    @classmethod
-    def set_for_date(cls, user, level: float, pollutants=None, date=None):
-        """Upsert на (user, date). Заменяет exposure_level и pollutants за этот день."""
-        date = date or timezone.localdate()
-        with transaction.atomic():
-            obj, _created = cls.objects.update_or_create(
-                user=user,
-                timestamp=date,
-                defaults={
-                    "exposure_level": level,
-                    "pollutants": pollutants or {},
-                },
-            )
-        return obj
