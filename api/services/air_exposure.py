@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import requests
 from datetime import timedelta
+from datetime import timezone as dt_timezone
 
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Tuple
@@ -13,10 +14,11 @@ from django.apps import apps
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
+from django.conf import settings
 
 OWM_BASE_URL = "http://api.openweathermap.org/data/2.5/air_pollution/history"
 
-OWM_API_KEY = os.getenv("OWM_API_KEY")
+OWM_API_KEY = settings.OWM_API_KEY  # type: ignore
 
 # Модели через apps.get_model, чтобы не ловить циклические импорты
 Movement = apps.get_model("api", "Movement")
@@ -188,7 +190,7 @@ def fetch_aq_for_bucket(lat: float, lon: float, bucket: timezone.datetime) -> AQ
     def it_dt(it):
         # OWM 'dt' — UNIX seconds UTC
         return timezone.make_aware(
-            timezone.datetime.fromtimestamp(it.get("dt", 0)), timezone.utc
+            timezone.datetime.fromtimestamp(it.get("dt", 0)), dt_timezone.utc
         ).astimezone(timezone.get_current_timezone())
 
     nearest = min(items, key=lambda it: abs((it_dt(it) - bucket).total_seconds()))

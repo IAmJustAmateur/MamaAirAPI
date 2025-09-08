@@ -20,10 +20,12 @@
             "request": "launch",
             "args": [
                 "test",
+                "api.tests.test_movement_upload_integration",
+                //"api.tests.test_movement_upload_csv"
                 //"api.tests.test_meta_choices",
                 //"api.tests.test_user_life_style",
                 //"api.tests.test_mommy_baby_symptoms_api",
-                "api.tests.test_auth",
+                //"api.tests.test_auth",
                 //"api.tests.test_user_risk_calculations"
             ],
             "justMyCode": false,

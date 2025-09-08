@@ -3,10 +3,11 @@ from datetime import timedelta, datetime
 import requests
 import pandas as pd
 import os
+from django.conf import settings
 
 OWM_BASE_URL = "http://api.openweathermap.org/data/2.5/air_pollution/history"
 
-OWM_API_KEY = os.getenv("OWM_API_KEY")
+OWM_API_KEY = settings.OWM_API_KEY
 
 
 def round_coord(val: float) -> float:

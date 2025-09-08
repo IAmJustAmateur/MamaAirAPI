@@ -33,6 +33,8 @@ load_dotenv(dotenv_path=intermediate_base_dir / ".env")
 
 DJANGO_ENV = os.getenv("DJANGO_ENV", "development")
 print(f"DJANGO_ENV: {DJANGO_ENV}")
+OWM_API_KEY = os.getenv("OWM_API_KEY")
+print(f"OWM_API_KEY is set: {OWM_API_KEY is not None}")
 
 if DJANGO_ENV == "production":
     BASE_DIR = settings_path.parent
