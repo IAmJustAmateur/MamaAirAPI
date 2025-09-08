@@ -74,7 +74,7 @@ from .services.services import (
     get_today_journey,
 )
 from .services.air_exposure import ingest_movements_batch
-from services.helpers import parse_csv_to_records
+from .services.helpers import parse_csv_to_records
 from .permissions import HasValidRegistrationAPIKey
 
 from api.models import (

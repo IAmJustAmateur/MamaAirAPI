@@ -508,11 +508,11 @@ class UserMommySymptoms(models.Model):
         User, on_delete=models.CASCADE, related_name="mommy_symptoms"
     )
     symptom = models.ForeignKey(MommySymptom, on_delete=models.CASCADE)
-    date_recorded = models.DateField(default=date.today)
+    recorded_at = models.DateField(default=date.today)
 
     class Meta:
         db_table = "user_mommy_symptoms"  # existing table name
-        ordering = ["-date_recorded"]
+        ordering = ["-recorded_at"]
 
     def __str__(self):
         return f"{self.user.email} - {self.symptom}"
@@ -522,11 +522,11 @@ class UserBabySymptoms(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="symptoms")
     symptom = models.ForeignKey(BabySymptom, on_delete=models.CASCADE)
-    date_recorded = models.DateField(default=date.today)
+    recorded_at = models.DateField(default=date.today)
 
     class Meta:
         db_table = "user_symptoms"  # existing table name
-        ordering = ["-date_recorded"]
+        ordering = ["-recorded_at"]
 
     def __str__(self):
         return f"{self.user.email} - {self.symptom}"
@@ -666,3 +666,40 @@ class AQRiskFactor(AbstractRiskFactor):
             return multiplier
         new_formua = self.formula.replace("param", str(param))
         return multiplier * eval(new_formua)
+
+
+class Exposure(models.Model):
+    user = models.ForeignKey(
+        "api.User", on_delete=models.CASCADE, related_name="exposures"
+    )
+    timestamp = models.DateField(default=timezone.localdate, editable=False)
+    exposure_level = models.FloatField()
+    updated_at = models.DateTimeField(auto_now=True)
+    pollutants = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-timestamp"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "timestamp"], name="uniq_exposure_user_date"
+            )
+        ]
+        indexes = [models.Index(fields=["user", "timestamp"])]
+
+    def __str__(self):
+        return f"{self.user_id} {self.timestamp}: {self.exposure_level}"
+
+    @classmethod
+    def set_for_date(cls, user, level: float, pollutants=None, date=None):
+        """Upsert на (user, date). Заменяет exposure_level и pollutants за этот день."""
+        date = date or timezone.localdate()
+        with transaction.atomic():
+            obj, _created = cls.objects.update_or_create(
+                user=user,
+                timestamp=date,
+                defaults={
+                    "exposure_level": level,
+                    "pollutants": pollutants or {},
+                },
+            )
+        return obj

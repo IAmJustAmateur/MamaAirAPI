@@ -1,7 +1,10 @@
 # services/air_exposure.py
 from __future__ import annotations
 
-import math
+import os
+import requests
+from datetime import timedelta
+
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Tuple
 
@@ -10,6 +13,10 @@ from django.apps import apps
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
+
+OWM_BASE_URL = "http://api.openweathermap.org/data/2.5/air_pollution/history"
+
+OWM_API_KEY = os.getenv("OWM_API_KEY")
 
 # Модели через apps.get_model, чтобы не ловить циклические импорты
 Movement = apps.get_model("api", "Movement")
@@ -97,33 +104,130 @@ class AQSample:
     data_quality: str = "ok"  # ok|gap|interpolated
 
 
+def _owm_fetch_interval(
+    lat: float, lon: float, start_dt: timezone.datetime, end_dt: timezone.datetime
+) -> list[dict]:
+    """
+    Тянем историю OWM по диапазону [start..end].
+    Возвращает список элементов OWM: {'dt', 'main':{'aqi'}, 'components': {...}}
+    """
+    if OWM_API_KEY is None:
+        raise RuntimeError("OWM_API_KEY is not configured")
+
+    # OWM принимает UNIX seconds (UTC)
+    start_ts = int(start_dt.timestamp())
+    end_ts = int(end_dt.timestamp())
+
+    url = f"{OWM_BASE_URL}?lat={lat}&lon={lon}&start={start_ts}&end={end_ts}&appid={OWM_API_KEY}"
+    resp = requests.get(url, timeout=15)
+    if resp.status_code != 200:
+        raise RuntimeError(f"OWM error {resp.status_code}: {resp.text}")
+
+    data = resp.json() or {}
+    return data.get("list", [])
+
+
 def fetch_aq_for_bucket(lat: float, lon: float, bucket: timezone.datetime) -> AQSample:
     """
-    Подтягиваем AQ для координаты/часа с кэшем.
-    ЗАМЕНИ на реальную интеграцию (OWM/Google AQ). Верни µg/m³.
+    Берём OWM-данные ±1 час вокруг бакета, выбираем ближайшую метку.
+    Результат нормализуем в AQSample (µg/m³).
+    Используется кэш на ключ (lat_r2, lon_r2, bucket_hour).
     """
-    key = f"aq:{round(lat,2)}:{round(lon,2)}:{bucket.isoformat()}"
+    key = f"aq:owm:{round(lat,2)}:{round(lon,2)}:{bucket.isoformat()}"
     cached = cache.get(key)
     if cached:
         return cached
 
-    # TODO: интеграция с твоим провайдером
+    # Диапазон запроса: [bucket-1h .. bucket+1h]
+    start_dt = bucket - timedelta(hours=1)
+    end_dt = bucket + timedelta(hours=1)
+
+    # OWM работает по UTC; Django-aware datetime timestamp() уже в UTC — норм.
+    try:
+        items = _owm_fetch_interval(lat, lon, start_dt, end_dt)
+    except Exception as e:
+        # Фоллбек: вернём "gap"
+        sample = AQSample(
+            timestamp=bucket,
+            aqi=None,
+            pm25=None,
+            pm10=None,
+            no2=None,
+            so2=None,
+            co=None,
+            o3=None,
+            temperature=None,
+            humidity=None,
+            wind_speed=None,
+            provider="OWM",
+            data_quality="gap",
+        )
+        cache.set(key, sample, 30 * 60)
+        return sample
+
+    if not items:
+        sample = AQSample(
+            timestamp=bucket,
+            aqi=None,
+            pm25=None,
+            pm10=None,
+            no2=None,
+            so2=None,
+            co=None,
+            o3=None,
+            temperature=None,
+            humidity=None,
+            wind_speed=None,
+            provider="OWM",
+            data_quality="gap",
+        )
+        cache.set(key, sample, 30 * 60)
+        return sample
+
+    # Выбираем запись с временем, ближайшим к центру бакета
+    def it_dt(it):
+        # OWM 'dt' — UNIX seconds UTC
+        return timezone.make_aware(
+            timezone.datetime.fromtimestamp(it.get("dt", 0)), timezone.utc
+        ).astimezone(timezone.get_current_timezone())
+
+    nearest = min(items, key=lambda it: abs((it_dt(it) - bucket).total_seconds()))
+
+    # Нормализуем компоненты: OWM keys: pm2_5, pm10, no2, so2, co, o3 (µg/m³)
+    comps = nearest.get("components", {}) or {}
+    main = nearest.get("main", {}) or {}  # {'aqi': 1..5}
+
+    # Приведём к ожидаемым именам
+    pm25 = comps.get("pm2_5")
+    pm10 = comps.get("pm10")
+    no2 = comps.get("no2")
+    so2 = comps.get("so2")
+    co = comps.get("co")
+    o3 = comps.get("o3")
+    aqi = main.get("aqi")
+
     sample = AQSample(
-        timestamp=bucket,
-        aqi=75,
-        pm25=18.0,
-        pm10=30.0,
-        no2=22.0,
-        so2=3.0,
-        co=150.0,
-        o3=60.0,
-        temperature=18.5,
-        humidity=55.0,
-        wind_speed=3.2,
+        timestamp=it_dt(nearest),
+        aqi=aqi,
+        pm25=pm25,
+        pm10=pm10,
+        no2=no2,
+        so2=so2,
+        co=co,
+        o3=o3,
+        temperature=None,
+        humidity=None,
+        wind_speed=None,
         provider="OWM",
-        data_quality="ok",
+        data_quality=(
+            "ok"
+            if any(v is not None for v in (pm25, pm10, no2, so2, co, o3))
+            else "gap"
+        ),
     )
-    cache.set(key, sample, timeout=60 * 60)  # кэш на 1 час
+
+    # Кэшируем на час
+    cache.set(key, sample, timeout=60 * 60)
     return sample
 
 
