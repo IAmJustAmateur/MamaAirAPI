@@ -277,6 +277,15 @@ class User(MyUser, PermissionsMixin):
             symptoms.extend(data["symptoms"])
         return symptoms[0:5]
 
+    def get_baby_symptoms_for_checking(self):
+        """
+        :return: A dictionary of baby symptoms for each risk factor
+        :rtype: dict
+        """
+        rdbs = RiskDefinitionBabySymptom.objects.all()
+        symptoms = [symptom.symptom.name for symptom in rdbs]
+        return symptoms
+
     def get_user_movements_df(
         self, start=None, end=None, hours: int = 24
     ) -> pd.DataFrame:
