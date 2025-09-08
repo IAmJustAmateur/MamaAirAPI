@@ -22,6 +22,8 @@ from django.contrib.auth.models import (
     PermissionsMixin,
 )
 
+from api.services.aq_inputs import get_air_quality_inputs_for_risks_from_logs
+
 from api.services.services import round_coord, fetch_air_quality_data_interval
 
 USER_RISK_FACTORS = [
@@ -217,7 +219,10 @@ class User(MyUser, PermissionsMixin):
         risk_dictionary = _calculate_risks(
             risks=risks, object=self, fields=USER_RISK_FACTORS, RiskModel=UserRiskFactor
         )
-        return risk_dictionary
+        integrated_risk = 1.0
+        for risk_name, risk_value in risk_dictionary.items():
+            integrated_risk *= risk_value
+        return risk_dictionary, integrated_risk
 
     def calculate_risk_factor_based_on_lifestyle(self):
 
@@ -236,7 +241,9 @@ class User(MyUser, PermissionsMixin):
 
     def calculate_risk_factor_based_on_aq(self, aq_data=None):
         if aq_data is None:
-            aq_data = self.get_air_quality_inputs_for_risks()
+            aq_data = get_air_quality_inputs_for_risks_from_logs(
+                user_id=self.user.id, hours=24
+            )
         risks = RiskDefinition.objects.filter(is_enabled=True)
         # field_names = [field.name for field in aq_data.keys()]
         field_names = aq_data.keys()
@@ -257,7 +264,7 @@ class User(MyUser, PermissionsMixin):
         :return: A dictionary of mommy symptoms for each risk factor
         :rtype: dict
         """
-        risks = self.calculate_risk_factors()
+        risks, integrated_risk = self.calculate_risk_factors()
         risk_list = [(key, value) for key, value in risks.items()]
         risk_list.sort(key=lambda x: x[1]["risk_value"], reverse=True)
         risk_list.sort(key=lambda x: x[1]["priority"], reverse=False)
@@ -353,11 +360,11 @@ class User(MyUser, PermissionsMixin):
                     results[idx] = {}
 
         # 2) извлекаем и конвертируем: OWM даёт µg/m³ → делим на 1000 → mg/m³
-        df["pm25"] = [results.get(i, {}).get("pm2_5", 0.0) / 1000.0 for i in df.index]
-        df["no2"] = [results.get(i, {}).get("no2", 0.0) / 1000.0 for i in df.index]
-        df["so2"] = [results.get(i, {}).get("so2", 0.0) / 1000.0 for i in df.index]
-        df["o3"] = [results.get(i, {}).get("o3", 0.0) / 1000.0 for i in df.index]
-        df["co"] = [results.get(i, {}).get("co", 0.0) / 1000.0 for i in df.index]
+        df["pm25"] = [results.get(i, {}).get("pm2_5", 0.0) for i in df.index]
+        df["no2"] = [results.get(i, {}).get("no2", 0.0) for i in df.index]
+        df["so2"] = [results.get(i, {}).get("so2", 0.0) for i in df.index]
+        df["o3"] = [results.get(i, {}).get("o3", 0.0) for i in df.index]
+        df["co"] = [results.get(i, {}).get("co", 0.0) for i in df.index]
 
         # 3) агрегируем к почасовому и считаем метрики окна
         df = df.sort_values("timestamp")

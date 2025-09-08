@@ -13,6 +13,8 @@ from django.utils import timezone
 
 from zoneinfo import ZoneInfo
 
+from api.services.air_exposure_daily import recompute_daily_exposure
+
 # Импортируем AQSample из сервиса, чтобы вернуть его из мока
 from api.services.air_exposure import AQSample
 
@@ -88,6 +90,17 @@ class MovementUploadCSVTests(APITestCase):
         # Бакет — начало часа 10:00 локального TZ
         local_hour = log.timestamp.astimezone(timezone.get_current_timezone()).hour
         self.assertEqual(local_hour, 10)
+
+        vilnius = ZoneInfo("Europe/Vilnius")
+        date_local = timezone.localtime(
+            AirExposureLog.objects.filter(user=self.user).first().timestamp, vilnius
+        ).date()
+        recompute_daily_exposure(self.user.id, date_local)
+
+        Exposure = apps.get_model("api", "Exposure")
+        exp = Exposure.objects.get(user=self.user, timestamp=date_local)
+        self.assertGreaterEqual(exp.exposure_level, 0.0)
+        self.assertIn("pm25_avg_24h", exp.pollutants)
 
     def test_bad_csv_returns_errors(self):
         bad_csv = SimpleUploadedFile(

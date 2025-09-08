@@ -1,6 +1,6 @@
 # api/views.py
 
-import csv
+from zoneinfo import ZoneInfo
 from io import TextIOWrapper
 from rest_framework.parsers import MultiPartParser
 from rest_framework import status
@@ -22,6 +22,7 @@ from django.contrib.auth import authenticate, login
 
 from django.shortcuts import render, redirect
 from django.db import transaction
+from django.conf import settings
 
 from drf_spectacular.utils import (
     extend_schema,
@@ -74,6 +75,7 @@ from .services.services import (
     get_today_journey,
 )
 from .services.air_exposure import ingest_movements_batch
+from .services.air_exposure_daily import recompute_daily_exposure
 from .services.helpers import parse_csv_to_records
 from .permissions import HasValidRegistrationAPIKey
 
@@ -544,10 +546,25 @@ class MovementCSVUploadView(APIView):
         except Exception as e:
             return Response({"status": "error", "detail": str(e)}, status=500)
 
+        tz = ZoneInfo(getattr(settings, "TIME_ZONE", "UTC"))
+        affected_dates = {timezone.localtime(rec["ts"], tz).date() for rec in records}
+
+        exposures_recomputed = 0
+        exposure_errors = []
+        for d in sorted(affected_dates):
+            try:
+                recompute_daily_exposure(request.user.id, d)
+                exposures_recomputed += 1
+            except Exception as e:
+                # не валим весь ответ, просто фиксируем ошибку расчёта конкретного дня
+                exposure_errors.append({"date": d.isoformat(), "error": str(e)})
+
         payload = {
             "status": "ok",
-            **summary,
-            "errors": errors,
+            **summary,  # imported, air_exposure_created, air_exposure_updated
+            "exposures_recomputed": exposures_recomputed,
+            "exposure_errors": exposure_errors,
+            "errors": errors,  # ошибки парсинга CSV
         }
         return Response(
             payload, status=status.HTTP_201_CREATED if summary["imported"] > 0 else 207
