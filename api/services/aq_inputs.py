@@ -6,8 +6,6 @@ from typing import Dict, Tuple, List
 from django.apps import apps
 from django.utils import timezone
 
-AirExposureLog = apps.get_model("api", "AirExposureLog")
-
 
 def _time_weighted_avg(values_minutes: List[Tuple[float | None, int]]) -> float | None:
     num, den = 0.0, 0
@@ -39,6 +37,7 @@ def _rolling_8h_max(values_minutes: List[Tuple[float | None, int]]) -> float | N
 def get_air_quality_inputs_for_risks_from_logs(
     user_id: int, *, hours: int = 24
 ) -> Dict:
+    AirExposureLog = apps.get_model("api", "AirExposureLog")
     """
     Формирует входы для risk-движка за окно (по умолчанию 24 часа) из AirExposureLog.
     ВОЗВРАЩАЕТ mg/м³ для совместимости с вашим движком (конвертируем из µg/м³).

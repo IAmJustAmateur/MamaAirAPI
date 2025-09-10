@@ -211,7 +211,10 @@ class User(MyUser, PermissionsMixin):
                 "risk_value": risk.risk_factor_multiplier,
                 "priority": risk.priority,
             }
-        return risk_dictionary
+        integrated_risk = 1.0
+        for risk_name, risk_value in risk_dictionary.items():
+            integrated_risk *= risk_value["risk_value"]
+        return risk_dictionary, integrated_risk
 
     def calculate_risk_factor_based_on_user_fields(self):
 
