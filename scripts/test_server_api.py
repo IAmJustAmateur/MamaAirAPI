@@ -27,6 +27,10 @@ CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/mommy/checklist/")
 
 MOMMY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/mommy/selection/")
 
+BABY_CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/baby/checklist/")
+BABY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/baby/selection/")
+
+
 META_CHOICES_URL = urljoin(BASE_URL, "api/meta/choices/")
 
 TIMEOUT = 20
@@ -325,7 +329,7 @@ def step_7_selection_post_replace(access_token: str, valid_ids: list[int]):
     ), f"Unexpected 'date' in response: {body.get('date')} vs {expected_date}"
     assert sorted(body.get("symptom_ids", [])) == sorted(
         valid_ids
-    ), f"IDs mismatch in response"
+    ), f"Mommy symptomsIDs mismatch in response"
 
     # Верификация GET с ?date=
     r = requests.get(
@@ -416,6 +420,160 @@ def step_10_selection_get_by_date_param(access_token: str, some_date: str):
     assert body.get("date") == some_date
     assert isinstance(body.get("symptom_ids"), list)
     pp("Selection GET by date", body)
+
+
+def step_11_baby_checklist(access_token: str) -> list[int]:
+    """GET /symptoms/baby/checklist/ — возвращает {"symptoms": [{id,name}, ...]}"""
+    r = requests.get(
+        BABY_CHECKLIST_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby checklist GET failed")
+    data = r.json()
+    assert isinstance(data, dict) and "symptoms" in data, f"Unexpected schema: {data}"
+    items = data["symptoms"]
+    assert isinstance(items, list) and len(items) > 0, "Empty baby checklist"
+    # базовая валидация элемента
+    sample = items[0]
+    assert (
+        isinstance(sample, dict) and "name" in sample and "id" in sample
+    ), f"Invalid item: {sample}"
+    pp("Baby checklist (first 3)", items[:3])
+
+    # Соберём валидные ID (некоторые могут быть None по логике вью)
+    valid_ids = [it["id"] for it in items if isinstance(it.get("id"), int)]
+    assert len(valid_ids) > 0, "No valid baby symptom IDs in checklist"
+    return valid_ids[:3]  # возьмём до 3-х
+
+
+def step_12_baby_selection_get_today(access_token: str):
+    r = requests.get(
+        BABY_SELECTION_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby selection GET (today) failed")
+    body = r.json()
+    assert (
+        "date" in body
+        and "symptom_ids" in body
+        and isinstance(body["symptom_ids"], list)
+    ), f"Invalid schema: {body}"
+    pp("Baby selection GET (today)", body)
+    return body
+
+
+def step_13_baby_selection_post_replace(access_token: str, valid_ids: list[int]) -> str:
+    recorded_at_iso = now_iso_with_tz()
+    expected_date = date_str_from_iso(recorded_at_iso)
+
+    payload = {"recorded_at": recorded_at_iso, "symptom_ids": valid_ids}
+    r = requests.post(
+        BABY_SELECTION_URL,
+        json=payload,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby selection POST (replace) failed")
+    body = r.json()
+    pp("Baby selection POST (replace) response", body)
+
+    assert body.get("recorded_at"), "Missing recorded_at in response"
+    assert (
+        body.get("date") == expected_date
+    ), f"Date mismatch: {body.get('date')} vs {expected_date}"
+    assert sorted(body.get("symptom_ids", [])) == sorted(
+        valid_ids
+    ), "Baby symptoms IDs mismatch in response"
+
+    # verify via GET ?date=
+    r = requests.get(
+        BABY_SELECTION_URL,
+        params={"date": expected_date},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby selection GET by date failed")
+    got = r.json()
+    assert got.get("date") == expected_date
+    assert sorted(got.get("symptom_ids", [])) == sorted(
+        valid_ids
+    ), "IDs mismatch on GET after POST"
+    pp("Baby selection GET (verify after replace)", got)
+    return expected_date
+
+
+def step_14_baby_selection_post_clear(access_token: str, target_date: str):
+    # создадим recorded_at на нужную дату в 09:00 локального TZ
+    local = datetime.now().astimezone()
+    naive = datetime.fromisoformat(f"{target_date}T09:00:00")
+    recorded_at = naive.replace(tzinfo=local.tzinfo).isoformat(timespec="seconds")
+
+    payload = {"recorded_at": recorded_at, "symptom_ids": []}
+    r = requests.post(
+        BABY_SELECTION_URL,
+        json=payload,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby selection POST (clear) failed")
+    body = r.json()
+    assert (
+        body.get("date") == target_date and body.get("symptom_ids") == []
+    ), "Expected empty selection after clear"
+    pp("Baby selection POST (clear) response", body)
+
+    r = requests.get(
+        BABY_SELECTION_URL,
+        params={"date": target_date},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby selection GET after clear failed")
+    got = r.json()
+    assert got.get("symptom_ids") == [], "GET should be empty after clear"
+    pp("Baby selection GET (verify after clear)", got)
+
+
+def step_15_baby_selection_post_invalid_ids(access_token: str):
+    recorded_at_iso = now_iso_with_tz()
+    payload = {"recorded_at": recorded_at_iso, "symptom_ids": [987654321, 876543210]}
+    r = requests.post(
+        BABY_SELECTION_URL,
+        json=payload,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 400, "Baby selection POST (invalid ids) should return 400")
+    body = safe_json(r)
+    pp("Baby selection POST (invalid ids) response", body)
+    assert "symptom_ids" in str(
+        body
+    ), "Response should mention 'symptom_ids' unknown ids"
+
+
+def step_16_baby_selection_get_by_date_param(access_token: str, some_date: str):
+    r = requests.get(
+        BABY_SELECTION_URL,
+        params={"date": some_date},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby selection GET by date failed")
+    body = r.json()
+    assert body.get("date") == some_date and isinstance(
+        body.get("symptom_ids"), list
+    ), f"Invalid schema/date: {body}"
+    pp("Baby selection GET by date", body)
 
 
 # ---------- main --------------------------------------------------------------
@@ -585,6 +743,14 @@ def main():
     # 10) GET by explicit ?date= (use today)
     today = datetime.now().date().isoformat()
     step_10_selection_get_by_date_param(token, today)
+
+    baby_valid_ids = step_11_baby_checklist(token)  # берём валидные id из чеклиста
+    step_12_baby_selection_get_today(token)
+    baby_date_used = step_13_baby_selection_post_replace(token, baby_valid_ids)
+    step_14_baby_selection_post_clear(token, baby_date_used)
+    step_15_baby_selection_post_invalid_ids(token)
+    today = datetime.now().date().isoformat()
+    step_16_baby_selection_get_by_date_param(token, today)
 
     print("\n✅ E2E flow passed.")
 
