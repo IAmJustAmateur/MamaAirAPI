@@ -2,7 +2,9 @@
 
 import requests
 
-BASE_URL = "http://52.4.150.16/api"
+# BASE_URL = "http://52.4.150.16/api"
+BASE_URL = "http://127.0.0.1:8000/api"
+# API_KEY = "super-secret-mobile-key"  # from your .env
 API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser3@example.com"
 PASSWORD = "testpass123"
@@ -103,7 +105,7 @@ def test_upload_movements(csv_path, token):
 
 
 def test_upload_mommy_symptoms(data, token):
-    url = f"{BASE_URL}/symptoms/mommy/"
+    url = f"{BASE_URL}/symptoms/mommy/checklist/"
     headers = {"Authorization": f"Bearer {token}"}
 
     response = requests.post(url, json=data, headers=headers)
