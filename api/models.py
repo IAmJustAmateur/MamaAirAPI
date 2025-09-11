@@ -23,8 +23,9 @@ from django.contrib.auth.models import (
 )
 
 from api.services.aq_inputs import get_air_quality_inputs_for_risks_from_logs
-
 from api.services.services import round_coord, fetch_air_quality_data_interval
+from api.services.aggregation import agg_max_plus_logistic_tail
+
 
 USER_RISK_FACTORS = [
     "bmi",
@@ -183,84 +184,98 @@ class User(MyUser, PermissionsMixin):
     def MVPA(self):
         pass
 
+    RISK_FIELDS = [
+        "bmi",
+        "full_year",
+        "race",
+    ]
+
     def calculate_risk_factors(self):
-        life_style_risks = self.calculate_risk_factor_based_on_lifestyle()
-        user_risks = self.calculate_risk_factor_based_on_user_profile()
-        aq_risks = self.calculate_risk_factor_based_on_aq()
+        lifestyle_risks, ls_integrated_risk = (
+            self.calculate_risk_factor_based_on_lifestyle()
+        )
+        profile_risks, profile_integrated_risk = (
+            self.calculate_risk_factor_based_on_user_profile()
+        )
+        aq_risks, aq_integrated_risk = self.calculate_risk_factor_based_on_aq()
         risks = RiskDefinition.objects.filter(is_enabled=True)
         risk_dictionary = {}
         for risk in risks:
-            if risk.name in life_style_risks:
-                life_style_multiplier = life_style_risks[risk.name]
-            else:
-                life_style_multiplier = 1
-            if risk.name in user_risks:
-                user_risks_multiplier = user_risks[risk.name]
-            else:
-                user_risks_multiplier = 1
-            if risk.name in aq_risks:
-                aq_risks_multiplier = aq_risks[risk.name]
-            else:
-                aq_risks_multiplier = 1
 
-            risk.risk_factor_multiplier = (
-                life_style_multiplier * user_risks_multiplier * aq_risks_multiplier
+            lifestyle_risk_score = (
+                lifestyle_risks[risk.name] if risk.name in lifestyle_risks else 1.0
             )
+            profile_risks_score = (
+                profile_risks[risk.name] if risk.name in profile_risks else 1.0
+            )
+            aq_risks_score = aq_risks[risk.name] if risk.name in aq_risks else 1.0
+
+            risk_score = lifestyle_risk_score * profile_risks_score * aq_risks_score
 
             risk_dictionary[risk.name] = {
-                "risk_value": risk.risk_factor_multiplier,
+                "risk_value": risk_score,
                 "priority": risk.priority,
             }
-        integrated_risk = 1.0
-        for risk_name, risk_value in risk_dictionary.items():
-            integrated_risk *= risk_value["risk_value"]
+
+        risk_values = {}
+        for risk in risk_dictionary:
+            risk_values[risk] = risk_dictionary[risk]["risk_value"]
+        integrated_risk = agg_max_plus_logistic_tail(
+            risk_values, mid=4.0, sensitivity=0.7
+        )
+
         return risk_dictionary, integrated_risk
 
     def calculate_risk_factor_based_on_user_profile(self):
-        from api.services.risks_engine import calculate_risks
+        from api.services.user_risks import compute_risks
 
         risks = RiskDefinition.objects.filter(is_enabled=True)
-        risk_dictionary = calculate_risks(
-            risks=risks, obj=self, fields=USER_RISK_FACTORS, RiskModel=UserRiskFactor
+
+        risks_dict = compute_risks(
+            obj=self,  # fields will be taken from User.RISK_FIELDS or get_risk_fields()
+            RiskModel=UserRiskFactor,
+            risks_qs=risks,
         )
-        integrated_risk = 1.0
-        for risk_name, risk_value in risk_dictionary.items():
-            integrated_risk *= risk_value
-        return risk_dictionary, integrated_risk
+        integrated_score = agg_max_plus_logistic_tail(
+            risks_dict, mid=4.0, sensitivity=0.7
+        )
+        return risks_dict, integrated_score
 
     def calculate_risk_factor_based_on_lifestyle(self):
-        from api.services.risks_engine import calculate_risks
+        from api.services.user_risks import compute_risks
 
-        user_life_style = UserLifeStyle.objects.get(user=self.id)
+        lifestyle = UserLifeStyle.objects.get(user=self.id)
         risks = RiskDefinition.objects.filter(is_enabled=True)
 
-        field_names = [field.name for field in UserLifeStyle._meta.fields]
-
-        risk_dictionary = calculate_risks(
-            risks=risks,
-            obj=user_life_style,
-            fields=field_names,
+        risks_dict = compute_risks(
+            obj=lifestyle,  # fields from UserLifeStyle.RISK_FIELDS or get_risk_fields()
             RiskModel=LifestyleRiskFactor,
+            risks_qs=risks,
         )
-        return risk_dictionary
+        integrated_score = agg_max_plus_logistic_tail(
+            risks_dict, mid=4.0, sensitivity=0.7
+        )
+        return risks_dict, integrated_score
 
     def calculate_risk_factor_based_on_aq(self, aq_data=None):
-        from api.services.risks_engine import calculate_risks
+        from api.services.user_risks import compute_risks
 
         if aq_data is None:
             aq_data = get_air_quality_inputs_for_risks_from_logs(
-                user_id=self.user.id, hours=24
+                user_id=self.user.id,
+                hours=24,
             )
         risks = RiskDefinition.objects.filter(is_enabled=True)
-        # field_names = [field.name for field in aq_data.keys()]
-        field_names = aq_data.keys()
-        risk_dictionary = calculate_risks(
-            risks=risks,
-            obj=aq_data,
-            fields=field_names,
+
+        risks_dict = compute_risks(
+            obj=aq_data,  # dict → fields = aq_data.keys()
             RiskModel=AQRiskFactor,
+            risks_qs=risks,
         )
-        return risk_dictionary
+        integrated_score = agg_max_plus_logistic_tail(
+            risks_dict, mid=4.0, sensitivity=0.7
+        )
+        return risks_dict, integrated_score
 
     def get_mommy_symptoms_for_checking(self):
         """
@@ -460,6 +475,14 @@ class UserLifeStyle(models.Model):
     activity_duration_minutes = models.IntegerField(
         null=True, blank=True
     )  # в минутах в неделю
+
+    RISK_FIELDS = [
+        "average_sleep_hours",
+        "work_type",
+        "diet_type",
+        "cooking_method",
+        "activity_duration_minutes",
+    ]
 
     def __str__(self):
         return f"{self.user.email} Lifestyle"

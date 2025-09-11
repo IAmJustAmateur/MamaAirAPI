@@ -27,7 +27,8 @@
                 //"api.tests.test_user_life_style",
                 //"api.tests.test_mommy_baby_symptoms_api",
                 //"api.tests.test_auth",
-                "api.tests.test_user_risk_calculations"
+                //"api.tests.test_user_risk_calculations"
+                "api.tests.test_aggregation",
             ],
             "justMyCode": false,
             "django": true,
