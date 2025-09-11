@@ -19,7 +19,7 @@ class UserRiskCalculationTest(TestCase):
         )
 
     def test_user_risk_calculation(self):
-        risks, integrated_risk = self.user.calculate_risk_factor_based_on_user_fields()
+        risks, integrated_risk = self.user.calculate_risk_factor_based_on_user_profile()
 
         self.assertIn("Preeclampsia", risks)
 

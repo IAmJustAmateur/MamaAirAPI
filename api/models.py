@@ -33,44 +33,44 @@ USER_RISK_FACTORS = [
 ]
 
 
-def _calculate_risks(risks, fields, object, RiskModel):
-    """
-    Calculate risk factors based on given object and risk factors.
+# def _calculate_risks(risks, fields, object, RiskModel):
+#     """
+#     Calculate risk factors based on given object and risk factors.
 
-    Args:
-        risks (list of RiskDefinition): Risk definitions to calculate.
-        fields (list of str): Fields of object that are used in risk factor conditions.
-        object (Any): Object to calculate risk factors for.
-        RiskModel (type): Type of RiskModel to use when calculating risk factors.
+#     Args:
+#         risks (list of RiskDefinition): Risk definitions to calculate.
+#         fields (list of str): Fields of object that are used in risk factor conditions.
+#         object (Any): Object to calculate risk factors for.
+#         RiskModel (type): Type of RiskModel to use when calculating risk factors.
 
-    Returns:
-        dict: Dictionary with risk names as keys and calculated risk factors as values.
-    """
-    risks_dictionary = {}
-    for risk in risks:
-        base_risk = 1.0  # Base risk factor
-        risk_factors = RiskModel.objects.filter(risk=risk)
+#     Returns:
+#         dict: Dictionary with risk names as keys and calculated risk factors as values.
+#     """
+#     risks_dictionary = {}
+#     for risk in risks:
+#         base_risk = 1.0  # Base risk factor
+#         risk_factors = RiskModel.objects.filter(risk=risk)
 
-        for risk_factor in risk_factors:
-            for factor in fields:
-                if factor in risk_factor.condition:
-                    if hasattr(object, factor):
-                        value = getattr(object, factor)
-                        if value:
-                            condition = risk_factor.condition.replace(
-                                factor, str(value)
-                            )
-                            logger.info(
-                                f"Condition: {condition}, factor: {factor}, value: {value}"
-                            )
-                            try:
-                                if eval(condition):
-                                    multiplier = risk_factor.get_multiplier(str(value))
-                                    base_risk *= multiplier
-                            except:
-                                pass
-        risks_dictionary[risk.name] = base_risk
-    return risks_dictionary
+#         for risk_factor in risk_factors:
+#             for factor in fields:
+#                 if factor in risk_factor.condition:
+#                     if hasattr(object, factor):
+#                         value = getattr(object, factor)
+#                         if value:
+#                             condition = risk_factor.condition.replace(
+#                                 factor, str(value)
+#                             )
+#                             logger.info(
+#                                 f"Condition: {condition}, factor: {factor}, value: {value}"
+#                             )
+#                             try:
+#                                 if eval(condition):
+#                                     multiplier = risk_factor.get_multiplier(str(value))
+#                                     base_risk *= multiplier
+#                             except:
+#                                 pass
+#         risks_dictionary[risk.name] = base_risk
+#     return risks_dictionary
 
 
 class MyUser(AbstractBaseUser):
@@ -185,7 +185,7 @@ class User(MyUser, PermissionsMixin):
 
     def calculate_risk_factors(self):
         life_style_risks = self.calculate_risk_factor_based_on_lifestyle()
-        user_risks = self.calculate_risk_factor_based_on_user_fields()
+        user_risks = self.calculate_risk_factor_based_on_user_profile()
         aq_risks = self.calculate_risk_factor_based_on_aq()
         risks = RiskDefinition.objects.filter(is_enabled=True)
         risk_dictionary = {}
@@ -216,11 +216,12 @@ class User(MyUser, PermissionsMixin):
             integrated_risk *= risk_value["risk_value"]
         return risk_dictionary, integrated_risk
 
-    def calculate_risk_factor_based_on_user_fields(self):
+    def calculate_risk_factor_based_on_user_profile(self):
+        from api.services.risks_engine import calculate_risks
 
         risks = RiskDefinition.objects.filter(is_enabled=True)
-        risk_dictionary = _calculate_risks(
-            risks=risks, object=self, fields=USER_RISK_FACTORS, RiskModel=UserRiskFactor
+        risk_dictionary = calculate_risks(
+            risks=risks, obj=self, fields=USER_RISK_FACTORS, RiskModel=UserRiskFactor
         )
         integrated_risk = 1.0
         for risk_name, risk_value in risk_dictionary.items():
@@ -228,21 +229,24 @@ class User(MyUser, PermissionsMixin):
         return risk_dictionary, integrated_risk
 
     def calculate_risk_factor_based_on_lifestyle(self):
+        from api.services.risks_engine import calculate_risks
 
         user_life_style = UserLifeStyle.objects.get(user=self.id)
         risks = RiskDefinition.objects.filter(is_enabled=True)
 
         field_names = [field.name for field in UserLifeStyle._meta.fields]
 
-        risk_dictionary = _calculate_risks(
+        risk_dictionary = calculate_risks(
             risks=risks,
-            object=user_life_style,
+            obj=user_life_style,
             fields=field_names,
             RiskModel=LifestyleRiskFactor,
         )
         return risk_dictionary
 
     def calculate_risk_factor_based_on_aq(self, aq_data=None):
+        from api.services.risks_engine import calculate_risks
+
         if aq_data is None:
             aq_data = get_air_quality_inputs_for_risks_from_logs(
                 user_id=self.user.id, hours=24
@@ -250,9 +254,9 @@ class User(MyUser, PermissionsMixin):
         risks = RiskDefinition.objects.filter(is_enabled=True)
         # field_names = [field.name for field in aq_data.keys()]
         field_names = aq_data.keys()
-        risk_dictionary = _calculate_risks(
+        risk_dictionary = calculate_risks(
             risks=risks,
-            object=aq_data,
+            obj=aq_data,
             fields=field_names,
             RiskModel=AQRiskFactor,
         )
