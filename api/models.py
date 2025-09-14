@@ -198,6 +198,12 @@ class User(MyUser, PermissionsMixin):
             self.calculate_risk_factor_based_on_user_profile()
         )
         aq_risks, aq_integrated_risk = self.calculate_risk_factor_based_on_aq()
+        Exposure.set_for_date(
+            user=self,  # или конкретный user
+            level=aq_integrated_risk,
+            risks=aq_risks,
+            # pollutants можно передать, если уже есть; иначе пустой dict
+        )
         risks = RiskDefinition.objects.filter(is_enabled=True)
         risk_dictionary = {}
         for risk in risks:
@@ -720,14 +726,33 @@ class AQRiskFactor(AbstractRiskFactor):
         return multiplier * eval(new_formua)
 
 
+# api/models.py
+from django.db import models, transaction
+from django.utils import timezone
+
+
 class Exposure(models.Model):
     user = models.ForeignKey(
         "api.User", on_delete=models.CASCADE, related_name="exposures"
     )
+    # локальная календарная дата (суточный агрегат)
     timestamp = models.DateField(default=timezone.localdate, editable=False)
+
+    # интегральный суточный скор (раньше был "уровень" — оставляем имя поля)
     exposure_level = models.FloatField()
-    updated_at = models.DateTimeField(auto_now=True)
+
+    # диагностические агрегаты по поллютантам — оставляем как есть (можно заполнять опционально)
     pollutants = models.JSONField(default=dict)
+
+    # НОВОЕ: снимок помодульных рисков (то самое risks_dict из compute_risks)
+    # пример структуры:
+    # {
+    #   "PM2_5": {"risk_id": 12, "score": 3.8, ...},
+    #   "O3": {"risk_id": 17, "score": 2.1, ...}
+    # }
+    risks = models.JSONField(default=dict, blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-timestamp"]
@@ -742,16 +767,20 @@ class Exposure(models.Model):
         return f"{self.user_id} {self.timestamp}: {self.exposure_level}"
 
     @classmethod
-    def set_for_date(cls, user, level: float, pollutants=None, date=None):
-        """Upsert на (user, date). Заменяет exposure_level и pollutants за этот день."""
+    def set_for_date(cls, user, level: float, pollutants=None, risks=None, date=None):
+        """
+        Upsert на (user, date). Заменяет интегральный скор (exposure_level),
+        а также pollutants и risks за этот день.
+        """
         date = date or timezone.localdate()
         with transaction.atomic():
             obj, _created = cls.objects.update_or_create(
                 user=user,
                 timestamp=date,
                 defaults={
-                    "exposure_level": level,
+                    "exposure_level": float(level),
                     "pollutants": pollutants or {},
+                    "risks": risks or {},
                 },
             )
         return obj

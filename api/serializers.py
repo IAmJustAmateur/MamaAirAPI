@@ -207,3 +207,15 @@ class SummaryResponseSerializer(serializers.Serializer):
     risks_delta = RisksDeltaSerializer()
     recommendations = RecommendationsSerializer()
     today_journey = JourneyBlockSerializer()
+
+
+class ExposureHistoryItemSerializer(serializers.Serializer):
+    date = serializers.DateField(source="timestamp")
+    integrated_score = serializers.FloatField(source="exposure_level")
+
+
+class ExposureHistoryResponseSerializer(serializers.Serializer):
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    days_requested = serializers.IntegerField()
+    items = ExposureHistoryItemSerializer(many=True)

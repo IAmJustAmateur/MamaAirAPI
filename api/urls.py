@@ -26,6 +26,8 @@ from .views import (
     # remove later
     login_view,
     MetaChoicesView,
+    #
+    ExposureHistoryView,
 )
 from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -69,6 +71,8 @@ urlpatterns = [
     path("advice/", HealthInsightView.as_view(), name="advice"),
     path("info/current/", CurrentAdviceView.as_view(), name="current-advices"),
     path("air-exposure/", EnvironmentView.as_view(), name="air-exposure"),
+    #
+    path("exposure/history/", ExposureHistoryView.as_view(), name="exposure-history"),
     #
     path("meta/choices/", MetaChoicesView.as_view(), name="meta-choices"),
     #

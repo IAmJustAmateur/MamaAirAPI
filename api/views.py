@@ -1,4 +1,5 @@
 # api/views.py
+import datetime as dt
 
 from zoneinfo import ZoneInfo
 from io import TextIOWrapper
@@ -47,6 +48,7 @@ from .models import (
     MommySymptom,
     BabySymptom,
     UserBabySymptoms,
+    Exposure,
 )
 from .serializers import (
     RegisterSerializer,
@@ -62,6 +64,8 @@ from .serializers import (
     SummaryResponseSerializer,
     SymptomSelectionSerializer,
     ChecklistItemSerializer,
+    ExposureHistoryResponseSerializer,
+    ExposureHistoryItemSerializer,
 )
 
 from .services.services import (
@@ -943,3 +947,51 @@ class MetaChoicesView(APIView):
             "exposure_levels": _map_choices(EXPOSURE_LEVEL_CHOICES),
         }
         return Response(data)
+
+
+@extend_schema(
+    tags=["Exposure"],
+    summary="Exposure history (integrated score)",
+    description=(
+        "Returns the user's integrated exposure score history for the last N calendar days "
+        "(default 7, up to 90). Missing days are simply absent from the list."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="days",
+            description="Number of calendar days to return (default 7, min 1, max 90).",
+            required=False,
+            type=int,
+            location=OpenApiParameter.QUERY,
+        ),
+    ],
+    responses=ExposureHistoryResponseSerializer,
+)
+class ExposureHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # parse & clamp days
+        try:
+            days = int(request.query_params.get("days", 7))
+        except (TypeError, ValueError):
+            days = 7
+        days = max(1, min(days, 90))
+
+        end_date = timezone.localdate()
+        start_date = end_date - dt.timedelta(days=days - 1)
+
+        qs = Exposure.objects.filter(
+            user=request.user,
+            timestamp__gte=start_date,
+            timestamp__lte=end_date,
+        ).order_by("timestamp")
+
+        items = ExposureHistoryItemSerializer(qs, many=True).data
+        payload = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "days_requested": days,
+            "items": items,
+        }
+        return Response(payload)
