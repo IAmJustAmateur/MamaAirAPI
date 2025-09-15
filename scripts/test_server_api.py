@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
-EMAIL = "testuser32@example.com"
+EMAIL = "testuser324@example.com"
 PASSWORD = "testpass123"
 
 # BASE_URL_RAW = os.getenv("BASE_URL", "http://52.4.150.16/")
@@ -445,6 +445,7 @@ def step_11_baby_checklist(access_token: str) -> list[int]:
 
     # Соберём валидные ID (некоторые могут быть None по логике вью)
     valid_ids = [it["id"] for it in items if isinstance(it.get("id"), int)]
+    valid_ids = list(set(valid_ids))  # уникальные
     assert len(valid_ids) > 0, "No valid baby symptom IDs in checklist"
     return valid_ids[:3]  # возьмём до 3-х
 
@@ -468,6 +469,8 @@ def step_12_baby_selection_get_today(access_token: str):
 
 
 def step_13_baby_selection_post_replace(access_token: str, valid_ids: list[int]) -> str:
+    print("\n--- Baby selection POST (replace) ---, step 13")
+    print("Valid IDs to post:", valid_ids)
     recorded_at_iso = now_iso_with_tz()
     expected_date = date_str_from_iso(recorded_at_iso)
 
@@ -476,7 +479,7 @@ def step_13_baby_selection_post_replace(access_token: str, valid_ids: list[int])
         BABY_SELECTION_URL,
         json=payload,
         headers=auth_headers(access_token),
-        timeout=TIMEOUT,
+        # timeout=TIMEOUT,
         verify=VERIFY_SSL,
     )
     assert_status(r, 200, "Baby selection POST (replace) failed")
@@ -903,9 +906,10 @@ def main():
     step_10_selection_get_by_date_param(token, today)
 
     baby_valid_ids = step_11_baby_checklist(token)  # берём валидные id из чеклиста
+    pp("Baby valid IDs", baby_valid_ids)
     step_12_baby_selection_get_today(token)
-    # baby_date_used = step_13_baby_selection_post_replace(token, baby_valid_ids)
-    # step_14_baby_selection_post_clear(token, baby_date_used)
+    baby_date_used = step_13_baby_selection_post_replace(token, baby_valid_ids)
+    step_14_baby_selection_post_clear(token, baby_date_used)
     step_15_baby_selection_post_invalid_ids(token)
     today = datetime.now().date().isoformat()
     step_16_baby_selection_get_by_date_param(token, today)
@@ -913,6 +917,8 @@ def main():
     # --- Exposure history E2E checks ---
     step_exposure_history_default(token)
     step_exposure_history_days_param(token)
+
+    #
 
     print("\n✅ E2E flow passed.")
 
