@@ -7,9 +7,9 @@ import json
 import requests
 from urllib.parse import urljoin
 
-BASE_URL = "http://52.4.150.16/"
-# BASE_URL = "http://127.0.0.1:8000/"
-# API_KEY = "super-secret-mobile-key"  # from your .env
+# BASE_URL = "http://52.4.150.16/"
+BASE_URL = "http://127.0.0.1:8000/"
+API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser32@example.com"
 PASSWORD = "testpass123"
@@ -30,6 +30,7 @@ MOMMY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/mommy/selection/")
 BABY_CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/baby/checklist/")
 BABY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/baby/selection/")
 
+EXPOSURE_HISTORY_URL = urljoin(BASE_URL, "api/exposure/history/")
 
 META_CHOICES_URL = urljoin(BASE_URL, "api/meta/choices/")
 
@@ -695,6 +696,163 @@ def test_delete_account(token):
     return response
 
 
+def _parse_iso_date(s: str):
+    # 'YYYY-MM-DD' -> datetime.date
+    from datetime import date, datetime
+
+    try:
+        return datetime.fromisoformat(s).date()
+    except Exception:
+        # На случай если бекенд вернёт что-то с Z/offset (не должен)
+        try:
+            return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+        except Exception as e:
+            raise AssertionError(f"Invalid ISO date: {s}") from e
+
+
+def _assert_chronological(items: list[dict]):
+    dates = [it["date"] for it in items]
+    if dates != sorted(dates):
+        raise AssertionError(f"Items are not chronological (asc): {dates}")
+
+
+def _assert_items_schema(items: list[dict]):
+    for i, it in enumerate(items):
+        if not isinstance(it, dict):
+            raise AssertionError(f"Item #{i} must be dict, got {type(it)}")
+        if "date" not in it or "integrated_score" not in it:
+            raise AssertionError(f"Item #{i} missing keys: {it}")
+        # date must be str and valid ISO date
+        if not isinstance(it["date"], str):
+            raise AssertionError(f"Item #{i}.date must be str, got {type(it['date'])}")
+        _ = _parse_iso_date(it["date"])
+        # score must be int/float
+        if not isinstance(it["integrated_score"], (int, float)):
+            raise AssertionError(
+                f"Item #{i}.integrated_score must be number, got {type(it['integrated_score'])}"
+            )
+
+
+def _assert_items_within_window(items: list[dict], start_date, end_date):
+    for it in items:
+        d = _parse_iso_date(it["date"])
+        if d < start_date or d > end_date:
+            raise AssertionError(
+                f"Date {d} out of requested window [{start_date}..{end_date}]"
+            )
+
+
+def step_exposure_history_default(access_token: str):
+    """GET /api/exposure/history/ — default window 7 days, schema & bounds."""
+    r = requests.get(
+        EXPOSURE_HISTORY_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Exposure history (default) failed")
+    data = safe_json(r)
+    pp("Exposure history (default)", data)
+
+    # Top-level keys
+    for key in ("start_date", "end_date", "days_requested", "items"):
+        if key not in data:
+            raise AssertionError(f"Missing '{key}' in response")
+
+    # days_requested defaults to 7
+    if data["days_requested"] != 7:
+        raise AssertionError(f"days_requested expected 7, got {data['days_requested']}")
+
+    # Dates should be valid and consistent
+    start_date = _parse_iso_date(data["start_date"])
+    end_date = _parse_iso_date(data["end_date"])
+    if start_date > end_date:
+        raise AssertionError("start_date must be <= end_date")
+
+    items = data["items"]
+    if not isinstance(items, list):
+        raise AssertionError(f"'items' must be list, got {type(items)}")
+
+    # If items present — validate schema & ordering & bounds
+    if items:
+        _assert_items_schema(items)
+        _assert_chronological(items)
+        _assert_items_within_window(items, start_date, end_date)
+
+
+def step_exposure_history_days_param(access_token: str):
+    """GET /api/exposure/history/?days=... — clamp & invalid handling."""
+    # Case 1: days=1 -> exactly today window
+    r = requests.get(
+        EXPOSURE_HISTORY_URL,
+        params={"days": 1},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Exposure history days=1 failed")
+    d1 = r.json()
+    if d1["days_requested"] != 1:
+        raise AssertionError(f"Expected days_requested=1, got {d1['days_requested']}")
+    sd = _parse_iso_date(d1["start_date"])
+    ed = _parse_iso_date(d1["end_date"])
+    if sd != ed:
+        raise AssertionError("For days=1 expected start_date==end_date")
+    if d1["items"]:
+        _assert_items_schema(d1["items"])
+        _assert_chronological(d1["items"])
+        _assert_items_within_window(d1["items"], sd, ed)
+    pp("Exposure history (days=1)", d1)
+
+    # Case 2: days=999 -> clamp to 90
+    r = requests.get(
+        EXPOSURE_HISTORY_URL,
+        params={"days": 999},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Exposure history days=999 failed")
+    d2 = r.json()
+    if d2["days_requested"] != 90:
+        raise AssertionError(f"Expected clamp to 90, got {d2['days_requested']}")
+    sd2 = _parse_iso_date(d2["start_date"])
+    ed2 = _parse_iso_date(d2["end_date"])
+    if d2["items"]:
+        _assert_items_schema(d2["items"])
+        _assert_chronological(d2["items"])
+        _assert_items_within_window(d2["items"], sd2, ed2)
+    pp("Exposure history (days=999 -> 90)", d2)
+
+    # Case 3: days=0 -> clamp to 1
+    r = requests.get(
+        EXPOSURE_HISTORY_URL,
+        params={"days": 0},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Exposure history days=0 failed")
+    d3 = r.json()
+    if d3["days_requested"] != 1:
+        raise AssertionError(f"Expected clamp to 1, got {d3['days_requested']}")
+    pp("Exposure history (days=0 -> 1)", d3)
+
+    # Case 4: days='oops' -> default 7
+    r = requests.get(
+        EXPOSURE_HISTORY_URL,
+        params={"days": "oops"},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Exposure history days=invalid failed")
+    d4 = r.json()
+    if d4["days_requested"] != 7:
+        raise AssertionError(f"Expected default=7, got {d4['days_requested']}")
+    pp("Exposure history (days=invalid -> 7)", d4)
+
+
 def main():
     # sanity
     if REG_API_KEY == "REPLACE_ME":
@@ -746,11 +904,15 @@ def main():
 
     baby_valid_ids = step_11_baby_checklist(token)  # берём валидные id из чеклиста
     step_12_baby_selection_get_today(token)
-    baby_date_used = step_13_baby_selection_post_replace(token, baby_valid_ids)
-    step_14_baby_selection_post_clear(token, baby_date_used)
+    # baby_date_used = step_13_baby_selection_post_replace(token, baby_valid_ids)
+    # step_14_baby_selection_post_clear(token, baby_date_used)
     step_15_baby_selection_post_invalid_ids(token)
     today = datetime.now().date().isoformat()
     step_16_baby_selection_get_by_date_param(token, today)
+
+    # --- Exposure history E2E checks ---
+    step_exposure_history_default(token)
+    step_exposure_history_days_param(token)
 
     print("\n✅ E2E flow passed.")
 
@@ -765,33 +927,3 @@ if __name__ == "__main__":
     except requests.RequestException as e:
         print(f"\n❌ Network error: {e}")
         sys.exit(2)
-    # print("🔍 Running remote API test against test server...")
-
-    # test_register()
-    # access_token, refresh_token = login()
-
-    # test_profile(access_token)
-    # test_summary(access_token)
-    # test_set_language(access_token)
-
-    # print("\n✅ Uploading valid CSV:")
-    # test_upload_movements("test_data/valid_movements.csv", access_token)
-
-    # payload = {
-    #     "symptom": "Headache",
-    #     "user": 1,  # Assuming user ID 1 exists
-    #     "severity": 3,
-    #     "date_recorded": "2025-07-18",
-    # }
-    # print("\n✅ Uploading valid mommy symptom:")
-    # test_upload_mommy_symptoms(payload, access_token)
-
-    # print("\n⚠️ Uploading invalid CSV:")
-    # test_upload_movements("test_data/invalid_movements.csv", access_token)
-
-    # test_logout(refresh_token, access_token)
-
-    # print("\n🗑️ Deleting user account:")
-    # test_delete_account(access_token)
-
-    # print("\n✅ ALL TESTS PASSED.")
