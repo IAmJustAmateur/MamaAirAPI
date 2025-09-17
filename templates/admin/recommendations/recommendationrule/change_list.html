@@ -1,0 +1,10 @@
+{% extends "admin/change_list.html" %}
+
+{% block content_title %}{{ title }}{% endblock %}
+
+{% block object-tools %}
+  {{ block.super }}
+  <div style="margin:12px 0; padding:12px; background:#f6f7f9; border:1px solid #e5e5e5;">
+    {{ cheatsheet_html|safe }}
+  </div>
+{% endblock %}
