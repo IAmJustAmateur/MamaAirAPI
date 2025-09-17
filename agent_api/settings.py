@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     # our apps
     "api",
     "demo_interface",
+    "recommendations",
     # third-party apps
     "drf_spectacular",
     #

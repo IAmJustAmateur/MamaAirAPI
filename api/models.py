@@ -722,8 +722,8 @@ class AQRiskFactor(AbstractRiskFactor):
         multiplier = super().get_multiplier()
         if param is None:
             return multiplier
-        new_formua = self.formula.replace("param", str(param))
-        return multiplier * eval(new_formua)
+        new_formula = self.formula.replace("param", str(param))
+        return multiplier * eval(new_formula)
 
 
 # api/models.py
@@ -744,12 +744,6 @@ class Exposure(models.Model):
     # диагностические агрегаты по поллютантам — оставляем как есть (можно заполнять опционально)
     pollutants = models.JSONField(default=dict)
 
-    # НОВОЕ: снимок помодульных рисков (то самое risks_dict из compute_risks)
-    # пример структуры:
-    # {
-    #   "PM2_5": {"risk_id": 12, "score": 3.8, ...},
-    #   "O3": {"risk_id": 17, "score": 2.1, ...}
-    # }
     risks = models.JSONField(default=dict, blank=True)
 
     updated_at = models.DateTimeField(auto_now=True)
