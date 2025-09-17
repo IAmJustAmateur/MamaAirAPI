@@ -593,13 +593,11 @@ class HealthInsightView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        snapshot = (
-            HealthInsightSnapshot.objects.filter(user=request.user)
-            .order_by("-created_at")
-            .first()
+        from recommendations.evaluator import get_or_create_fresh_snapshot
+
+        snapshot = get_or_create_fresh_snapshot(
+            request.user, fresh_for_hours=6, trigger_event="login"
         )
-        if not snapshot:
-            return Response({"detail": "No health insights available."}, status=204)
         return Response(HealthInsightSerializer(snapshot).data)
 
 

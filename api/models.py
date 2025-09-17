@@ -635,29 +635,45 @@ class AirExposureLog(models.Model):
 
 
 class HealthInsightSnapshot(models.Model):
+    """
+    Снимок рекомендаций для пользователя.
+    recommendations — список объектов (карточек), а не просто строки. Пример элемента:
+    {
+      "id": "alert.pm25.daily.v1",
+      "severity": "moderate",
+      "title": "PM2.5 is high",
+      "message": "Limit outdoor time...",
+      "category": "air_quality",
+      "ttl_hours": 12,
+      "expires_at": "2025-09-18T08:00:00Z",
+      "sources": ["engine"],
+      "engine_version": "receng-mvp-0.1"
+    }
+    """
+
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="health_insights"
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # риски по категориям
-    mommy_risk = models.JSONField()  # {"fatigue": 3, "headache": 2}
-    baby_risk = models.JSONField()  # {"reduced_movement": 2}
+    # Рекомендации (структурированный список карточек)
+    recommendations = models.JSONField(default=list, blank=True)
 
-    # рекомендации
-    recommendations = (
-        models.JSONField()
-    )  # список строк: ["Avoid charcoal cooking", "Increase rest"]
-
-    # метаинформация
-
-    source = models.CharField(max_length=32, default="engine")  # или "ml"
+    # Метаданные генерации
+    source = models.CharField(max_length=32, default="engine")  # "engine" | "ml" | ...
     trigger_event = models.CharField(
         max_length=64, blank=True, null=True
-    )  # "manual", "login", "auto"
+    )  # "manual" | "login" | "auto"
+    engine_version = models.CharField(max_length=32, default="receng-mvp-0.1")
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"HealthInsightSnapshot(user={self.user_id}, created_at={self.created_at:%Y-%m-%d %H:%M})"
 
 
 class AdviceTemplate(models.Model):
