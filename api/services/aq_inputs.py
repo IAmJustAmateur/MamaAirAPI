@@ -74,7 +74,7 @@ def get_air_quality_inputs_for_risks_from_logs(
     vm_co = [(row["co"], row["exposure_minutes"]) for row in logs]
     vm_o3 = [(row["o3"], row["exposure_minutes"]) for row in logs]
 
-    pm25_24h = _time_weighted_avg(vm_pm25) or 0.0  # µg/м³
+    pm25_avg = _time_weighted_avg(vm_pm25) or 0.0  # µg/м³
     pm10_24h = _time_weighted_avg(vm_pm10) or 0.0
     no2_24h = _time_weighted_avg(vm_no2) or 0.0
     so2_24h = _time_weighted_avg(vm_so2) or 0.0
@@ -87,7 +87,7 @@ def get_air_quality_inputs_for_risks_from_logs(
     hours_covered = sum(1 for row in logs if (row["exposure_minutes"] or 0) > 0)
 
     return {
-        "pm25": pm25_24h,
+        "pm25": pm25_avg,
         "pm10": pm10_24h,
         "no2": no2_24h,
         "so2": so2_24h,

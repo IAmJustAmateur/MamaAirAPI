@@ -433,7 +433,7 @@ class User(MyUser, PermissionsMixin):
                 return float(s.mean())
             return float(s.rolling(window=8, min_periods=8).mean().max())
 
-        pm25_24h = _safe_mean(hourly["pm25"])
+        pm25_avg = _safe_mean(hourly["pm25"])
         no2_24h = _safe_mean(hourly["no2"])
         so2_24h = _safe_mean(hourly["so2"])
         o3_24h = _safe_mean(hourly["o3"])
@@ -444,7 +444,7 @@ class User(MyUser, PermissionsMixin):
 
         return {
             # значения для формул рисков (mg/м³), без суффиксов
-            "pm25": pm25_24h,
+            "pm25": pm25_avg,
             "no2": no2_24h,
             "so2": so2_24h,
             "o3": o3_8hmax,

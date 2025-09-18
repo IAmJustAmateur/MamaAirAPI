@@ -27,7 +27,7 @@ CHEATSHEET_HTML = """
     </li>
   </ul>
   <p><b>Examples:</b></p>
-  <pre style="white-space:pre-wrap">ge_poll('pm25_24h_mean', 10)
+  <pre style="white-space:pre-wrap">ge_poll('pm25_avg', 10)
 count_true(is_20w_plus, m('high blood pressure'), m('headache')) >= 3
 lifestyle.get('cooking_method') in ('wood','charcoal')</pre>
 </details>

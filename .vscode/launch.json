@@ -33,7 +33,8 @@
                 //"api.tests.test_auth",
                 //"api.tests.test_user_risk_calculations"
                 //"api.tests.test_aggregation",
-                "recommendations.tests.test_context"
+                //"recommendations.tests.test_context",
+                "recommendations.tests.test_advice_recommendations",
             ],
             "justMyCode": false,
             "django": true,

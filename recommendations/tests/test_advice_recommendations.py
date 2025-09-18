@@ -78,11 +78,11 @@ class AdviceEndpointTests(APITestCase):
     def _create_air_exposure_log(self, **metrics) -> AirExposureLog:
         """
         Создаёт последний (по времени) AirExposureLog для пользователя.
-        В metrics передаём нужные агрегаты, например:
-         pm25_24h_mean=15, no2_24h_mean=30, o3_8h_max=120, so2_24h_mean=50
         """
         log = AirExposureLog.objects.create(
             user=self.user,
+            latitude=55.0,
+            longitude=37.0,
             timestamp=timezone.now(),  # последний лог
             **metrics,
         )
@@ -150,13 +150,13 @@ class AdviceEndpointTests(APITestCase):
 
     def test_air_quality_pm25_high(self):
         """
-        Должно сработать правило alert.pm25.daily при ge_poll('pm25_24h_mean', 10).
+        Должно сработать правило alert.pm25.daily при ge_poll('pm25_avg', 10).
         """
         self._wipe_snapshots()
         self._set_profile(height=170, weight_pre_pregnancy=65, week_of_pregnancy=20)
 
         # создаём свежий лог экспозиции
-        self._create_air_exposure_log(pm25_24h_mean=15)
+        self._create_air_exposure_log(pm25=15)
 
         recs = self._get_recommendations()
         self.assertTrue(self._has_rule(recs, "alert.pm25.daily"), recs)
