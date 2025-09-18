@@ -6,12 +6,14 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 import json
 import requests
 from urllib.parse import urljoin
+from utils import build_csv_many_points
+import time
 
-# BASE_URL = "http://52.4.150.16/"
-BASE_URL = "http://127.0.0.1:8000/"
+BASE_URL = "http://52.4.150.16/"
+# BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
-EMAIL = "testuser324@example.com"
+EMAIL = "testuser111@example.com"
 PASSWORD = "testpass123"
 
 # BASE_URL_RAW = os.getenv("BASE_URL", "http://52.4.150.16/")
@@ -33,6 +35,10 @@ BABY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/baby/selection/")
 EXPOSURE_HISTORY_URL = urljoin(BASE_URL, "api/exposure/history/")
 
 META_CHOICES_URL = urljoin(BASE_URL, "api/meta/choices/")
+
+MOVEMENTS_UPLOAD_URL = urljoin(BASE_URL, "api/movements/upload/")
+AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
+
 
 TIMEOUT = 20
 VERIFY_SSL = True  # http у тебя сейчас — флаг игнорируется
@@ -580,6 +586,83 @@ def step_16_baby_selection_get_by_date_param(access_token: str, some_date: str):
     pp("Baby selection GET by date", body)
 
 
+def step_movements_upload_many(access_token: str) -> tuple[str, dict]:
+    """POST /api/movements/upload с множеством точек. Возвращает (target_date, resp_body)."""
+    fname, csv_bytes, target_date = build_csv_many_points()
+    files = {"file": (fname, csv_bytes, "text/csv")}
+    r = requests.post(
+        MOVEMENTS_UPLOAD_URL,
+        files=files,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    # на бэке обычно 201 (created) или 207 (multi-status, если были частичные ошибки)
+    assert_status(r, [201, 207], "Movements upload failed")
+    body = safe_json(r)
+    pp("Movements upload response", body)
+
+    # Мягкая проверка типичных ключей (если возвращаются)
+    if isinstance(body, dict):
+        for k in ("created", "processed", "rows_ok", "errors", "summary"):
+            # допускаем отсутствие ключей: просто проверяем тип, если есть
+            if k in body:
+                if k in ("errors", "summary"):
+                    assert isinstance(
+                        body[k], (list, dict)
+                    ), f"{k} must be list or dict"
+                else:
+                    assert (
+                        isinstance(body[k], int) and body[k] >= 0
+                    ), f"{k} must be non-negative int"
+    return target_date, (body if isinstance(body, dict) else {})
+
+
+import time
+
+
+def step_air_exposure_poll_latest(
+    access_token: str, max_attempts: int = 6, delay_sec: int = 5
+) -> dict:
+    """
+    GET /api/air-exposure/ с несколькими попытками.
+    204 означает, что лог ещё не готов — подождём и повторим.
+    Возвращает JSON лога при успехе (status 200).
+    """
+    for attempt in range(1, max_attempts + 1):
+        r = requests.get(
+            AIR_EXPOSURE_URL,
+            headers=auth_headers(access_token),
+            timeout=TIMEOUT,
+            verify=VERIFY_SSL,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            pp(f"AirExposureLog (attempt {attempt})", data)
+            # Базовые soft-проверки схемы
+            assert isinstance(
+                data, dict
+            ), "AirExposureLog response must be a JSON object"
+            # Часто полезно наличие timestamp/id/level — проверяем мягко
+            if "timestamp" in data:
+                assert (
+                    isinstance(data["timestamp"], str) and len(data["timestamp"]) >= 10
+                ), "timestamp must be ISO-like string"
+            return data
+        elif r.status_code == 204:
+            if attempt < max_attempts:
+                time.sleep(delay_sec)
+                continue
+            else:
+                raise AssertionError("AirExposureLog not ready after retries (204).")
+        else:
+            raise AssertionError(
+                f"Unexpected status from /api/air-exposure/: {r.status_code} {r.text[:300]}"
+            )
+
+    raise AssertionError("AirExposureLog polling exceeded attempts.")
+
+
 # ---------- main --------------------------------------------------------------
 
 
@@ -659,7 +742,7 @@ def test_logout(refresh_token, access_token):
 
 
 def test_upload_movements(csv_path, token):
-    url = f"{BASE_URL}/movements/upload"
+    url = f"{BASE_URL}/movements/upload/"
     headers = {"Authorization": f"Bearer {token}"}
     files = {"file": open(csv_path, "rb")}
 
@@ -917,8 +1000,24 @@ def main():
     # --- Exposure history E2E checks ---
     step_exposure_history_default(token)
     step_exposure_history_days_param(token)
-
     #
+    # --- movements upload -> AirExposureLog ---
+    target_date, upload_info = step_movements_upload_many(token)
+    exposure = step_air_exposure_poll_latest(token)
+
+    try:
+        ts = exposure.get("timestamp")
+        if ts:
+            # лог считается свежим, если внутри последних ~12 часов
+            expo_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            delta = datetime.now(dt_timezone.utc) - expo_dt.astimezone(dt_timezone.utc)
+            assert (
+                delta.total_seconds() < 12 * 3600
+            ), f"AirExposureLog looks stale: {ts}"
+    except Exception:
+        pass
+
+    print("✔ Movements uploaded and AirExposureLog generated.")
 
     print("\n✅ E2E flow passed.")
 

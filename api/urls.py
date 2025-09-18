@@ -66,7 +66,7 @@ urlpatterns = [
         UserBabySymptomsSelectionView.as_view(),
         name="symptoms-baby-selection",
     ),
-    path("movements/upload", MovementCSVUploadView.as_view(), name="movements-upload"),
+    path("movements/upload/", MovementCSVUploadView.as_view(), name="movements-upload"),
     #
     path("advice/", HealthInsightView.as_view(), name="advice"),
     path("info/current/", CurrentAdviceView.as_view(), name="current-advices"),
