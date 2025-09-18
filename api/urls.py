@@ -29,8 +29,10 @@ from .views import (
     #
     ExposureHistoryView,
 )
+from api.views_debug import DebugExposureUpsertView, DebugExposureRecomputeView
 from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from django.conf import settings
 
 # app_name = "api"
 
@@ -89,3 +91,19 @@ urlpatterns = [
 urlpatterns += [
     path("login/", login_view, name="login"),
 ]
+
+debug_urls = [
+    path(
+        "debug/air-exposure/upsert/",
+        DebugExposureUpsertView.as_view(),
+        name="debug-exposure-upsert",
+    ),
+    path(
+        "debug/air-exposure/recompute/",
+        DebugExposureRecomputeView.as_view(),
+        name="debug-exposure-recompute",
+    ),
+]
+
+if settings.DEBUG or settings.DJANGO_ENV in {"development", "staging"}:
+    urlpatterns += debug_urls

@@ -165,24 +165,10 @@ class AdviceEndpointTests(APITestCase):
         self._upload_movements_many()
 
         # 2) имитируем пересчёт дневной экспозиции так, чтобы появились нужные метрики
-        #    Тебе нужно, чтобы после этого в контексте EvalContextBuilder появились:
         #    pm25_24h_mean >= 10 (например 15).
         def _fake_recompute(user):
             from api.models import Exposure
 
-            # Здесь сделай то, что обычно делает реальный пересчёт:
-            # либо создай Exposure с pollutants={'pm25_24h_mean': 15, ...},
-            # либо создай/обнови AirExposureLog( pm25_24h_mean=15, ... ),
-            # в зависимости от того, откуда ge_poll читает данные в твоём EvalContextBuilder.
-            # from api.models import (
-            #     AirExposureLog,
-            # )  # или Exposure, если именно его читаете
-
-            # AirExposureLog.objects.create(
-            #     user=self.user,
-            #     timestamp=timezone.now(),
-            #     pm25_24h_mean=15.0,
-            # )
             es = Exposure.objects.filter(user=user)
             for e in es:
                 e.pollutants = e.pollutants or {}

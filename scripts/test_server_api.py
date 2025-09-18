@@ -38,6 +38,8 @@ META_CHOICES_URL = urljoin(BASE_URL, "api/meta/choices/")
 
 MOVEMENTS_UPLOAD_URL = urljoin(BASE_URL, "api/movements/upload/")
 AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
+ADVICE_URL = urljoin(BASE_URL, "api/advice/")
+AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
 
 
 TIMEOUT = 20
