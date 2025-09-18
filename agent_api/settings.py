@@ -37,7 +37,7 @@ OWM_API_KEY = os.getenv("OWM_API_KEY")
 print(f"OWM_API_KEY is set: {OWM_API_KEY is not None}")
 
 
-if DJANGO_ENV == "production":
+if DJANGO_ENV in {"staging", "production"}:
     BASE_DIR = settings_path.parent
     TEMPLATE_DIR = settings_path.parent.parent / "templates"
 else:
@@ -136,7 +136,7 @@ ASGI_APPLICATION = "agent_api.asgi.application"  # required for uvicorn
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if DJANGO_ENV != "production":
+if not DJANGO_ENV in {"production", "staging"}:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",

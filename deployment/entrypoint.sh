@@ -15,7 +15,7 @@ wait_for_postgres() {
 }
 
 # Check if DJANGO_ENV is set to production
-if [ "$DJANGO_ENV" = "production" ]; then
+if [ "$DJANGO_ENV" = "production" ] || [ "$DJANGO_ENV" = "staging" ]; then
   wait_for_postgres
   echo "Applying database migrations..."
   python manage.py migrate --noinput

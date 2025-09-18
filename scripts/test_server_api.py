@@ -41,6 +41,7 @@ AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
 ADVICE_URL = urljoin(BASE_URL, "api/advice/")
 AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
 
+DEBUG_EXPOSURE_UPSERT_URL = urljoin(BASE_URL, "api/debug/air-exposure/upsert/")
 
 TIMEOUT = 20
 VERIFY_SSL = True  # http у тебя сейчас — флаг игнорируется
@@ -665,6 +666,88 @@ def step_air_exposure_poll_latest(
     raise AssertionError("AirExposureLog polling exceeded attempts.")
 
 
+def step_debug_exposure_upsert(
+    access_token: str, pollutants: dict, timestamp_iso: str | None = None
+) -> dict:
+    """
+    POST /api/debug/air-exposure/upsert/
+    Создаёт свежую запись Exposure для текущего пользователя с заданными агрегатами.
+    Пример pollutants: {"pm25_avg_24h": 15.0}
+    """
+    payload = {"pollutants": pollutants}
+    if timestamp_iso:
+        payload["timestamp"] = timestamp_iso
+
+    r = requests.post(
+        DEBUG_EXPOSURE_UPSERT_URL,
+        json=payload,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    # если эндпойнт доступен только staff — тут можно получить 403
+    assert_status(r, [201, 200], "Debug exposure upsert failed")
+    data = r.json()
+    pp("Debug exposure upsert response", data)
+    return data
+
+
+def step_advice_get(access_token: str) -> dict:
+    """
+    GET /api/advice/
+    Возвращает JSON снапшота со списком рекомендаций.
+    """
+    r = requests.get(
+        ADVICE_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Advice GET failed")
+    data = r.json()
+    assert "recommendations" in data and isinstance(
+        data["recommendations"], list
+    ), f"Bad advice schema: {data}"
+    pp(
+        "Advice snapshot (head)",
+        {
+            "created_at": data.get("created_at"),
+            "count": len(data["recommendations"]),
+            "first": (data["recommendations"][:1] or None),
+        },
+    )
+    return data
+
+
+def step_validate_aq_via_debug(access_token: str, min_pm25: float = 10.0):
+    """
+    Апсертим pm25_avg_24h >= min_pm25, затем проверяем /api/advice/, что сработал alert.pm25.daily.
+    """
+    # 1) апсёртим свежую экспозицию
+    now_iso = datetime.now(dt_timezone.utc).astimezone().isoformat(timespec="seconds")
+    _ = step_debug_exposure_upsert(
+        access_token, {"pm25_avg_24h": max(min_pm25, 12.0)}, timestamp_iso=now_iso
+    )
+
+    # 2) запрашиваем советы
+    data = step_advice_get(access_token)
+    recs = data["recommendations"]
+
+    # 3) проверяем наличие air_quality карточки и конкретного правила
+    def _has_rule(rule_id: str) -> bool:
+        return any(isinstance(x, dict) and x.get("rule_id") == rule_id for x in recs)
+
+    def _has_cat(cat: str) -> bool:
+        return any(isinstance(x, dict) and x.get("category") == cat for x in recs)
+
+    assert _has_cat(
+        "air_quality"
+    ), f"No 'air_quality' recommendations found: {recs[:5]}"
+    assert _has_rule("alert.pm25.daily"), f"'alert.pm25.daily' not found: {recs[:5]}"
+
+    print("✔ AQ via debug upsert validated (pm25_avg_24h >= threshold).")
+
+
 # ---------- main --------------------------------------------------------------
 
 
@@ -1020,6 +1103,10 @@ def main():
         pass
 
     print("✔ Movements uploaded and AirExposureLog generated.")
+
+    # --- Advice + debug upsert -> AQ alert ---
+    step_debug_exposure_upsert(token, {"pm25_avg_24h": 20.0})
+    step_validate_aq_via_debug(token, min_pm25=15.0)
 
     print("\n✅ E2E flow passed.")
 
