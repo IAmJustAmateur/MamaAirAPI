@@ -112,7 +112,9 @@ class EvalContextBuilder:
             "sym_m": sym_m,  # {"headache": True, "upper abdominal pain": True, ...}
             "sym_b": sym_b,  # {"reduced fetal movement": True, ...}
             # сокращённые булевы из профиля
-            "is_20w_plus": bool((self._profile.get("week_of_pregnancy") or 0) >= 20),
+            "is_20w_plus": bool(
+                (self._profile.get("current_week_of_pregnancy") or 0) >= 20
+            ),
             # helpers для условий
             "exists": _exists,
             "ge": _ge,
@@ -138,7 +140,7 @@ class EvalContextBuilder:
             "bmi": getattr(u, "bmi", None),
             "full_year": getattr(u, "full_year", None),
             "race": getattr(u, "race", None),
-            "week_of_pregnancy": getattr(u, "week_of_pregnancy", None),
+            "current_week_of_pregnancy": getattr(u, "current_week_of_pregnancy", None),
         }
         return profile
 

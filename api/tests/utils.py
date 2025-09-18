@@ -21,7 +21,7 @@ def create_defaults():
         weight_pre_pregnancy=60,
         is_first_pregnancy=True,
         race="caucasian",
-        week_of_pregnancy=3,
+        week_of_pregnancy=20,
     )
     UserLifeStyle.objects.create(
         user=mommy_user,

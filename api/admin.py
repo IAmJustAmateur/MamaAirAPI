@@ -54,6 +54,7 @@ class UserAdmin(BaseUserAdmin):
         "country",
         "race",
         "week_of_pregnancy",
+        "current_week_of_pregnancy",
         "registered_at",
     )
     list_filter = ("country", "race", "week_of_pregnancy", "tracking_enabled")

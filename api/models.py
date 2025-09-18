@@ -175,6 +175,27 @@ class User(MyUser, PermissionsMixin):
         return self.weight_pre_pregnancy / ((self.height / 100) ** 2)
 
     @property
+    def current_week_of_pregnancy(self) -> int | None:
+        """
+        Текущая неделя беременности = неделя на момент регистрации + полные недели с регистрации.
+        Возвращает None, если исходные данные неполные.
+        """
+        if self.week_of_pregnancy is None or not self.registered_at:
+            return None
+
+        # Дата «якоря» — день регистрации (когда фиксировалась week_of_pregnancy)
+        anchor_date = self.registered_at.astimezone(
+            timezone.get_current_timezone()
+        ).date()
+        today = timezone.localdate()
+
+        delta_weeks = max(0, (today - anchor_date).days // 7)
+        current = self.week_of_pregnancy + delta_weeks
+
+        # Часто практично ограничивать 42, но если не хотите — уберите min(...)
+        return min(current, 42)
+
+    @property
     def full_year(self):
         return (
             date.today().year - self.date_of_birth.year if self.date_of_birth else None
