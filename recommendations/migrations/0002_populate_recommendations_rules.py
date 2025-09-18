@@ -116,7 +116,7 @@ RULES = [
         "rule_id": "alert.pm25.daily",
         "version": 1,
         "title": "PM2.5 is high",
-        "condition": "ge_poll('pm25_avg', 10)",
+        "condition": "ge_poll('pm25_avg_24h', 10)",
         "message": "PM2.5 is high. Limit outdoor time, use a mask/purifier, ventilate when cleaner.",
         "severity": "moderate",
         "category": "air_quality",

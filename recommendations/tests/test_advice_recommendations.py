@@ -1,4 +1,5 @@
 # tests/test_advice_recommendations.py
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone as dt_tz
 from django.urls import reverse
 from django.utils import timezone
@@ -16,6 +17,7 @@ from api.models import AirExposureLog
 from api.models import (
     HealthInsightSnapshot,
 )
+from .utils import _build_movements_csv_many
 
 User = get_user_model()
 
@@ -75,18 +77,20 @@ class AdviceEndpointTests(APITestCase):
                 user=self.user, symptom=sym, recorded_at=now
             )
 
-    def _create_air_exposure_log(self, **metrics) -> AirExposureLog:
+    def _upload_movements_many(self):
         """
-        Создаёт последний (по времени) AirExposureLog для пользователя.
+        POST /api/movements/upload/ локально.
+        Возвращает Response.
         """
-        log = AirExposureLog.objects.create(
-            user=self.user,
-            latitude=55.0,
-            longitude=37.0,
-            timestamp=timezone.now(),  # последний лог
-            **metrics,
+        file = _build_movements_csv_many()
+        url = reverse("movements-upload")  # имя эндпойнта из твоих тестов
+        resp = self.client.post(url, {"file": file}, format="multipart")
+        self.assertIn(
+            resp.status_code,
+            (201, 207),
+            resp.data if hasattr(resp, "data") else resp.content[:300],
         )
-        return log
+        return resp
 
     def _get_recommendations(self):
         """
@@ -148,15 +152,49 @@ class AdviceEndpointTests(APITestCase):
         self.assertTrue(self._has_rule(recs, "alert.preeclampsia"), recs)
         self.assertTrue(self._has_category(recs, "medical"), recs)
 
-    def test_air_quality_pm25_high(self):
+    @patch("api.services.air_exposure_daily.recompute_daily_exposure")
+    def test_air_quality_pm25_high(self, mock_recompute):
         """
-        Должно сработать правило alert.pm25.daily при ge_poll('pm25_avg', 10).
+        Правило alert.pm25.daily при ge_poll('pm25_24h_mean', 10).
+        Загрузим перемещения и гарантируем агрегаты через мок пересчёта.
         """
         self._wipe_snapshots()
         self._set_profile(height=170, weight_pre_pregnancy=65, week_of_pregnancy=20)
 
-        # создаём свежий лог экспозиции
-        self._create_air_exposure_log(pm25=15)
+        # 1) загрузка перемещений
+        self._upload_movements_many()
+
+        # 2) имитируем пересчёт дневной экспозиции так, чтобы появились нужные метрики
+        #    Тебе нужно, чтобы после этого в контексте EvalContextBuilder появились:
+        #    pm25_24h_mean >= 10 (например 15).
+        def _fake_recompute(user):
+            from api.models import Exposure
+
+            # Здесь сделай то, что обычно делает реальный пересчёт:
+            # либо создай Exposure с pollutants={'pm25_24h_mean': 15, ...},
+            # либо создай/обнови AirExposureLog( pm25_24h_mean=15, ... ),
+            # в зависимости от того, откуда ge_poll читает данные в твоём EvalContextBuilder.
+            # from api.models import (
+            #     AirExposureLog,
+            # )  # или Exposure, если именно его читаете
+
+            # AirExposureLog.objects.create(
+            #     user=self.user,
+            #     timestamp=timezone.now(),
+            #     pm25_24h_mean=15.0,
+            # )
+            es = Exposure.objects.filter(user=user)
+            for e in es:
+                e.pollutants = e.pollutants or {}
+                e.pollutants["pm25_avg_24h"] = 15.0
+                e.save()
+            return True
+
+        mock_recompute.side_effect = _fake_recompute
+
+        # 3) триггерим пересчёт (если он не выполняется автоматически в загрузчике)
+        # Если твой upload сам вызывает recompute_daily_exposure — этот вызов можно опустить.
+        _ = mock_recompute(self.user)
 
         recs = self._get_recommendations()
         self.assertTrue(self._has_rule(recs, "alert.pm25.daily"), recs)

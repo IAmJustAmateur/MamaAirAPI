@@ -40,7 +40,7 @@ class EvaluatorTests(TestCase):
             user=self.u,
             timestamp=timezone.localdate(),
             exposure_level=4.0,
-            pollutants={"pm25_avg": 10, "no2_24h_mean": 26},
+            pollutants={"pm25_avg_24h": 10, "no2_24h_mean": 26},
         )
 
         # Небезопасное правило (проверка песочницы)

@@ -40,13 +40,13 @@ class EvalContextBuilderTests(TestCase):
             user=self.u,
             timestamp=timezone.localdate() - timedelta(days=1),
             exposure_level=3.0,
-            pollutants={"pm25_avg": 8},
+            pollutants={"pm25_avg_24h": 8},
         )
         Exposure.objects.create(
             user=self.u,
             timestamp=timezone.localdate(),
             exposure_level=4.0,
-            pollutants={"pm25_avg": 10, "no2_24h_mean": 26},
+            pollutants={"pm25_avg_24h": 10, "no2_24h_mean": 26},
         )
 
         # Symptoms (в окне и вне окна)
@@ -77,7 +77,7 @@ class EvalContextBuilderTests(TestCase):
         self.assertEqual(round(ctx["profile"]["bmi"], 0), 31)
         self.assertTrue(ctx["is_20w_plus"])
         self.assertEqual(ctx["lifestyle"]["cooking_method"], "gas")
-        self.assertEqual(ctx["aq"]["pollutants"]["pm25_avg"], 10)
+        self.assertEqual(ctx["aq"]["pollutants"]["pm25_avg_24h"], 10)
         self.assertEqual(ctx["aq"]["pollutants"]["no2_24h_mean"], 26)
 
     def test_symptoms_window_and_aliases(self):
