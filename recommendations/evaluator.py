@@ -8,8 +8,8 @@ from .context import EvalContextBuilder
 from .models import RecommendationRule
 
 from api.models import HealthInsightSnapshot
-
-ENGINE_VERSION = "receng-mvp-0.1"
+from .const import ENGINE_VERSION
+from .fallbacks import build_fallback_recommendations
 
 
 def evaluate_recommendations(user) -> List[Dict[str, Any]]:
@@ -50,6 +50,9 @@ def evaluate_recommendations(user) -> List[Dict[str, Any]]:
 
     # порядок уже по приоритету, но на всякий — гарантируем:
     recs.sort(key=lambda x: x["priority"])
+    # Fallbacks if nothing matched
+    if not recs:
+        recs = build_fallback_recommendations(user, ctx)
     return recs
 
 
