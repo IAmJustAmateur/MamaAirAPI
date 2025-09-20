@@ -21,7 +21,7 @@ services:
       DJANGO_SECRET_KEY: ${SECRET_KEY}
       DJANGO_DEBUG: ${DEBUG}
       DJANGO_ALLOWED_HOSTS: ${ALLOWED_HOSTS}
-      DJANGO_ENV: 'production' # Set to 'production' for production environment
+      DJANGO_ENV: ${DJANGO_ENV} # Set to 'production' for production environment
 
   db:
     image: postgres:15

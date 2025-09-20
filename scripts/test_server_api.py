@@ -9,8 +9,8 @@ from urllib.parse import urljoin
 from utils import build_csv_many_points
 import time
 
-BASE_URL = "http://52.4.150.16/"
-# BASE_URL = "http://127.0.0.1:8000/"
+# BASE_URL = "http://52.4.150.16/"
+BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser112@example.com"
