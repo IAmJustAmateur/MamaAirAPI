@@ -25,6 +25,7 @@ class DebugExposureUpsertSerializer(serializers.Serializer):
     pollutants = serializers.DictField(
         child=serializers.FloatField(allow_null=False), required=True
     )
+    user_email = serializers.EmailField(required=False)  # field for specifying user
 
 
 class DebugExposureUpsertView(APIView):
@@ -36,16 +37,44 @@ class DebugExposureUpsertView(APIView):
     permission_classes = [IsDebugAndAdmin]
 
     def post(self, request):
+        from api.models import (
+            User,
+        )  # импортируем здесь, чтобы избежать циклических импортов
+
         ser = DebugExposureUpsertSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+        user = (
+            User.objects.get(email=ser.validated_data.get("user_email"))
+            if ser.validated_data.get("user_email")
+            else None
+        )
+        if not user:
+            raise serializers.ValidationError("User with specified email not found")
         ts = ser.validated_data.get("timestamp") or timezone.now()
         pollutants = ser.validated_data["pollutants"]
-
-        exp = Exposure.objects.create(
-            user=request.user,
-            timestamp=ts,
-            pollutants=pollutants,  # JSONField со словарём: {"pm25_24h_mean": 15.0, ...}
-        )
+        default_exposure_level = 1
+        try:
+            exp = Exposure.objects.get(
+                user=user,
+                timestamp=ts,
+            )
+            if exp:
+                exp.pollutants = pollutants
+                exp.save()
+            else:
+                exp = Exposure.objects.create(
+                    user=user,
+                    timestamp=ts,
+                    exposure_level=default_exposure_level,
+                    pollutants=pollutants,  # JSONField со словарём: {"pm25_24h_mean": 15.0, ...}
+                )
+        except Exposure.DoesNotExist:
+            exp = Exposure.objects.create(
+                user=user,
+                timestamp=ts,
+                exposure_level=default_exposure_level,
+                pollutants=pollutants,  # JSONField со словарём: {"pm25_24h_mean": 15.0, ...}
+            )
 
         return Response(
             {

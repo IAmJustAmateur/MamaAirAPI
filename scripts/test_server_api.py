@@ -13,7 +13,7 @@ import time
 BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
-EMAIL = "testuser112@example.com"
+EMAIL = "testuser114@example.com"
 PASSWORD = "testpass123"
 
 # BASE_URL_RAW = os.getenv("BASE_URL", "http://52.4.150.16/")
@@ -43,7 +43,7 @@ AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
 
 DEBUG_EXPOSURE_UPSERT_URL = urljoin(BASE_URL, "api/debug/air-exposure/upsert/")
 
-TIMEOUT = 20
+TIMEOUT = 200
 VERIFY_SSL = True  # http у тебя сейчас — флаг игнорируется
 
 
@@ -159,12 +159,44 @@ def step_meta_choices_public():
     ), "exposure_levels missing 'Clean'"
 
 
+def login_as_superuser():
+    """Login as superuser from .env, return access token."""
+    django_env = os.getenv("DJANGO_ENV", "development")
+    if django_env in ("staging", "production"):
+        email = os.getenv("SUPERUSER_EMAIL")
+        password = os.getenv("SUPERUSER_PASSWORD")
+    elif django_env == "development":
+        email = "admin@example.com"
+        password = "admin"
+    if not email or not password:
+        fail("SUPERUSER_EMAIL/PASSWORD not set in environment")
+
+    payload = {"email": email, "password": password}
+    r = requests.post(TOKEN_URL, data=payload, timeout=TIMEOUT, verify=VERIFY_SSL)
+    assert_status(r, 200, "Superuser token obtain failed")
+    data = r.json()
+    access = data.get("access")
+    refresh = data.get("refresh")
+    if not access or not refresh:
+        raise AssertionError(f"No access/refresh in token response: {data}")
+    pp(
+        "Superuser token response",
+        {"has_access": bool(access), "has_refresh": bool(refresh)},
+    )
+    return access
+
+
 # ---------- Existing E2E steps -------------------------------------------------
 
 
 def step_1_register():
     """POST /api/auth/register/ with X-API-Key"""
-    payload = {"email": EMAIL, "password": PASSWORD}
+    payload = {
+        "email": EMAIL,
+        "password": PASSWORD,
+        "heignt": 170,
+        "weight_pre_pregnancy": 65,
+    }
     headers = {"X-API-Key": REG_API_KEY}
     r = requests.post(
         REGISTER_URL, json=payload, headers=headers, timeout=TIMEOUT, verify=VERIFY_SSL
@@ -667,28 +699,31 @@ def step_air_exposure_poll_latest(
 
 
 def step_debug_exposure_upsert(
-    access_token: str, pollutants: dict, timestamp_iso: str | None = None
+    admin_access_token: str,
+    user_email: str,
+    pollutants: dict,
+    timestamp_iso: str | None = None,
 ) -> dict:
     """
     POST /api/debug/air-exposure/upsert/
     Создаёт свежую запись Exposure для текущего пользователя с заданными агрегатами.
     Пример pollutants: {"pm25_avg_24h": 15.0}
     """
-    payload = {"pollutants": pollutants}
+    payload = {"pollutants": pollutants, "user_email": user_email}
     if timestamp_iso:
         payload["timestamp"] = timestamp_iso
 
     r = requests.post(
         DEBUG_EXPOSURE_UPSERT_URL,
         json=payload,
-        headers=auth_headers(access_token),
+        headers=auth_headers(admin_access_token),
         timeout=TIMEOUT,
         verify=VERIFY_SSL,
     )
     # если эндпойнт доступен только staff — тут можно получить 403
+    pp("status code", r.status_code)
     assert_status(r, [201, 200], "Debug exposure upsert failed")
     data = r.json()
-    pp("Debug exposure upsert response", data)
     return data
 
 
@@ -724,10 +759,13 @@ def step_validate_aq_via_debug(access_token: str, min_pm25: float = 10.0):
     Апсертим pm25_avg_24h >= min_pm25, затем проверяем /api/advice/, что сработал alert.pm25.daily.
     """
     # 1) апсёртим свежую экспозицию
-    now_iso = datetime.now(dt_timezone.utc).astimezone().isoformat(timespec="seconds")
-    _ = step_debug_exposure_upsert(
-        access_token, {"pm25_avg_24h": max(min_pm25, 12.0)}, timestamp_iso=now_iso
-    )
+    # now_iso = datetime.now(dt_timezone.utc).astimezone().isoformat(timespec="seconds")
+    # _ = step_debug_exposure_upsert(
+    #     access_token,
+    #     user_email=EMAIL,
+    #     pollutants={"pm25_avg_24h": max(min_pm25, 12.0)},
+    #     timestamp_iso=now_iso,
+    # )
 
     # 2) запрашиваем советы
     data = step_advice_get(access_token)
@@ -1104,9 +1142,15 @@ def main():
 
     print("✔ Movements uploaded and AirExposureLog generated.")
 
+    admin_access_token = login_as_superuser()
     # --- Advice + debug upsert -> AQ alert ---
-    step_debug_exposure_upsert(token, {"pm25_avg_24h": 20.0})
-    step_validate_aq_via_debug(token, min_pm25=15.0)
+    print("\n--- AQ via debug upsert ----")
+    step_debug_exposure_upsert(
+        admin_access_token, user_email=EMAIL, pollutants={"pm25_avg_24h": 20.0}
+    )
+
+    print("✔ Debug exposure upsert done, now validating advice...")
+    step_validate_aq_via_debug(access_token=admin_access_token, min_pm25=15.0)
 
     print("\n✅ E2E flow passed.")
 
