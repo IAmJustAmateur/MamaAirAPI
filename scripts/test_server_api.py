@@ -9,8 +9,8 @@ from urllib.parse import urljoin
 from utils import build_csv_many_points
 import time
 
-# BASE_URL = "http://52.4.150.16/"
-BASE_URL = "http://127.0.0.1:8000/"
+BASE_URL = "http://52.4.150.16/"
+# BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser114@example.com"
@@ -21,6 +21,7 @@ PASSWORD = "testpass123"
 # BASE_URL = BASE_URL_RAW.rstrip("/") + "/"
 
 REGISTER_URL = urljoin(BASE_URL, "api/auth/register/")
+
 TOKEN_URL = urljoin(BASE_URL, "api/auth/token/")  # <-- изменил
 REFRESH_URL = urljoin(BASE_URL, "api/auth/token/refresh/")  # <-- на будущее
 PROFILE_URL = urljoin(BASE_URL, "api/profile/")
@@ -1150,7 +1151,7 @@ def main():
     )
 
     print("✔ Debug exposure upsert done, now validating advice...")
-    step_validate_aq_via_debug(access_token=admin_access_token, min_pm25=15.0)
+    step_validate_aq_via_debug(access_token=token, min_pm25=15.0)
 
     print("\n✅ E2E flow passed.")
 
