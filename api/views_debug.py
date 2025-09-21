@@ -17,11 +17,16 @@ from api.models import Exposure  # или AirExposureLog — подставь с
 class IsDebugAndAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         logger.info("Try to authenticate")
+        django_env = getattr(settings, "DJANGO_ENV", "")
+        logger.info(f"DJANGO_ENV:  {django_env}")
         if not (
             getattr(settings, "DEBUG", False)
             or getattr(settings, "DJANGO_ENV", "") in {"dev", "staging"}
         ):
             return False
+        logger.info(
+            f"user {request.user.email} is authenticated: {request.user.is_authenticated} is staff {request.user.is_staff}"
+        )
         return request.user and request.user.is_authenticated and request.user.is_staff
 
 

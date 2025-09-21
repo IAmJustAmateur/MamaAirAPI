@@ -9,8 +9,8 @@ from urllib.parse import urljoin
 from utils import build_csv_many_points
 import time
 
-BASE_URL = "http://52.4.150.16/"
-# BASE_URL = "http://127.0.0.1:8000/"
+# BASE_URL = "http://52.4.150.16/"
+BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser114@example.com"
@@ -40,7 +40,6 @@ META_CHOICES_URL = urljoin(BASE_URL, "api/meta/choices/")
 MOVEMENTS_UPLOAD_URL = urljoin(BASE_URL, "api/movements/upload/")
 AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
 ADVICE_URL = urljoin(BASE_URL, "api/advice/")
-AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
 
 DEBUG_EXPOSURE_UPSERT_URL = urljoin(BASE_URL, "api/debug/air-exposure/upsert/")
 
@@ -171,6 +170,9 @@ def login_as_superuser():
         password = "admin"
     if not email or not password:
         fail("SUPERUSER_EMAIL/PASSWORD not set in environment")
+
+    print("Try to login as supersuer:")
+    print(f"email {email}, password {password}")
 
     payload = {"email": email, "password": password}
     r = requests.post(TOKEN_URL, data=payload, timeout=TIMEOUT, verify=VERIFY_SSL)
