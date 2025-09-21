@@ -8,17 +8,17 @@ import requests
 from urllib.parse import urljoin
 from utils import build_csv_many_points
 import time
+from dotenv import load_dotenv
 
-# BASE_URL = "http://52.4.150.16/"
-BASE_URL = "http://127.0.0.1:8000/"
+load_dotenv()
+
+
+BASE_URL = "http://52.4.150.16/"
+# BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
-EMAIL = "testuser114@example.com"
+EMAIL = "testuser115@example.com"
 PASSWORD = "testpass123"
-
-# BASE_URL_RAW = os.getenv("BASE_URL", "http://52.4.150.16/")
-# BASE_URL_RAW = os.getenv("BASE_URL", "http://127.0.0.1:8000/")
-# BASE_URL = BASE_URL_RAW.rstrip("/") + "/"
 
 REGISTER_URL = urljoin(BASE_URL, "api/auth/register/")
 
@@ -161,17 +161,14 @@ def step_meta_choices_public():
 
 def login_as_superuser():
     """Login as superuser from .env, return access token."""
-    django_env = os.getenv("DJANGO_ENV", "development")
-    if django_env in ("staging", "production"):
-        email = os.getenv("SUPERUSER_EMAIL")
-        password = os.getenv("SUPERUSER_PASSWORD")
-    elif django_env == "development":
+    if BASE_URL == "http://127.0.0.1:8000/":
         email = "admin@example.com"
         password = "admin"
-    if not email or not password:
-        fail("SUPERUSER_EMAIL/PASSWORD not set in environment")
+    else:
+        email = os.getenv("SUPERUSER_EMAIL", "admin@example.com")
+        password = os.getenv("SUPERUSER_PASSWORD", "admin")
 
-    print("Try to login as supersuer:")
+    print("Try to login as superuser:")
     print(f"email {email}, password {password}")
 
     payload = {"email": email, "password": password}
@@ -1067,6 +1064,7 @@ def step_exposure_history_days_param(access_token: str):
 
 def main():
     # sanity
+
     if REG_API_KEY == "REPLACE_ME":
         print(
             "⚠ Set REG_API_KEY env var (server's settings.REGISTRATION_API_KEY) to allow registration."
