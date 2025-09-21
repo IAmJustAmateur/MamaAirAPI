@@ -5,6 +5,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from api.models import Exposure  # или AirExposureLog — подставь свою модель
 
 # from api.services.air_exposure_daily import recompute_daily_exposure  # если нужен второй эндпойнт
@@ -12,9 +16,10 @@ from api.models import Exposure  # или AirExposureLog — подставь с
 
 class IsDebugAndAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
+        logger.info("Try to authenticate")
         if not (
             getattr(settings, "DEBUG", False)
-            or getattr(settings, "ENV", "") in {"dev", "staging"}
+            or getattr(settings, "DJANG_ENV", "") in {"dev", "staging"}
         ):
             return False
         return request.user and request.user.is_authenticated and request.user.is_staff
