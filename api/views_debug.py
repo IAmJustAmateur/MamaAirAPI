@@ -19,7 +19,7 @@ class IsDebugAndAdmin(permissions.BasePermission):
         logger.info("Try to authenticate")
         if not (
             getattr(settings, "DEBUG", False)
-            or getattr(settings, "DJANG_ENV", "") in {"dev", "staging"}
+            or getattr(settings, "DJANGO_ENV", "") in {"dev", "staging"}
         ):
             return False
         return request.user and request.user.is_authenticated and request.user.is_staff
