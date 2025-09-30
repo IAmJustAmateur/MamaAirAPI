@@ -6,12 +6,21 @@ import os
 from django.conf import settings
 
 OWM_BASE_URL = "http://api.openweathermap.org/data/2.5/air_pollution/history"
+OWM_WEATHER_URL = "https://api.openweathermap.org/data/3.0/onecall"
 
 OWM_API_KEY = settings.OWM_API_KEY
 
 
 def round_coord(val: float) -> float:
     return round(val, 2)  # ~1 км
+
+
+def get_current_weather(lat: float, lon: float):
+    url = f"{OWM_WEATHER_URL}?lat={lat}&lon={lon}&appid={OWM_API_KEY}"
+    resp = requests.get(url)
+    if resp.status_code != 200:
+        raise RuntimeError(f"OWM error {resp.status_code}: {resp.text}")
+    return resp.json()
 
 
 def fetch_air_quality_data_interval(
