@@ -146,7 +146,7 @@ def step_meta_choices_public():
     # Якорные значения из твоего примера (мягкие проверки)
     assert _contains_value(data["languages"], "en"), "languages missing 'en'"
     assert _contains_value(data["races"], "caucasian"), "races missing 'caucasian'"
-    assert _contains_value(data["countries"], "nigeria"), "countries missing 'nigeria'"
+    assert _contains_value(data["countries"], "NG"), "countries missing 'nigeria'"
     assert _contains_value(data["work_types"], "Desk"), "work_types missing 'Desk'"
     assert _contains_value(
         data["diet_types"], "carnivore"
@@ -238,7 +238,7 @@ def step_3_fill_profile(access_token: str):
         "height": 178,
         "weight_pre_pregnancy": 70,
         "race": "caucasian",
-        "country": "nigeria",
+        "country": "NG",
         "is_first_pregnancy": True,
         "week_of_pregnancy": 12,
         "tracking_enabled": True,

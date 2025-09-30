@@ -15,12 +15,57 @@ def round_coord(val: float) -> float:
     return round(val, 2)  # ~1 км
 
 
-def get_current_weather(lat: float, lon: float):
-    url = f"{OWM_WEATHER_URL}?lat={lat}&lon={lon}&appid={OWM_API_KEY}"
-    resp = requests.get(url)
+def _uvi_level(uvi: float | None) -> str:
+    if uvi is None:
+        return "unknown"
+    if uvi <= 2:
+        return "low"
+    if 3 <= uvi <= 5:
+        return "moderate"
+    if 6 <= uvi <= 7:
+        return "high"
+    if 8 <= uvi <= 10:
+        return "very high"
+    return "extreme"  # 11+
+
+
+def get_current_weather(lat: float, lon: float) -> dict:
+    """
+    Returns only the required metrics from OWM One Call 3.0:
+    current temperature (°C), humidity (%), pressure (hPa), UV index, and UV level label.
+    """
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "units": "metric",
+        "appid": OWM_API_KEY,
+        # exclude everything except 'current' to keep payload small
+        "exclude": "minutely,hourly,daily,alerts",
+    }
+    resp = requests.get(OWM_WEATHER_URL, params=params, timeout=20)
     if resp.status_code != 200:
         raise RuntimeError(f"OWM error {resp.status_code}: {resp.text}")
-    return resp.json()
+
+    data = resp.json()
+    cur = (data or {}).get("current") or {}
+
+    temp_c = cur.get("temp")
+    humidity = cur.get("humidity")
+    pressure = cur.get("pressure")
+    uvi = cur.get("uvi")
+    uvi_level = _uvi_level(uvi)
+
+    # Basic sanity check to catch empty/malformed responses
+    if temp_c is None or humidity is None or pressure is None:
+        raise RuntimeError(f"OWM response missing expected fields: {cur}")
+
+    return {
+        "temp_c": temp_c,
+        "humidity": humidity,
+        "pressure": pressure,
+        "uvi": uvi,
+        "uvi_level": uvi_level,
+    }
 
 
 def fetch_air_quality_data_interval(

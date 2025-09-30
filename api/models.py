@@ -644,6 +644,9 @@ class AirExposureLog(models.Model):
     aqi = models.IntegerField(null=True, blank=True)  # Air Quality Index
     temperature = models.FloatField(null=True, blank=True)
     humidity = models.FloatField(null=True, blank=True)
+    pressure = models.FloatField(null=True, blank=True)
+    uvi = models.FloatField(null=True, blank=True)
+    uvi_level = models.CharField(max_length=32, null=True, blank=True)
     wind_speed = models.FloatField(null=True, blank=True)  # wind speed in m/s
 
     exposure_minutes = models.IntegerField(default=60)

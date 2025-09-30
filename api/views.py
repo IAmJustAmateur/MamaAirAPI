@@ -83,6 +83,7 @@ from .services.services import (
     get_risks_delta,
     get_current_recommendations,
     get_today_journey,
+    get_current_weather,
 )
 from .services.air_exposure import ingest_movements_batch
 from .services.air_exposure_daily import recompute_daily_exposure
@@ -627,6 +628,14 @@ class EnvironmentView(APIView):
             .order_by("-timestamp")
             .first()
         )
+
+        current_weather = get_current_weather(latest_log.latitude, latest_log.longitude)
+        latest_log.temperature = current_weather["temp_c"]
+        latest_log.humidity = current_weather["humidity"]
+        latest_log.pressure = current_weather["pressure"]
+        latest_log.uvi = current_weather["uvi"]
+        latest_log.uvi_level = current_weather["uvi_level"]
+
         if not latest_log:
             return Response({"detail": "No air exposure data found."}, status=204)
         return Response(AirExposureLogSerializer(latest_log).data)
