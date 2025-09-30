@@ -136,8 +136,9 @@ class User(MyUser, PermissionsMixin):
     ]
 
     COUNTRY_CHOICES = [
-        ("nigeria", "Nigeria"),
-        ("ghana", "Ghana"),
+        ("NG", "Nigeria"),
+        ("GH", "Ghana"),
+        ("KE", "Kenya"),
         ("other", "Other"),
     ]
 

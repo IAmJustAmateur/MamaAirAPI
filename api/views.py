@@ -50,6 +50,12 @@ from .models import (
     UserBabySymptoms,
     Exposure,
 )
+from .choices_emoji import (
+    map_choices_with_emoji,
+    COOKING_METHOD_EMOJI,
+    DIET_TYPE_EMOJI,
+    WORK_TYPE_EMOJI,
+)
 from .serializers import (
     RegisterSerializer,
     UserProfileSerializer,
@@ -939,9 +945,15 @@ class MetaChoicesView(APIView):
             "languages": _map_choices(LANGUAGE_CHOICES),
             "races": _map_choices(User.RACE_CHOICES),
             "countries": _map_choices(User.COUNTRY_CHOICES),
-            "work_types": _map_choices(UserLifeStyle.WORK_TYPE_CHOICES),
-            "diet_types": _map_choices(UserLifeStyle.DIET_TYPE_CHOICES),
-            "cooking_methods": _map_choices(UserLifeStyle.COOKING_METHOD_CHOICES),
+            "work_types": map_choices_with_emoji(
+                UserLifeStyle.WORK_TYPE_CHOICES, WORK_TYPE_EMOJI
+            ),
+            "diet_types": map_choices_with_emoji(
+                UserLifeStyle.DIET_TYPE_CHOICES, DIET_TYPE_EMOJI
+            ),
+            "cooking_methods": map_choices_with_emoji(
+                UserLifeStyle.COOKING_METHOD_CHOICES, COOKING_METHOD_EMOJI
+            ),
             "exposure_levels": _map_choices(EXPOSURE_LEVEL_CHOICES),
         }
         return Response(data)
