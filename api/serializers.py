@@ -219,3 +219,27 @@ class ExposureHistoryResponseSerializer(serializers.Serializer):
     end_date = serializers.DateField()
     days_requested = serializers.IntegerField()
     items = ExposureHistoryItemSerializer(many=True)
+
+
+class GoogleAuthRequestSerializer(serializers.Serializer):
+    id_token = serializers.CharField(
+        write_only=True, help_text="Google ID token from Android app"
+    )
+
+
+class GoogleAuthUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    email = serializers.EmailField()
+    name = serializers.CharField(allow_blank=True)
+    avatar_url = serializers.URLField(allow_null=True, required=False)
+    provider = serializers.CharField()
+
+
+class GoogleAuthResponseSerializer(serializers.Serializer):
+    access = serializers.CharField()
+    refresh = serializers.CharField()
+    user = GoogleAuthUserSerializer()
+
+
+class ErrorSerializer(serializers.Serializer):
+    detail = serializers.CharField()

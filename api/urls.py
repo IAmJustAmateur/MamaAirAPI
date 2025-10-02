@@ -29,6 +29,7 @@ from .views import (
     #
     ExposureHistoryView,
 )
+from .auth_views import GoogleAuthView
 from api.views_debug import DebugExposureUpsertView, DebugExposureRecomputeView
 from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -87,6 +88,9 @@ urlpatterns = [
     # Swagger/OpenAPI
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+]
+urlpatterns += [
+    path("auth/google/", GoogleAuthView.as_view(), name="auth-google"),
 ]
 urlpatterns += [
     path("login/", login_view, name="login"),

@@ -165,6 +165,10 @@ class User(MyUser, PermissionsMixin):
     tracking_enabled = models.BooleanField(default=False)
     notifications_enabled = models.BooleanField(default=False)
 
+    auth_provider = models.CharField(max_length=20, default="password")
+    google_sub = models.CharField(max_length=255, null=True, blank=True, unique=True)
+    avatar_url = models.URLField(null=True, blank=True)
+
     def __str__(self):
         if self.name:
             return f"{self.name} ({self.email})"
