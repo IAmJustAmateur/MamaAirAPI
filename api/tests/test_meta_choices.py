@@ -41,4 +41,4 @@ class MetaChoicesTests(APITestCase):
 
         resp = self.client.get(self.url)
         countries = [x["value"] for x in resp.data["countries"]]
-        self.assertIn("nigeria", countries)
+        self.assertIn("NG", countries)
