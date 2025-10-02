@@ -40,25 +40,26 @@ class SigninThrottle(throttling.AnonRateThrottle):
     operation_id="auth_google_sign_in",
     summary="Sign in with Google (Android)",
     description=(
-        "Принимает Google **ID token** с клиента (Android), проверяет его на сервере, "
-        "создаёт/связывает пользователя и выдаёт ваши JWT (access/refresh)."
+        "Accept Google **ID token** from Android app, verify it on the server,"
+        "create or link user, and issue your JWTs (access/refresh)."
     ),
     request=GoogleAuthRequestSerializer,
     responses={
         200: OpenApiResponse(
-            response=GoogleAuthResponseSerializer, description="Успешная аутентификация"
+            response=GoogleAuthResponseSerializer,
+            description="Authentication successful",
         ),
         400: OpenApiResponse(
-            response=ErrorSerializer, description="Некорректный запрос (нет id_token)"
+            response=ErrorSerializer, description="Incorrect request (missing id_token)"
         ),
         401: OpenApiResponse(
             response=ErrorSerializer,
-            description="Проблемы валидации токена Google (aud/iss/expired/email_verified)",
+            description="Token validation failed (aud/iss/expired/email_verified)",
         ),
     },
     examples=[
         OpenApiExample(
-            "Успешный запрос",
+            "Request successful",
             value={"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."},
             request_only=True,
         ),
@@ -78,7 +79,7 @@ class SigninThrottle(throttling.AnonRateThrottle):
             response_only=True,
         ),
         OpenApiExample(
-            "Ошибка: некорректная аудитория",
+            "Error: Invalid audience",
             value={"detail": "Invalid audience"},
             response_only=True,
             status_codes=["401"],
