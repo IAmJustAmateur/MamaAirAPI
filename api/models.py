@@ -201,6 +201,27 @@ class User(MyUser, PermissionsMixin):
         return min(current, 42)
 
     @property
+    def pregnancy_start_date(self):
+        """
+        Дата начала беременности (ориентировочно LMP): дата регистрации минус
+        зафиксированная на тот момент неделя беременности.
+        Вернёт None, если данных недостаточно.
+        """
+        if self.week_of_pregnancy is None or not self.registered_at:
+            return None
+
+        anchor_date = self.registered_at.astimezone(
+            timezone.get_current_timezone()
+        ).date()
+
+        try:
+            weeks = int(self.week_of_pregnancy)
+        except (TypeError, ValueError):
+            return None
+
+        return anchor_date - timedelta(weeks=weeks)
+
+    @property
     def full_year(self):
         return (
             date.today().year - self.date_of_birth.year if self.date_of_birth else None

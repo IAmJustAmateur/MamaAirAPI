@@ -39,7 +39,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     current_pregnancy_week = serializers.IntegerField(
         source="current_week_of_pregnancy", read_only=True
     )
-    read_only_fields = ("current_pregnancy_week",)
+    pregnancy_start_date = serializers.DateField(read_only=True)
+
+    read_only_fields = ("current_pregnancy_week", "pregnancy_start_date")
 
     class Meta:
         model = User
