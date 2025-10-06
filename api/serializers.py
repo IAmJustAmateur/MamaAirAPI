@@ -36,6 +36,11 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    current_pregnancy_week = serializers.IntegerField(
+        source="current_week_of_pregnancy", read_only=True
+    )
+    read_only_fields = ("current_pregnancy_week",)
+
     class Meta:
         model = User
         exclude = ["password", "groups", "user_permissions", "is_superuser", "is_staff"]
