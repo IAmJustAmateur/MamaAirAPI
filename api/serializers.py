@@ -10,6 +10,7 @@ from .models import (
     HealthInsightSnapshot,
     AirExposureLog,
     AdviceTemplate,
+    Exposure,
 )
 
 from django.contrib.auth import get_user_model
@@ -156,64 +157,65 @@ class PollutantSerializer(serializers.Serializer):
     who_limit = serializers.FloatField(source="who limit")
 
 
-class AirQualityBlockSerializer(serializers.Serializer):
-    pm25 = PollutantSerializer()
-    pm10 = PollutantSerializer()
-    no2 = PollutantSerializer()
-    so2 = PollutantSerializer()
-    o3 = PollutantSerializer()
-    co = PollutantSerializer()
-    aqi = serializers.FloatField()
+class SimpleExposureSerializer(serializers.ModelSerializer):
+    """
+    Минимальный сериалайзер для Exposure.
+    Берём только гарантированные поля, чтобы избежать расхождений со схемой.
+    """
+
+    class Meta:
+        model = Exposure
+        fields = ("id", "timestamp", "exposure_level", "risks")
 
 
-class WeatherBlockSerializer(serializers.Serializer):
-    temperature = serializers.FloatField()
-    humidity = serializers.FloatField()
-    pressure = serializers.FloatField()
-    wind_speed = serializers.FloatField()
-    condition = serializers.CharField()
+class RecommendationSerializer(serializers.Serializer):
+    """
+    Отбираем только нужные поля из recommendation-объектов.
+    Остальные ключи игнорируются без ошибок.
+    """
+
+    id = serializers.CharField()
+    severity = serializers.CharField()
+    title = serializers.CharField()
+    message = serializers.CharField()
+    ttl_hours = serializers.IntegerField()
+    priority = serializers.IntegerField()
 
 
-class UVBlockSerializer(serializers.Serializer):
-    value = serializers.FloatField()
-    level = serializers.CharField()
+class TodayJourneySerializer(serializers.Serializer):
+    """
+    Поля, как ты указал:
+      - distance_m: округляем и возвращаем как число (float)
+      - distance_km: float
+      - points: список произвольных dict (оставляем как есть)
+    """
 
-
-class ExposureLevelSerializer(serializers.Serializer):
-    date = serializers.DateField()
-    level = serializers.IntegerField()
-
-
-class ExposureBlockSerializer(serializers.Serializer):
-    total_score = serializers.CharField()
-    last_updated = serializers.DateTimeField()
-    exposure_levels = ExposureLevelSerializer(many=True)
-
-
-class RisksDeltaSerializer(serializers.Serializer):
-    mom = serializers.FloatField()
-    baby = serializers.FloatField()
-
-
-class RecommendationsSerializer(serializers.Serializer):
-    mom = serializers.ListField(child=serializers.CharField())
-    baby = serializers.ListField(child=serializers.CharField())
-
-
-class JourneyBlockSerializer(serializers.Serializer):
-    length = serializers.FloatField()
-    time = serializers.FloatField()
+    distance_m = serializers.FloatField()
+    distance_km = serializers.FloatField()
 
 
 class SummaryResponseSerializer(serializers.Serializer):
-    air_quality = AirQualityBlockSerializer()
-    weather = WeatherBlockSerializer()
-    UV = UVBlockSerializer()
-    mom_exposure = ExposureBlockSerializer()
-    baby_exposure = ExposureBlockSerializer()
-    risks_delta = RisksDeltaSerializer()
-    recommendations = RecommendationsSerializer()
-    today_journey = JourneyBlockSerializer()
+    """
+    Гибкий ответ для /summary:
+    - aq_weather_uv: что вернёт update_air_exposure_log_with_weather (dict) — принимаем как JSON.
+    - mom_exposure: последняя экспозиция (может быть None).
+    - risks_delta: изменение уровня риска (float | null).
+    - recommendations: что вернёт snapshot.recommendations (list|dict) — принимаем как JSON.
+    - today_journey: структура маршрута/дня — тоже JSON (dict|list).
+    """
+
+    aq_weather_uv = AirExposureLogSerializer()
+    mom_exposure = SimpleExposureSerializer(allow_null=True)
+    risks_delta = serializers.FloatField(allow_null=True)
+    recommendations = serializers.SerializerMethodField()
+    today_journey = TodayJourneySerializer()
+
+    def get_recommendations(self, obj):
+        recs = obj.get("recommendations", [])
+        if isinstance(recs, dict):
+            recs = recs.get("items", [])
+        # На выходе — список объектов согласно RecommendationSerializer
+        return RecommendationSerializer(recs, many=True).data
 
 
 class ExposureHistoryItemSerializer(serializers.Serializer):

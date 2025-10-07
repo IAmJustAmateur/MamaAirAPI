@@ -76,19 +76,13 @@ from .serializers import (
 
 from .services.services import (
     get_current_advices,
-    get_air_quality_summary,
-    get_weather_summary,
-    get_uv_index,
-    get_exposure_summary,
-    get_risks_delta,
-    get_current_recommendations,
-    get_today_journey,
-    get_current_weather,
 )
+from .services.analytics import get_today_journey
 from .services.air_exposure import ingest_movements_batch
 from .services.air_exposure_daily import recompute_daily_exposure
 from .services.helpers import parse_csv_to_records
 from .permissions import HasValidRegistrationAPIKey
+from .services.aq_logs_services import update_air_exposure_log_with_weather
 
 from api.models import (
     LANGUAGE_CHOICES,
@@ -628,13 +622,15 @@ class EnvironmentView(APIView):
             .order_by("-timestamp")
             .first()
         )
+        latest_log = update_air_exposure_log_with_weather(latest_log)
 
-        current_weather = get_current_weather(latest_log.latitude, latest_log.longitude)
-        latest_log.temperature = current_weather["temp_c"]
-        latest_log.humidity = current_weather["humidity"]
-        latest_log.pressure = current_weather["pressure"]
-        latest_log.uvi = current_weather["uvi"]
-        latest_log.uvi_level = current_weather["uvi_level"]
+        # current_weather = get_current_weather(latest_log.latitude, latest_log.longitude)
+        # latest_log.temperature = current_weather["temp_c"]
+        # latest_log.humidity = current_weather["humidity"]
+        # latest_log.pressure = current_weather["pressure"]
+        # latest_log.uvi = current_weather["uvi"]
+        # latest_log.uvi_level = current_weather["uvi_level"]
+        # latest_log.save()
 
         if not latest_log:
             return Response({"detail": "No air exposure data found."}, status=204)
@@ -828,18 +824,49 @@ class SummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        latest_log = (
+            AirExposureLog.objects.filter(user=request.user)
+            .order_by("-timestamp")
+            .first()
+        )
+        # air quality, weather, uv index
+        aq_weater_uv = update_air_exposure_log_with_weather(latest_log)
+
+        from recommendations.evaluator import get_or_create_fresh_snapshot
+
+        # recommendations
+        snapshot = get_or_create_fresh_snapshot(
+            request.user, fresh_for_hours=6, trigger_event="login"
+        )
+        recommendations = snapshot.recommendations
+        #  exposure
+        exposures = Exposure.objects.filter(user=request.user).order_by("-timestamp")[
+            :2
+        ]
+        exposure = exposures[0] if exposures else None
+        risk_delta = (
+            exposure.exposure_level - exposures[1].exposure_level
+            if exposures and len(exposures) > 1
+            else None
+        )
+
         user = request.user
         data = {
-            "air_quality": get_air_quality_summary(user),
-            "weather": get_weather_summary(user),
-            "UV": get_uv_index(user),
-            "mom_exposure": get_exposure_summary(user, target="mom"),
-            "baby_exposure": get_exposure_summary(user, target="baby"),
-            "risks_delta": get_risks_delta(user),
-            "recommendations": get_current_recommendations(user),
+            # "air_quality": get_air_quality_summary(user),
+            # "weather": get_weather_summary(user),
+            # "UV": get_uv_index(user),
+            "aq_weather_uv": aq_weater_uv,
+            # "mom_exposure": get_exposure_summary(user, target="mom"),
+            # "baby_exposure": get_exposure_summary(user, target="baby"),
+            "mom_exposure": exposure,
+            "risks_delta": risk_delta,
+            # "risks_delta": get_risks_delta(user),
+            "recommendations": recommendations,
+            # "recommendations": get_current_recommendations(user),
             "today_journey": get_today_journey(user),
         }
-        return Response(data)
+        serializer = SummaryResponseSerializer(data)
+        return Response(serializer.data)
 
 
 @extend_schema(

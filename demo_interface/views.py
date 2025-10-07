@@ -76,7 +76,7 @@ def edit_user(request, user_id):
 
     # risks
     try:
-        user_risks_dict = user.calculate_risk_factors()
+        user_risks_dict, _ = user.calculate_risk_factors()
     except Exception as e:
         user_risks_dict = {}
         messages.warning(request, f"Risk calc error: {e}")

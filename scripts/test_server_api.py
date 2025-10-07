@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-BASE_URL = "http://52.4.150.16/"
-# BASE_URL = "http://127.0.0.1:8000/"
+# BASE_URL = "http://52.4.150.16/"
+BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser115@example.com"
@@ -42,6 +42,9 @@ AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
 ADVICE_URL = urljoin(BASE_URL, "api/advice/")
 
 DEBUG_EXPOSURE_UPSERT_URL = urljoin(BASE_URL, "api/debug/air-exposure/upsert/")
+
+SUMMARY_URL = urljoin(BASE_URL, "api/summary/")
+
 
 TIMEOUT = 200
 VERIFY_SSL = True  # http у тебя сейчас — флаг игнорируется
@@ -187,6 +190,105 @@ def login_as_superuser():
 
 
 # ---------- Existing E2E steps -------------------------------------------------
+
+
+def _assert_recommendation_item(it: dict):
+    req = ("id", "severity", "title", "message", "ttl_hours", "priority")
+    if not isinstance(it, dict):
+        raise AssertionError(f"Recommendation item must be dict, got {type(it)}")
+    missing = [k for k in req if k not in it]
+    if missing:
+        raise AssertionError(f"Recommendation item missing keys: {missing}")
+    if not isinstance(it["ttl_hours"], int):
+        raise AssertionError("ttl_hours must be int")
+    if not isinstance(it["priority"], int):
+        raise AssertionError("priority must be int")
+
+
+def _assert_today_journey(obj: dict):
+    req = ("distance_m", "distance_km")
+    if not isinstance(obj, dict):
+        raise AssertionError(f"today_journey must be dict, got {type(obj)}")
+    missing = [k for k in req if k not in obj]
+    if missing:
+        raise AssertionError(f"today_journey missing keys: {missing}")
+    if not isinstance(obj["distance_m"], (int, float)):
+        raise AssertionError("today_journey.distance_m must be number")
+    if not isinstance(obj["distance_km"], (int, float)):
+        raise AssertionError("today_journey.distance_km must be number")
+
+
+def _assert_air_exposure_log_payload(aq: dict):
+    """
+    Совместимо с твоей моделью AirExposureLog: проверяем базовые поля AQ/погода/UV.
+    Не требуем строго всех полей — только разумные.
+    """
+    if not isinstance(aq, dict):
+        raise AssertionError(f"aq_weather_uv must be object, got {type(aq)}")
+    # обязательные для смысла ключи (мягко)
+    for k in ("timestamp", "latitude", "longitude"):
+        if k not in aq:
+            raise AssertionError(f"aq_weather_uv missing '{k}'")
+    # типы — мягкие проверки
+    for k in ("aqi", "pm25", "pm10", "temperature", "humidity", "pressure", "uvi"):
+        if k in aq and aq[k] is not None and not isinstance(aq[k], (int, float)):
+            raise AssertionError(f"aq_weather_uv.{k} must be number or null")
+
+
+def step_summary_get(access_token: str):
+    """
+    GET /api/summary/ — проверка схемы ответа согласно SummaryResponseSerializer.
+    """
+    r = requests.get(
+        SUMMARY_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Summary GET failed")
+    body = safe_json(r)
+    pp("Summary GET", body)
+
+    # Верхний уровень
+    for key in (
+        "aq_weather_uv",
+        "mom_exposure",
+        "risks_delta",
+        "recommendations",
+        "today_journey",
+    ):
+        if key not in body:
+            raise AssertionError(f"Summary missing '{key}'")
+
+    # aq_weather_uv — сериализованный AirExposureLog
+    _assert_air_exposure_log_payload(body["aq_weather_uv"])
+
+    # mom_exposure — либо null, либо объект с полями сериалайзера
+    me = body["mom_exposure"]
+    if me is not None:
+        if not isinstance(me, dict):
+            raise AssertionError("mom_exposure must be object or null")
+        for k in ("id", "timestamp", "exposure_level", "risks"):
+            if k not in me:
+                raise AssertionError(f"mom_exposure missing '{k}'")
+        if not isinstance(me["exposure_level"], (int, float)):
+            raise AssertionError("mom_exposure.exposure_level must be number")
+
+    # risks_delta — float|null
+    if body["risks_delta"] is not None and not isinstance(
+        body["risks_delta"], (int, float)
+    ):
+        raise AssertionError("risks_delta must be number or null")
+
+    # recommendations — список объектов с выбранными полями
+    recs = body["recommendations"]
+    if not isinstance(recs, list):
+        raise AssertionError("recommendations must be a list")
+    for it in recs[:5]:  # достаточно проверить первые несколько
+        _assert_recommendation_item(it)
+
+    # today_journey — проверка структуры
+    _assert_today_journey(body["today_journey"])
 
 
 def step_1_register():
@@ -1149,6 +1251,8 @@ def main():
     step_debug_exposure_upsert(
         admin_access_token, user_email=EMAIL, pollutants={"pm25_avg_24h": 20.0}
     )
+
+    step_summary_get(token)
 
     print("✔ Debug exposure upsert done, now validating advice...")
     step_validate_aq_via_debug(access_token=token, min_pm25=15.0)
