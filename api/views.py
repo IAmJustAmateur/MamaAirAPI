@@ -861,12 +861,11 @@ class SummaryView(APIView):
             timestamp__lte=end_date,
         ).order_by("timestamp")
 
-        history_items = ExposureHistoryItemSerializer(qs_hist, many=True).data
         exposure_history_payload = {
             "start_date": start_date,
             "end_date": end_date,
             "days_requested": 7,
-            "items": history_items,
+            "items": qs_hist,
         }
 
         user: User = request.user
@@ -877,7 +876,7 @@ class SummaryView(APIView):
             "baby_exposure": exposure,
             "recommendations": recommendations,
             "today_journey": get_today_journey(user),
-            "mama_air_speaks": user.mama_air_speaks(),
+            "mama_air_speaks": user.mamaair_speaks(),
             "exposure_history": exposure_history_payload,
         }
 

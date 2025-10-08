@@ -150,7 +150,7 @@ class SummaryViewTests(APITestCase):
 
         # delta = 0.62 - 0.40 = 0.22
         assert (
-            resp.data["risks_delta"]
+            resp.data["risks_delta"]["mom"]
             == self.exp_new.exposure_level - self.exp_old.exposure_level
         )
 
@@ -200,4 +200,5 @@ class SummaryViewTests(APITestCase):
 
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["mom_exposure"] is None
-        assert resp.data["risks_delta"] is None
+        assert resp.data["risks_delta"]["mom"] is None
+        assert resp.data["risks_delta"]["baby"] is None
