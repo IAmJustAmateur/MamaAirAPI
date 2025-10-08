@@ -182,6 +182,11 @@ class RecommendationSerializer(serializers.Serializer):
     priority = serializers.IntegerField()
 
 
+class RiskDeltaSerializer(serializers.Serializer):
+    mom = serializers.FloatField(allow_null=True)
+    baby = serializers.FloatField(allow_null=True)
+
+
 class TodayJourneySerializer(serializers.Serializer):
     """
     Поля, как ты указал:
@@ -192,6 +197,18 @@ class TodayJourneySerializer(serializers.Serializer):
 
     distance_m = serializers.FloatField()
     distance_km = serializers.FloatField()
+
+
+class ExposureHistoryItemSerializer(serializers.Serializer):
+    date = serializers.DateField(source="timestamp")
+    integrated_score = serializers.FloatField(source="exposure_level")
+
+
+class ExposureHistoryResponseSerializer(serializers.Serializer):
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    days_requested = serializers.IntegerField()
+    items = ExposureHistoryItemSerializer(many=True)
 
 
 class SummaryResponseSerializer(serializers.Serializer):
@@ -206,28 +223,33 @@ class SummaryResponseSerializer(serializers.Serializer):
 
     aq_weather_uv = AirExposureLogSerializer()
     mom_exposure = SimpleExposureSerializer(allow_null=True)
+    baby_exposure = SimpleExposureSerializer(allow_null=True)
     risks_delta = serializers.FloatField(allow_null=True)
     recommendations = serializers.SerializerMethodField()
     today_journey = TodayJourneySerializer()
+    risks_delta = RiskDeltaSerializer()
+    mama_air_speaks = serializers.JSONField()
+    exposure_history = ExposureHistoryResponseSerializer()
 
     def get_recommendations(self, obj):
+        """
+        Return a list of recommendation objects based on obj["recommendations"].
+        If obj["recommendations"] is a dictionary, it is expected to have an "items" key.
+        The returned list is serialized according to RecommendationSerializer.
+        """
         recs = obj.get("recommendations", [])
         if isinstance(recs, dict):
             recs = recs.get("items", [])
         # На выходе — список объектов согласно RecommendationSerializer
         return RecommendationSerializer(recs, many=True).data
 
-
-class ExposureHistoryItemSerializer(serializers.Serializer):
-    date = serializers.DateField(source="timestamp")
-    integrated_score = serializers.FloatField(source="exposure_level")
-
-
-class ExposureHistoryResponseSerializer(serializers.Serializer):
-    start_date = serializers.DateField()
-    end_date = serializers.DateField()
-    days_requested = serializers.IntegerField()
-    items = ExposureHistoryItemSerializer(many=True)
+    def get_exposure_history(self, obj):
+        """
+        Return a list of exposure history items based on obj["exposure_history"].
+        The returned list is serialized according to ExposureHistoryItemSerializer.
+        """
+        history = obj.get("exposure_history", [])
+        return ExposureHistoryItemSerializer(history, many=True).data
 
 
 class GoogleAuthRequestSerializer(serializers.Serializer):

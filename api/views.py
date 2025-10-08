@@ -829,44 +829,58 @@ class SummaryView(APIView):
             .order_by("-timestamp")
             .first()
         )
-        # air quality, weather, uv index
+
+        # AQ + Weather + UV (возвращает инстанс AirExposureLog)
         aq_weater_uv = update_air_exposure_log_with_weather(latest_log)
 
+        # Рекомендации
         from recommendations.evaluator import get_or_create_fresh_snapshot
 
-        # recommendations
         snapshot = get_or_create_fresh_snapshot(
             request.user, fresh_for_hours=6, trigger_event="login"
         )
         recommendations = snapshot.recommendations
-        #  exposure
-        exposures = Exposure.objects.filter(user=request.user).order_by("-timestamp")[
-            :2
-        ]
+
+        # Последняя экспозиция и дельта (мама/малыш — пока одинаково)
+        exposures = list(
+            Exposure.objects.filter(user=request.user).order_by("-timestamp")[:2]
+        )
         exposure = exposures[0] if exposures else None
         risk_delta = (
-            exposure.exposure_level - exposures[1].exposure_level
-            if exposures and len(exposures) > 1
+            (exposures[0].exposure_level - exposures[1].exposure_level)
+            if len(exposures) > 1
             else None
         )
 
+        # История экспозиции за 7 дней (или меньше, если данных меньше)
+        end_date = timezone.localdate()
+        start_date = end_date - dt.timedelta(days=7 - 1)  # последние 7 календарных дней
+        qs_hist = Exposure.objects.filter(
+            user=request.user,
+            timestamp__gte=start_date,
+            timestamp__lte=end_date,
+        ).order_by("timestamp")
+
+        history_items = ExposureHistoryItemSerializer(qs_hist, many=True).data
+        exposure_history_payload = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "days_requested": 7,
+            "items": history_items,
+        }
+
         user: User = request.user
         data = {
-            # "air_quality": get_air_quality_summary(user),
-            # "weather": get_weather_summary(user),
-            # "UV": get_uv_index(user),
             "aq_weather_uv": aq_weater_uv,
-            # "mom_exposure": get_exposure_summary(user, target="mom"),
-            # "baby_exposure": get_exposure_summary(user, target="baby"),
             "risks_delta": {"mom": risk_delta, "baby": risk_delta},
             "mom_exposure": exposure,
             "baby_exposure": exposure,
-            # "risks_delta": get_risks_delta(user),
             "recommendations": recommendations,
-            # "recommendations": get_current_recommendations(user),
             "today_journey": get_today_journey(user),
             "mama_air_speaks": user.mama_air_speaks(),
+            "exposure_history": exposure_history_payload,
         }
+
         serializer = SummaryResponseSerializer(data)
         return Response(serializer.data)
 
