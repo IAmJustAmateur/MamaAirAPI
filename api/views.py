@@ -850,7 +850,7 @@ class SummaryView(APIView):
             else None
         )
 
-        user = request.user
+        user: User = request.user
         data = {
             # "air_quality": get_air_quality_summary(user),
             # "weather": get_weather_summary(user),
@@ -858,12 +858,14 @@ class SummaryView(APIView):
             "aq_weather_uv": aq_weater_uv,
             # "mom_exposure": get_exposure_summary(user, target="mom"),
             # "baby_exposure": get_exposure_summary(user, target="baby"),
+            "risks_delta": {"mom": risk_delta, "baby": risk_delta},
             "mom_exposure": exposure,
-            "risks_delta": risk_delta,
+            "baby_exposure": exposure,
             # "risks_delta": get_risks_delta(user),
             "recommendations": recommendations,
             # "recommendations": get_current_recommendations(user),
             "today_journey": get_today_journey(user),
+            "mama_air_speaks": user.mama_air_speaks(),
         }
         serializer = SummaryResponseSerializer(data)
         return Response(serializer.data)

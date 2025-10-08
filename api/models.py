@@ -1,11 +1,11 @@
 # api/models.py
 
-import uuid
 from django.db import models, transaction
+
 from django.contrib.auth.models import BaseUserManager
 from datetime import date, timedelta
 
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, get_language
 from django.utils import timezone
 
 from logging import getLogger
@@ -120,6 +120,7 @@ LANGUAGE_CHOICES = [
     ("en", "English"),
     ("fr", "French"),
     ("sw", "Swahili"),
+    ("pl", "Polish"),
 ]
 
 
@@ -483,6 +484,28 @@ class User(MyUser, PermissionsMixin):
             "data_quality": "ok" if hourly.shape[0] >= 8 else "low",
         }
 
+    def mamaair_speaks(self, locale: str | None = None) -> dict | None:
+        """
+        Вернёт словарь вида:
+        {
+           "week": int,
+           "locale": str,
+           "text": str,
+           "source": "db"
+        }
+        или None, если неделя неизвестна или сообщение не найдено.
+        """
+        # Lazy import, чтобы избежать циклических зависимостей
+        from recommendations.services.mamaair import get_mamaair_message_for_week
+
+        week = self.current_week_of_pregnancy
+        if not week:
+            return None
+
+        # приоритет: явный аргумент -> язык пользователя -> активный язык -> "en"
+        loc = locale or getattr(self, "language", None) or get_language() or "en"
+        return get_mamaair_message_for_week(week, loc)
+
 
 class UserLifeStyle(models.Model):
     user = models.OneToOneField(
@@ -790,11 +813,6 @@ class AQRiskFactor(AbstractRiskFactor):
             return multiplier
         new_formula = self.formula.replace("param", str(param))
         return multiplier * eval(new_formula)
-
-
-# api/models.py
-from django.db import models, transaction
-from django.utils import timezone
 
 
 class Exposure(models.Model):

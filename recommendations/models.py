@@ -116,3 +116,31 @@ class RecommendationRule(models.Model):
 
     def __str__(self):
         return f"{self.rule_id}.v{self.version} ({'on' if self.enabled else 'off'})"
+
+
+from django.db.models import Q, UniqueConstraint
+
+
+class MamaAirMessage(models.Model):
+    week = models.PositiveSmallIntegerField()  # 1..40
+    locale = models.CharField(max_length=10, default="en")  # "en", "en-US", "ru"
+    text = models.TextField()
+    is_active = models.BooleanField(default=True)
+    version = models.PositiveIntegerField(default=1)  # для вашего контроля
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["week", "locale"],
+                condition=Q(is_active=True),
+                name="unique_active_mamaair_week_locale",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["week", "locale", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.locale} / week {self.week} (active={self.is_active})"

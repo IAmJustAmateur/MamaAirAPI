@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from django.utils.safestring import mark_safe
-from .models import RecommendationRule
+from .models import RecommendationRule, MamaAirMessage
 
 CHEATSHEET_HTML = """
 <details open>
@@ -91,3 +91,11 @@ class RecommendationRuleAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         extra_context["cheatsheet_html"] = mark_safe(CHEATSHEET_HTML)
         return super().changelist_view(request, extra_context=extra_context)
+
+
+@admin.register(MamaAirMessage)
+class MamaAirMessageAdmin(admin.ModelAdmin):
+    list_display = ("week", "locale", "is_active", "version", "updated_at")
+    list_filter = ("locale", "is_active")
+    search_fields = ("text",)
+    list_editable = ("is_active",)
