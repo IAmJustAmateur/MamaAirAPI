@@ -20,6 +20,7 @@ class SummaryViewTests(APITestCase):
             email="test@example.com",
             password="pass1234",
             is_active=True,
+            week_of_pregnancy=12,
         )
         self.client.force_authenticate(self.user)
 
@@ -166,6 +167,21 @@ class SummaryViewTests(APITestCase):
         assert isinstance(j, dict)
         assert "distance_m" in j and "distance_km" in j
 
+        mas = resp.data["mama_air_speaks"]
+        assert mas is not None
+
+        hist = resp.data["exposure_history"]
+        assert isinstance(hist, dict)
+        for k in ("start_date", "end_date", "days_requested", "items"):
+            assert k in hist, f"exposure_history missing '{k}'"
+
+        assert hist["days_requested"] == 7
+        assert isinstance(hist["items"], list)
+        # элементы истории: {"date": <iso-date>, "integrated_score": <float>}
+        if hist["items"]:
+            first_item = hist["items"][0]
+            assert "date" in first_item and "integrated_score" in first_item
+
         # Вызовы моков
         mock_update_air_exposure_log_with_weather.assert_called_once_with(
             self.latest_log
@@ -197,6 +213,18 @@ class SummaryViewTests(APITestCase):
 
         url = reverse("summary")
         resp = self.client.get(url)
+
+        # поля присутствуют
+        assert "mama_air_speaks" in resp.data  # ← добавлено
+        assert "exposure_history" in resp.data  # ← добавлено
+
+        # exposure_history — корректная структура
+        hist = resp.data["exposure_history"]
+        assert isinstance(hist, dict)
+        for k in ("start_date", "end_date", "days_requested", "items"):
+            assert k in hist
+        assert hist["days_requested"] == 7
+        assert isinstance(hist["items"], list)
 
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["mom_exposure"] is None
