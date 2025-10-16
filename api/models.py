@@ -862,3 +862,82 @@ class Exposure(models.Model):
                 },
             )
         return obj
+
+
+class GuidelineLimit(models.Model):
+    """
+    Конфигурируемые предельные уровни (например, WHO AQG 2021).
+    Позволяет версионирование и переключение активных лимитов без правки кода.
+    """
+
+    # базовые справочники
+    POLLUTANT_CHOICES = [
+        ("pm25", "PM2.5"),
+        ("pm10", "PM10"),
+        ("no2", "NO₂"),
+        ("o3", "O₃"),
+        ("so2", "SO₂"),
+        ("co", "CO"),
+    ]
+    # усреднение. На старте достаточно 24h/8h; далее можно расширять.
+    AVG_PERIOD_CHOICES = [
+        ("24h", "24h mean"),
+        ("8h", "8h mean"),
+        ("1h", "1h mean"),
+        ("annual", "annual"),
+    ]
+
+    pollutant = models.CharField(
+        max_length=10, choices=POLLUTANT_CHOICES, db_index=True
+    )
+    avg_period = models.CharField(
+        max_length=10, choices=AVG_PERIOD_CHOICES, db_index=True
+    )
+
+    # числовое значение и единицы измерения
+    value = models.FloatField(help_text="Limit value in the specified unit")
+    unit = models.CharField(
+        max_length=16,
+        help_text="e.g. µg/m³ or mg/m³",
+        default="µg/m³",
+    )
+
+    # метаданные источника/версии
+    source = models.CharField(max_length=64, default="WHO")
+    version = models.CharField(max_length=64, default="AQG 2021", db_index=True)
+
+    # период действия (не обязательно)
+    valid_from = models.DateField(null=True, blank=True, default=None)
+    valid_to = models.DateField(null=True, blank=True, default=None)
+
+    # активный набор — удобно переключать для A/B/локальных стандартов
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    # служебные
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "guideline_limits"
+        ordering = ["pollutant", "avg_period", "-is_active", "version", "-created_at"]
+        # Разрешаем несколько версий/источников, но не дубли внутри одной версии/источника
+        unique_together = ("pollutant", "avg_period", "version", "source")
+
+    def __str__(self):
+        return f"{self.source} {self.version} • {self.get_pollutant_display()} • {self.avg_period} = {self.value} {self.unit}"
+
+    @classmethod
+    def active_map(cls):
+        """
+        Возвращает dict {(pollutant, avg_period): GuidelineLimit} только по активным записям.
+        Если активных несколько — берём последнюю по updated_at.
+        """
+        qs = cls.objects.filter(is_active=True).order_by(
+            "pollutant", "avg_period", "-updated_at", "-id"
+        )
+        out = {}
+        for gl in qs:
+            key = (gl.pollutant, gl.avg_period)
+            if key not in out:
+                out[key] = gl
+        return out

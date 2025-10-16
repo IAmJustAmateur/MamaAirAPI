@@ -22,6 +22,7 @@ from .models import (
     RiskDefinitionMommySymptom,
     AQRiskFactor,
     Exposure,
+    GuidelineLimit,
 )
 from django.contrib.auth import authenticate, login
 
@@ -219,3 +220,33 @@ class ExposureAdmin(admin.ModelAdmin):
     list_display = ("user", "timestamp", "exposure_level")
     list_filter = ("user", "timestamp")
     search_fields = ("user__email",)
+
+
+@admin.register(GuidelineLimit)
+class GuidelineLimitAdmin(admin.ModelAdmin):
+    list_display = (
+        "pollutant",
+        "avg_period",
+        "value",
+        "unit",
+        "source",
+        "version",
+        "is_active",
+        "valid_from",
+        "valid_to",
+        "updated_at",
+    )
+    list_filter = ("pollutant", "avg_period", "source", "version", "is_active")
+    search_fields = ("pollutant", "version", "source")
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("pollutant", "avg_period", "-is_active", "version")
+
+    actions = ["activate_selected", "deactivate_selected"]
+
+    @admin.action(description="Mark selected limits as active")
+    def activate_selected(self, request, queryset):
+        queryset.update(is_active=True)
+
+    @admin.action(description="Mark selected limits as inactive")
+    def deactivate_selected(self, request, queryset):
+        queryset.update(is_active=False)

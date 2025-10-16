@@ -276,7 +276,7 @@ def step_summary_get(access_token: str):
 
     # risks_delta — float|null
     if body["risks_delta"] is not None and not isinstance(
-        body["risks_delta"], (int, float)
+        body["risks_delta"]["mom"], (int, float)
     ):
         raise AssertionError("risks_delta must be number or null")
 
