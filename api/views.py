@@ -15,6 +15,7 @@ from rest_framework_simplejwt.token_blacklist.models import (
     BlacklistedToken,
     OutstandingToken,
 )
+from api.services.guidelines import compute_pollutant_compliance
 
 from django.utils.translation import gettext as _
 from django.contrib.auth import get_user_model
@@ -867,6 +868,9 @@ class SummaryView(APIView):
             "days_requested": 7,
             "items": qs_hist,
         }
+        pollutant_compliance = compute_pollutant_compliance(
+            request.user, latest_log, exposure
+        )
 
         user: User = request.user
         data = {
@@ -878,6 +882,7 @@ class SummaryView(APIView):
             "today_journey": get_today_journey(user),
             "mama_air_speaks": user.mamaair_speaks(),
             "exposure_history": exposure_history_payload,
+            "pollutant_compliance": pollutant_compliance,
         }
 
         serializer = SummaryResponseSerializer(data)

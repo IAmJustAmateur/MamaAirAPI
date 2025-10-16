@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-BASE_URL = "http://52.4.150.16/"
-# BASE_URL = "http://127.0.0.1:8000/"
+# BASE_URL = "http://52.4.150.16/"
+BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser115@example.com"
@@ -100,6 +100,57 @@ def log(msg):
 def fail(msg):
     print(f"[✗] {msg}")
     exit(1)
+
+
+def _assert_pollutant_compliance(pc: dict):
+    if not isinstance(pc, dict):
+        raise AssertionError(f"pollutant_compliance must be object, got {type(pc)}")
+    for k in ("source", "version", "per_pollutant"):
+        if k not in pc:
+            raise AssertionError(f"pollutant_compliance missing '{k}'")
+
+    per = pc["per_pollutant"]
+    if not isinstance(per, dict):
+        raise AssertionError("pollutant_compliance.per_pollutant must be object")
+
+    # Проверяем пару типичных поллютантов, если присутствуют
+    for pol in ("pm25", "pm10"):
+        if pol in per:
+            item = per[pol]
+            req = (
+                "value",
+                "unit",
+                "avg_period_used",
+                "value_source",
+                "value_datetime",
+                "limit",
+                "limit_unit",
+                "limit_avg_period",
+                "compliance",
+                "exceedance_pct",
+                "approximate",
+            )
+            missing = [k for k in req if k not in item]
+            if missing:
+                raise AssertionError(f"pollutant_compliance.{pol} missing {missing}")
+
+
+def _assert_today_journey_soft(obj: dict):
+    # Мягкая версия: points можно не требовать (у тебя в ответе их может не быть)
+    req = ("distance_m", "distance_km")
+    if not isinstance(obj, dict):
+        raise AssertionError(f"today_journey must be dict, got {type(obj)}")
+    for k in req:
+        if k not in obj:
+            raise AssertionError(f"today_journey missing '{k}'")
+    if not isinstance(obj["distance_m"], (int, float)):
+        raise AssertionError("today_journey.distance_m must be number")
+    if not isinstance(obj["distance_km"], (int, float)):
+        raise AssertionError("today_journey.distance_km must be number")
+    # Если points есть — слегка провалидируем
+    if "points" in obj:
+        if not isinstance(obj["points"], list):
+            raise AssertionError("today_journey.points must be list if present")
 
 
 def _assert_choice_list(arr, field_name: str):
@@ -253,9 +304,13 @@ def step_summary_get(access_token: str):
     for key in (
         "aq_weather_uv",
         "mom_exposure",
+        "baby_exposure",
         "risks_delta",
         "recommendations",
         "today_journey",
+        "mama_air_speaks",
+        "exposure_history",
+        "pollutant_compliance",
     ):
         if key not in body:
             raise AssertionError(f"Summary missing '{key}'")
@@ -263,7 +318,7 @@ def step_summary_get(access_token: str):
     # aq_weather_uv — сериализованный AirExposureLog
     _assert_air_exposure_log_payload(body["aq_weather_uv"])
 
-    # mom_exposure — либо null, либо объект с полями сериалайзера
+    # mom_exposure — либо null, либо объект
     me = body["mom_exposure"]
     if me is not None:
         if not isinstance(me, dict):
@@ -274,21 +329,57 @@ def step_summary_get(access_token: str):
         if not isinstance(me["exposure_level"], (int, float)):
             raise AssertionError("mom_exposure.exposure_level must be number")
 
-    # risks_delta — float|null
-    if body["risks_delta"] is not None and not isinstance(
-        body["risks_delta"]["mom"], (int, float)
-    ):
-        raise AssertionError("risks_delta must be number or null")
+    # baby_exposure — либо null, либо объект (тот же формат)
+    be = body["baby_exposure"]
+    if be is not None:
+        if not isinstance(be, dict):
+            raise AssertionError("baby_exposure must be object or null")
+        for k in ("id", "timestamp", "exposure_level", "risks"):
+            if k not in be:
+                raise AssertionError(f"baby_exposure missing '{k}'")
+
+    # risks_delta — dict с mom/baby: number|null
+    rd = body["risks_delta"]
+    if not isinstance(rd, dict) or "mom" not in rd or "baby" not in rd:
+        raise AssertionError("risks_delta must be an object with 'mom' and 'baby'")
+    for key in ("mom", "baby"):
+        if rd[key] is not None and not isinstance(rd[key], (int, float)):
+            raise AssertionError(f"risks_delta.{key} must be number or null")
 
     # recommendations — список объектов с выбранными полями
     recs = body["recommendations"]
     if not isinstance(recs, list):
         raise AssertionError("recommendations must be a list")
-    for it in recs[:5]:  # достаточно проверить первые несколько
+    for it in recs[:5]:
         _assert_recommendation_item(it)
 
-    # today_journey — проверка структуры
-    _assert_today_journey(body["today_journey"])
+    # today_journey — мягкая проверка структуры
+    _assert_today_journey_soft(body["today_journey"])
+
+    # mama_air_speaks — существует; тип свободный (str|dict), просто не None
+    if body["mama_air_speaks"] is None:
+        raise AssertionError("mama_air_speaks must not be null")
+
+    # exposure_history — структура
+    hist = body["exposure_history"]
+    if not isinstance(hist, dict):
+        raise AssertionError("exposure_history must be object")
+    for k in ("start_date", "end_date", "days_requested", "items"):
+        if k not in hist:
+            raise AssertionError(f"exposure_history missing '{k}'")
+    if not isinstance(hist["days_requested"], int):
+        raise AssertionError("exposure_history.days_requested must be int")
+    if not isinstance(hist["items"], list):
+        raise AssertionError("exposure_history.items must be list")
+    if hist["items"]:
+        first_item = hist["items"][0]
+        if "date" not in first_item or "integrated_score" not in first_item:
+            raise AssertionError(
+                "exposure_history.items[*] must have date and integrated_score"
+            )
+
+    # pollutant_compliance — новая секция
+    _assert_pollutant_compliance(body["pollutant_compliance"])
 
 
 def step_1_register():

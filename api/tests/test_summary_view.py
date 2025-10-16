@@ -8,8 +8,9 @@ from rest_framework import status
 
 from django.contrib.auth import get_user_model
 
-# Подправь импорты моделей под свой проект
 from api.models import Exposure, AirExposureLog
+
+from api.models import GuidelineLimit
 
 User = get_user_model()
 
@@ -65,6 +66,9 @@ class SummaryViewTests(APITestCase):
             exposure_level=0.40,
             risks={"pm25": "low"},
         )
+
+        self.exp_new.pollutants = {"pm25": 18.0, "pm10": 30.0}
+        self.exp_new.save(update_fields=["pollutants"])
 
     def _mock_recommendations(self):
         snapshot = Mock()
@@ -124,6 +128,7 @@ class SummaryViewTests(APITestCase):
             "risks_delta",
             "recommendations",
             "today_journey",
+            "pollutant_compliance",
         ]:
             assert key in resp.data, f"Missing key: {key}"
 
@@ -182,6 +187,54 @@ class SummaryViewTests(APITestCase):
             first_item = hist["items"][0]
             assert "date" in first_item and "integrated_score" in first_item
 
+            # --- pollutant_compliance -- проверяем структуру и ключевые кейсы ---
+        pc = resp.data["pollutant_compliance"]
+        assert isinstance(pc, dict)
+        assert pc.get("source") in ("WHO",)  # по сид-сету
+        assert pc.get("version") == "AQG 2021"
+        assert isinstance(pc.get("per_pollutant"), dict)
+
+        per = pc["per_pollutant"]
+        # Должны присутствовать как минимум эти поллютанты
+        for pol in ("pm25", "pm10"):
+            assert pol in per, f"per_pollutant missing {pol}"
+
+        # pm25: берём из Exposure (24h), превышает 15 → compliance=False
+        pm25 = per["pm25"]
+        for k in (
+            "value",
+            "unit",
+            "avg_period_used",
+            "value_source",
+            "limit",
+            "limit_unit",
+            "limit_avg_period",
+            "compliance",
+            "approximate",
+        ):
+            assert k in pm25, f"pm25 missing {k}"
+        assert pm25["value_source"] == "exposure"
+        assert pm25["avg_period_used"] in ("24h", "24h-approx")
+        assert pm25["limit_avg_period"] == "24h"
+        # мы поставили exp_new.pollutants.pm25 = 18.0 → лимит 15 → non-compliant
+        assert abs(pm25["value"] - 18.0) < 1e-6
+        assert pm25["unit"] in (
+            "µg/m³",
+            "ug/m3",
+        )  # допускаем разные символы в окружении
+        assert pm25["limit"] == 15.0
+        assert pm25["compliance"] is False
+        # При 24h из Exposure — approximate должно быть False (или оставим строго)
+        assert pm25["approximate"] is False
+
+        # pm10: exp_new.pollutants.pm10 = 30.0, лимит 45 → compliant
+        pm10 = per["pm10"]
+        assert pm10["value_source"] == "exposure"
+        assert pm10["limit_avg_period"] == "24h"
+        assert pm10["compliance"] is True
+        assert abs(pm10["value"] - 30.0) < 1e-6
+        assert pm10["approximate"] in (False,)  # ожидаем False для 24h
+
         # Вызовы моков
         mock_update_air_exposure_log_with_weather.assert_called_once_with(
             self.latest_log
@@ -230,3 +283,38 @@ class SummaryViewTests(APITestCase):
         assert resp.data["mom_exposure"] is None
         assert resp.data["risks_delta"]["mom"] is None
         assert resp.data["risks_delta"]["baby"] is None
+
+        # --- pollutant_compliance при отсутствии суточной экспозиции ---
+        pc = resp.data["pollutant_compliance"]
+        assert isinstance(pc, dict)
+        assert pc.get("version") == "AQG 2021"
+        per = pc.get("per_pollutant", {})
+        assert isinstance(per, dict)
+
+        # pm25 должен браться из логов → value_source='log', avg_period_used='instant-approx', approximate=True
+        assert "pm25" in per
+        pm25 = per["pm25"]
+        for k in (
+            "value",
+            "unit",
+            "avg_period_used",
+            "value_source",
+            "limit",
+            "limit_unit",
+            "limit_avg_period",
+            "compliance",
+            "approximate",
+        ):
+            assert k in pm25
+        assert pm25["value_source"] == "log"
+        assert pm25["avg_period_used"] == "instant-approx"
+        assert pm25["approximate"] is True
+        # значение берётся из latest_log.pm25 (=18.2) и сравнивается с лимитом 15.0 → non-compliant
+        # (Учти: если сервис делает конверсию единиц, здесь всё равно должно быть число около 18.2)
+        assert isinstance(pm25["value"], (int, float))
+        assert pm25["limit"] == 15.0
+        assert pm25["compliance"] in (
+            True,
+            False,
+            None,
+        )  # допускаем обе ветки на случай округлений

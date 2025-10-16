@@ -211,6 +211,26 @@ class ExposureHistoryResponseSerializer(serializers.Serializer):
     items = ExposureHistoryItemSerializer(many=True)
 
 
+class PollutantComplianceItemSerializer(serializers.Serializer):
+    value = serializers.FloatField(allow_null=True)
+    unit = serializers.CharField()
+    avg_period_used = serializers.CharField()
+    value_source = serializers.CharField()
+    value_datetime = serializers.CharField(allow_null=True)
+    limit = serializers.FloatField()
+    limit_unit = serializers.CharField()
+    limit_avg_period = serializers.CharField()
+    compliance = serializers.BooleanField(allow_null=True)
+    exceedance_pct = serializers.FloatField(allow_null=True)
+    approximate = serializers.BooleanField()
+
+
+class PollutantComplianceSerializer(serializers.Serializer):
+    source = serializers.CharField()
+    version = serializers.CharField()
+    per_pollutant = serializers.DictField(child=PollutantComplianceItemSerializer())
+
+
 class SummaryResponseSerializer(serializers.Serializer):
     """
     Гибкий ответ для /summary:
@@ -230,6 +250,7 @@ class SummaryResponseSerializer(serializers.Serializer):
     risks_delta = RiskDeltaSerializer()
     mama_air_speaks = serializers.JSONField()
     exposure_history = ExposureHistoryResponseSerializer()
+    pollutant_compliance = PollutantComplianceSerializer()
 
     def get_recommendations(self, obj):
         """
