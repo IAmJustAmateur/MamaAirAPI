@@ -121,7 +121,7 @@ class RecommendationRule(models.Model):
 from django.db.models import Q, UniqueConstraint
 
 
-class MamaAirMessage(models.Model):
+class MamaAirWeeklyMessage(models.Model):
     week = models.PositiveSmallIntegerField()  # 1..40
     locale = models.CharField(max_length=10, default="en")  # "en", "en-US", "ru"
     text = models.TextField()

@@ -1,7 +1,7 @@
 # recommendations/services/mamaair.py
 from django.core.cache import cache
 from django.utils.translation import get_language
-from recommendations.models import MamaAirMessage
+from recommendations.models import MamaAirWeeklyMessage
 
 
 def _locale_chain(locale: str):
@@ -26,7 +26,7 @@ def get_mamaair_message_for_week(week: int, locale: str | None) -> dict | None:
         if cached:
             return cached
         obj = (
-            MamaAirMessage.objects.filter(week=week, locale=loc, is_active=True)
+            MamaAirWeeklyMessage.objects.filter(week=week, locale=loc, is_active=True)
             .only("text", "locale", "week", "updated_at")
             .first()
         )

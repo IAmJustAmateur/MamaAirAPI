@@ -1,10 +1,10 @@
 from django.test import TestCase
 from django.utils import translation
 from api.models import User
-from recommendations.models import MamaAirMessage
+from recommendations.models import MamaAirWeeklyMessage
 
 
-class MamaAirSpeaksMethodTest(TestCase):
+class MamaAirWeeklyMessageMethodTest(TestCase):
 
     def test_returns_message_for_user_week(self):
         user = User.objects.create_user(
@@ -14,7 +14,7 @@ class MamaAirSpeaksMethodTest(TestCase):
         user.week_of_pregnancy = 10
         user.save()
         mamaair_msg = user.week_info()
-        messageText = MamaAirMessage.objects.get(
+        messageText = MamaAirWeeklyMessage.objects.get(
             week=10, locale="en", is_active=True
         ).text
         self.assertEqual(mamaair_msg["text"], messageText)

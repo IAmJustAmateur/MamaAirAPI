@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from django.utils.safestring import mark_safe
-from .models import RecommendationRule, MamaAirMessage
+from .models import RecommendationRule, MamaAirWeeklyMessage
 
 CHEATSHEET_HTML = """
 <details open>
@@ -93,7 +93,7 @@ class RecommendationRuleAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
 
 
-@admin.register(MamaAirMessage)
+@admin.register(MamaAirWeeklyMessage)
 class MamaAirMessageAdmin(admin.ModelAdmin):
     list_display = ("week", "locale", "is_active", "version", "updated_at")
     list_filter = ("locale", "is_active")
