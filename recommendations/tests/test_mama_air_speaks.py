@@ -13,7 +13,7 @@ class MamaAirSpeaksMethodTest(TestCase):
         # замокаем вычисление недели
         user.week_of_pregnancy = 10
         user.save()
-        mamaair_msg = user.mamaair_speaks()
+        mamaair_msg = user.week_info()
         messageText = MamaAirMessage.objects.get(
             week=10, locale="en", is_active=True
         ).text
@@ -27,7 +27,7 @@ class MamaAirSpeaksMethodTest(TestCase):
         user.week_of_pregnancy = 10
         user.save()
 
-        data = user.mamaair_speaks()
+        data = user.week_info()
         self.assertEqual(data["locale"], "en")
         self.assertEqual(data["week"], 10)
 
@@ -37,4 +37,4 @@ class MamaAirSpeaksMethodTest(TestCase):
         )
         user.week_of_pregnancy = None
         user.save()
-        self.assertIsNone(user.mamaair_speaks())
+        self.assertIsNone(user.week_info())

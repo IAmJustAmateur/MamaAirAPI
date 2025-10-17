@@ -880,7 +880,7 @@ class SummaryView(APIView):
             "baby_exposure": exposure,
             "recommendations": recommendations,
             "today_journey": get_today_journey(user),
-            "mama_air_speaks": user.mamaair_speaks(),
+            "week_info": user.week_info(),
             "exposure_history": exposure_history_payload,
             "pollutant_compliance": pollutant_compliance,
         }

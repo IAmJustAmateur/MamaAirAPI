@@ -248,7 +248,7 @@ class SummaryResponseSerializer(serializers.Serializer):
     recommendations = serializers.SerializerMethodField()
     today_journey = TodayJourneySerializer()
     risks_delta = RiskDeltaSerializer()
-    mama_air_speaks = serializers.JSONField()
+    week_info = serializers.JSONField()
     exposure_history = ExposureHistoryResponseSerializer()
     pollutant_compliance = PollutantComplianceSerializer()
 

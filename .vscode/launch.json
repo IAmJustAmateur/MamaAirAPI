@@ -35,7 +35,7 @@
                 //"api.tests.test_aggregation",
                 //"recommendations.tests.test_context",
                 //"recommendations.tests.test_advice_recommendations",
-                //"recommendations.tests.test_mama_air_speaks",
+                //"recommendations.tests.test_week_info",
                 //"api.tests.test_today_journey",
                 "api.tests.test_summary_view",
             ],

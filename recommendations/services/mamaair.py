@@ -37,7 +37,7 @@ def get_mamaair_message_for_week(week: int, locale: str | None) -> dict | None:
     return None  # Ничего не нашли даже на en
 
 
-def mamaair_speaks(user) -> dict | None:
+def week_info(user) -> dict | None:
     week = getattr(user, "current_week_of_pregnancy", lambda: None)()
     if not week:
         return None

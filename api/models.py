@@ -484,7 +484,7 @@ class User(MyUser, PermissionsMixin):
             "data_quality": "ok" if hourly.shape[0] >= 8 else "low",
         }
 
-    def mamaair_speaks(self, locale: str | None = None) -> dict | None:
+    def week_info(self, locale: str | None = None) -> dict | None:
         """
         Вернёт словарь вида:
         {

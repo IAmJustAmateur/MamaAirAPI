@@ -308,7 +308,7 @@ def step_summary_get(access_token: str):
         "risks_delta",
         "recommendations",
         "today_journey",
-        "mama_air_speaks",
+        "week_info",
         "exposure_history",
         "pollutant_compliance",
     ):
@@ -356,9 +356,9 @@ def step_summary_get(access_token: str):
     # today_journey — мягкая проверка структуры
     _assert_today_journey_soft(body["today_journey"])
 
-    # mama_air_speaks — существует; тип свободный (str|dict), просто не None
-    if body["mama_air_speaks"] is None:
-        raise AssertionError("mama_air_speaks must not be null")
+    # week_info — существует; тип свободный (str|dict), просто не None
+    if body["week_info"] is None:
+        raise AssertionError("week_info must not be null")
 
     # exposure_history — структура
     hist = body["exposure_history"]

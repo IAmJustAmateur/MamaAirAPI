@@ -172,7 +172,7 @@ class SummaryViewTests(APITestCase):
         assert isinstance(j, dict)
         assert "distance_m" in j and "distance_km" in j
 
-        mas = resp.data["mama_air_speaks"]
+        mas = resp.data["week_info"]
         assert mas is not None
 
         hist = resp.data["exposure_history"]
@@ -268,7 +268,7 @@ class SummaryViewTests(APITestCase):
         resp = self.client.get(url)
 
         # поля присутствуют
-        assert "mama_air_speaks" in resp.data  # ← добавлено
+        assert "week_info" in resp.data  # ← добавлено
         assert "exposure_history" in resp.data  # ← добавлено
 
         # exposure_history — корректная структура
