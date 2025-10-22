@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# BASE_URL = "http://52.4.150.16/"
-BASE_URL = "http://127.0.0.1:8000/"
+BASE_URL = "http://52.4.150.16/"
+# BASE_URL = "http://127.0.0.1:8000/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser115@example.com"

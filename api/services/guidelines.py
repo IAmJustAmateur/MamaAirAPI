@@ -20,6 +20,17 @@ LOG_UNITS = {
 EXPOSURE_UNITS = LOG_UNITS.copy()
 
 
+def get_label(pollutant: str) -> str:
+    return {
+        "pm25": "PM2.5",
+        "pm10": "PM10",
+        "no2": "NO₂",
+        "o3": "O₃",
+        "so2": "SO₂",
+        "co": "CO",
+    }.get(pollutant, pollutant)
+
+
 def _convert(value: Optional[float], from_unit: str, to_unit: str) -> Optional[float]:
     if value is None or from_unit == to_unit:
         return value
@@ -155,6 +166,7 @@ def compute_pollutant_compliance(user, latest_log, exposure_today) -> Dict[str, 
 
         per_pollutant[pol] = {
             "value": value,
+            "label": get_label(pol),
             "unit": (
                 gl.unit if value is not None else gl.unit
             ),  # единица результата — как у лимита

@@ -213,6 +213,7 @@ class ExposureHistoryResponseSerializer(serializers.Serializer):
 
 class PollutantComplianceItemSerializer(serializers.Serializer):
     value = serializers.FloatField(allow_null=True)
+    label = serializers.CharField()
     unit = serializers.CharField()
     avg_period_used = serializers.CharField()
     value_source = serializers.CharField()

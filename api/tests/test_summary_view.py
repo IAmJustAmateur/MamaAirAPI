@@ -203,6 +203,7 @@ class SummaryViewTests(APITestCase):
         pm25 = per["pm25"]
         for k in (
             "value",
+            "label",
             "unit",
             "avg_period_used",
             "value_source",
