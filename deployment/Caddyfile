@@ -1,0 +1,30 @@
+{
+    email {$ACME_EMAIL}
+    # optional: лок для логов
+    # admin off
+}
+
+{$DOMAIN} {
+    encode zstd gzip
+
+    # Статика напрямую из volume (ускоряет отдачу)
+    handle_path /static/* {
+        root * /app
+        file_server
+    }
+
+    # Проксируем всё остальное на Django
+    reverse_proxy web:8000 {
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Host {host}
+    }
+
+    # Небольшие полезные заголовки
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        Referrer-Policy "same-origin"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+    }
+}

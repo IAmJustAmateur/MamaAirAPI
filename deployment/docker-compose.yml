@@ -36,18 +36,27 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
 
-  nginx:
-    image: nginx:latest
-    container_name: agent_api_nginx
+  caddy:
+    image: caddy:2
+    container_name: agent_api_caddy
+    restart: always
     ports:
       - "80:80"
+      - "443:443"
+    environment:
+      # Подхватит домен и email из .env
+      DOMAIN: ${PUBLIC_DOMAIN}            # напр. api.mamaair.example.com
+      ACME_EMAIL: ${ACME_EMAIL}           # твой email для Let's Encrypt
     volumes:
-      - static_volume:/app/static
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data                  # тут сертификаты
+      - caddy_config:/config
+      - static_volume:/app/static:ro      # чтобы раздавать /static/
     depends_on:
       - web
-    restart: always
 
 volumes:
   postgres_data:
   static_volume:
+  caddy_data:
+  caddy_config:
