@@ -87,3 +87,6 @@ coverage.xml
 
 # IDE files
 *.swp
+
+# Firebase service account secrets
+secrets/
