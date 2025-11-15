@@ -37,7 +37,9 @@ class FirebaseAuthView(APIView):
         name = decoded.get("name") or ""
         picture = decoded.get("picture")
 
-        if not email or not email_verified:
+        # if not email or not email_verified:
+        #     return Response({"detail": "Email missing or not verified"}, status=401)
+        if not email:
             return Response({"detail": "Email missing or not verified"}, status=401)
 
         # Линкуем/создаём юзера у себя
