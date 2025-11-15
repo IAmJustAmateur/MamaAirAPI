@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
-import sys
+
 from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -19,6 +19,9 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 import logging
+
+import firebase_admin
+from firebase_admin import credentials
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -47,6 +50,11 @@ logger.info(f"BASE_DIR: {BASE_DIR}, TEMPLATE_DIR: {TEMPLATE_DIR}")
 
 
 load_dotenv(dotenv_path=BASE_DIR / ".env")
+
+FIREBASE_CREDENTIALS = os.getenv("FIREBASE_CREDENTIALS")
+if FIREBASE_CREDENTIALS and not firebase_admin._apps:
+    cred = credentials.Certificate(FIREBASE_CREDENTIALS)
+    firebase_admin.initialize_app(cred)
 
 
 print(f"BASE_DIR: {BASE_DIR}")

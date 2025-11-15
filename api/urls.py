@@ -30,6 +30,7 @@ from .views import (
     ExposureHistoryView,
 )
 from .auth_views import GoogleAuthView
+from .auth.views_firebase import FirebaseAuthView
 from api.views_debug import DebugExposureUpsertView, DebugExposureRecomputeView
 from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -94,6 +95,9 @@ urlpatterns += [
 ]
 urlpatterns += [
     path("login/", login_view, name="login"),
+]
+urlpatterns += [
+    path("auth/firebase/", FirebaseAuthView.as_view(), name="auth-firebase"),
 ]
 
 debug_urls = [
