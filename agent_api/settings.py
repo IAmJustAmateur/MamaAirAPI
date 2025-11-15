@@ -311,8 +311,9 @@ logger.info("Logging initialized")
 if DJANGO_ENV in {"production", "staging"}:
     SESSION_COOKIE_SECURE = True  # если HTTPS
     CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = False
     CSRF_TRUSTED_ORIGINS = ["https://app.mamaair.com"]
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 else:
     SESSION_COOKIE_SECURE = False  # если HTTP
     CSRF_COOKIE_SECURE = False
