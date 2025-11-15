@@ -6,6 +6,10 @@ from rest_framework import status, throttling
 from firebase_admin import auth as fb_auth
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from logging import getLogger
+
+logger = getLogger(__name__)
+
 User = get_user_model()
 
 
@@ -28,7 +32,9 @@ class FirebaseAuthView(APIView):
             decoded = fb_auth.verify_id_token(
                 token
             )  # при необходимости: check_revoked=True
+            logger.info(f"Decoded Firebase token: {decoded}")
         except Exception:
+            logger.exception("Failed to verify Firebase token")
             return Response({"detail": "Invalid Firebase token"}, status=401)
 
         uid = decoded["uid"]

@@ -9,7 +9,7 @@
 
     # Статика напрямую из volume (ускоряет отдачу)
     handle_path /static/* {
-        root * /app
+        root * /app/static
         file_server
     }
 

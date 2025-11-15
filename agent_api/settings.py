@@ -308,8 +308,14 @@ logger.info("Logging initialized")
 
 # http
 # ! TODO: remove this for https
-SESSION_COOKIE_SECURE = False  # если HTTP
-CSRF_COOKIE_SECURE = False
+if DJANGO_ENV in {"production", "staging"}:
+    SESSION_COOKIE_SECURE = True  # если HTTPS
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
+    CSRF_TRUSTED_ORIGINS = ["https://app.mamaair.com"]
+else:
+    SESSION_COOKIE_SECURE = False  # если HTTP
+    CSRF_COOKIE_SECURE = False
 SESSION_COOKIE_SAMESITE = "Lax"
 
 
