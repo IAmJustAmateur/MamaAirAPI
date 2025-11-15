@@ -7,6 +7,7 @@ services:
     command: ./entrypoint.sh
     volumes:
       - static_volume:/app/static
+      - /home/ec2-user/secrets/firebase_service_account.json:/run/secrets/firebase_service_account.json:ro  # <<< NEW
     depends_on:
       - db
     expose:
@@ -19,9 +20,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DJANGO_SECRET_KEY: ${SECRET_KEY}
-      DJANGO_DEBUG: ${DEBUG}
-      DJANGO_ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-${DEBUG}}        # опционально, если хочешь; можно удалить, если лишнее
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-${ALLOWED_HOSTS}}
       DJANGO_ENV: ${DJANGO_ENV} # Set to 'production' for production environment
+      FIREBASE_CREDENTIALS: /run/secrets/firebase_service_account.json   # <<< NEW
 
   db:
     image: postgres:15
