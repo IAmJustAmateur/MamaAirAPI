@@ -39,6 +39,7 @@ class FirebaseAuthView(APIView):
 
         uid = decoded["uid"]
         email = (decoded.get("email") or "").lower()
+        logger.info(f"Firebase token email: {email}")
         email_verified = decoded.get("email_verified", False)
         name = decoded.get("name") or ""
         picture = decoded.get("picture")
