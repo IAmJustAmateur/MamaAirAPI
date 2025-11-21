@@ -136,8 +136,8 @@ class GoogleAuthView(APIView):
                 user.auth_provider = "google"
                 if picture and not getattr(user, "avatar_url", None):
                     user.avatar_url = picture
-                if name and not user.first_name:
-                    user.first_name = name
+                # if name and not user.first_name:
+                #     user.first_name = name
                 user.save()
             else:
                 user = User.objects.create(
