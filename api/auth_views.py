@@ -128,8 +128,11 @@ class GoogleAuthView(APIView):
 
         user = None
         if google_sub:
+            logger.debug(f"Looking for user with google_sub: {google_sub}")
             user = User.objects.filter(google_sub=google_sub).first()
+            logger.debug(f"User found by google_sub: {user}")
         if not user:
+            logger.debug(f"Looking for user with email: {email}")
             user = User.objects.filter(email=email).first()
             if user:
                 user.google_sub = google_sub
@@ -139,7 +142,9 @@ class GoogleAuthView(APIView):
                 # if name and not user.first_name:
                 #     user.first_name = name
                 user.save()
+                logger.debug(f"User found by email: {user}")
             else:
+                logger.debug("Creating new user")
                 user = User.objects.create(
                     email=email,
                     google_sub=google_sub,
@@ -147,8 +152,10 @@ class GoogleAuthView(APIView):
                     avatar_url=picture or None,
                     is_active=True,
                 )
+                logger.debug(f"User created: {user}")
 
         refresh = RefreshToken.for_user(user)
+        logger.info(f"User {user} authenticated via Google")
         return Response(
             {
                 "access": str(refresh.access_token),
