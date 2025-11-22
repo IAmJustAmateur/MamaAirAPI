@@ -3,6 +3,8 @@ from api.services.services import get_current_weather
 
 
 def update_air_exposure_log_with_weather(air_exposure_log: AirExposureLog):
+    if air_exposure_log is None:
+        return None
     if air_exposure_log.temperature is not None:
         return air_exposure_log
     current_weather = get_current_weather(

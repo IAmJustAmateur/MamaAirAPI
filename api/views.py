@@ -830,6 +830,8 @@ class SummaryView(APIView):
             .order_by("-timestamp")
             .first()
         )
+        if not latest_log:
+            return Response({"detail": "No air exposure data found."}, status=204)
 
         # AQ + Weather + UV (возвращает инстанс AirExposureLog)
         aq_weater_uv = update_air_exposure_log_with_weather(latest_log)
