@@ -178,6 +178,8 @@ class User(MyUser, PermissionsMixin):
 
     @property
     def bmi(self):
+        if not self.height or not self.weight_pre_pregnancy:
+            return None
         return self.weight_pre_pregnancy / ((self.height / 100) ** 2)
 
     @property
