@@ -209,9 +209,10 @@ from datetime import timedelta
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     # "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ],
+    # "DEFAULT_AUTHENTICATION_CLASSES": [
+    #     "rest_framework_simplejwt.authentication.JWTAuthentication",
+    # ],
+    "DEFAULT_AUTHENTICATION_CLASSES": ("api.authentication.LoggingJWTAuthentication",),
     "DEFAULT_THROTTLE_RATES": {
         "signin": "10/min",  # пример
     },
@@ -234,6 +235,8 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": False,
+    "USER_ID_FIELD": "email",
+    "USER_ID_CLAIM": "email",
 }
 
 # Static files (for nginx)

@@ -36,12 +36,19 @@ from rest_framework.schemas import get_schema_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from django.conf import settings
 
+from .jwt_refresh import LoggingTokenRefreshView
+
 # app_name = "api"
 
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    # path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path(
+        "api/auth/token/refresh/",
+        LoggingTokenRefreshView.as_view(),
+        name="token_refresh",
+    ),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/password-change/", PasswordChangeView.as_view(), name="password-change"),
     path("auth/delete-account/", DeleteAccountView.as_view(), name="delete-account"),
