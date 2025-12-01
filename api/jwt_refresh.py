@@ -5,6 +5,9 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
 
+from rest_framework_simplejwt.settings import (
+    api_settings,
+)  # ВАЖНО: берём отсюда настройки
 from rest_framework_simplejwt.views import TokenRefreshView
 
 logger = logging.getLogger(__name__)
@@ -20,14 +23,15 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
     def validate(self, attrs):
         raw_refresh = attrs.get("refresh")
 
-        # Сначала пробуем просто декодировать токен
+        # 1. Декодируем refresh-токен сами
         try:
             token = self.token_class(raw_refresh)
         except TokenError as e:
             logger.warning("Invalid refresh token: %s", e)
+            # это уже "нормальная" ошибка simplejwt → 401
             raise InvalidToken(e.args[0])
 
-        # Здесь у нас уже есть payload refresh-токена
+        # 2. Достаём payload
         try:
             payload = token.payload
         except AttributeError:
@@ -35,16 +39,17 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
 
         logger.info("Refresh token payload: %s", payload)
 
-        # Можно дополнительно попробовать явно найти пользователя
-        user_id_field = (
-            self.token_class().user_id_field
-        )  # как simplejwt ищет пользователя
-        user_id = payload.get(self.token_class().user_id_claim)
+        # 3. Узнаём, как simplejwt ищет пользователя:
+        #    USER_ID_FIELD – поле в модели (id или email)
+        #    USER_ID_CLAIM – ключ в payload токена
+        user_id_field = api_settings.USER_ID_FIELD  # <-- вот так, а не через token
+        user_id_claim = api_settings.USER_ID_CLAIM  # например, "email" или "user_id"
+        user_id = payload.get(user_id_claim)
 
         logger.info(
             "User lookup for refresh token: user_id_field=%s, claim=%s, value=%s",
             user_id_field,
-            self.token_class().user_id_claim,
+            user_id_claim,
             user_id,
         )
 
@@ -63,11 +68,10 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
                     user_id,
                     payload,
                 )
-                # здесь можно либо бросить InvalidToken, либо позволить simplejwt самому упасть
-                # безопаснее — сразу дать 401, а не 500:
+                # отдаём аккуратный 401 вместо 500
                 raise InvalidToken("User for this refresh token does not exist")
 
-        # а теперь даём simplejwt сделать свою стандартную логику (выдача нового access'а)
+        # 4. Теперь даём simplejwt сделать обычную логику (проверка срока, выдача нового access и т.д.)
         return super().validate(attrs)
 
 
