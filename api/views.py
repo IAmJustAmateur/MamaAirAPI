@@ -1,5 +1,6 @@
 # api/views.py
 import datetime as dt
+import logging
 
 from zoneinfo import ZoneInfo
 from io import TextIOWrapper
@@ -94,6 +95,9 @@ from api.models import (
 
 from datetime import date as date_cls
 from django.utils.dateparse import parse_datetime
+
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_recorded_at_param(request):
@@ -264,6 +268,8 @@ class MommySymptomsChecklistView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        """Mommy symptoms checklist (id + name)"""
+        logger.info("MommySymptomsChecklistView GET, user=%s", request.user)
         user: User = request.user
         names = user.get_mommy_symptoms_for_checking()  # list[str]
         qs = MommySymptom.objects.filter(name__in=names).values("id", "name")
@@ -333,6 +339,7 @@ class UserMommySymptomsSelectionView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        logger.info("UserMommySymptomsSelectionView GET, user=%s", request.user)
         user: User = request.user
         target_date = _target_date_from_request(request)
         ids = list(
@@ -344,6 +351,11 @@ class UserMommySymptomsSelectionView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        logger.info(
+            "UserMommySymptomsSelectionView POST, user=%s, data=%s",
+            request.user,
+            request.data,
+        )
         user: User = request.user
         ser = SymptomSelectionSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -391,6 +403,8 @@ class BabySymptomsChecklistView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        """Baby symptoms checklist (id + name)"""
+        logger.info("BabySymptomsChecklistView GET, user=%s", request.user)
         user: User = request.user
         names = user.get_baby_symptoms_for_checking()  # list[str]
         qs = BabySymptom.objects.filter(name__in=names).values("id", "name")
@@ -436,6 +450,7 @@ class UserBabySymptomsSelectionView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        logger.info("UserBabySymptomsSelectionView GET, user=%s", request.user)
         user: User = request.user
         target_date = _target_date_from_request(request)
         ids = list(
@@ -447,6 +462,11 @@ class UserBabySymptomsSelectionView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        logger.info(
+            "UserBabySymptomsSelectionView POST, user=%s, data=%s",
+            request.user,
+            request.data,
+        )
         user: User = request.user
         ser = SymptomSelectionSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -537,6 +557,7 @@ class MovementCSVUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
+        logger.info("MyAPIView GET, user=%s, data=%s", request.user, request.data)
         if "file" not in request.FILES:
             return Response({"error": "No file provided."}, status=400)
 
@@ -597,6 +618,8 @@ class HealthInsightView(APIView):
     def get(self, request):
         from recommendations.evaluator import get_or_create_fresh_snapshot
 
+        logger.info("HealthInsightView GET, user=%s", request.user)
+
         snapshot = get_or_create_fresh_snapshot(
             request.user, fresh_for_hours=6, trigger_event="login"
         )
@@ -618,6 +641,7 @@ class EnvironmentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        logger.info("EnvironmentView GET, user=%s", request.user)
         latest_log = (
             AirExposureLog.objects.filter(user=request.user)
             .order_by("-timestamp")
@@ -643,6 +667,7 @@ class CurrentAdviceView(APIView):
     serializer_class = AdviceTemplateSerializer
 
     def get(self, request):
+        logger.info("CurrentAdviceView GET, user=%s", request.user)
         week = request.query_params.get("week")
 
         try:
@@ -692,6 +717,7 @@ class LogoutView(APIView):
         },
     )
     def post(self, request):
+        logger.info("LogoutView POST, user=%s", request.user)
         serializer = LogoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -726,6 +752,7 @@ class DeleteAccountView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request):
+        logger.info("DeleteAccountView DELETE, user=%s", request.user)
         user = request.user
         user.delete()
         return Response(
@@ -768,6 +795,7 @@ class PasswordChangeView(APIView):
         return self.request.user
 
     def post(self, request):
+        logger.info("PasswordChangeView POST, user=%s", request.user)
         user = request.user
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -809,6 +837,7 @@ class WeeklyExposureView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        logger.info("WeeklyExposureView GET, user=%s", request.user)
         exposures = WeeklyExposure.objects.filter(user=request.user)
         result = {
             item.pregnancy_week: {"level": item.exposure_level} for item in exposures
@@ -825,6 +854,7 @@ class SummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        logger.info("SummaryView GET, user=%s", request.user)
         latest_log = (
             AirExposureLog.objects.filter(user=request.user)
             .order_by("-timestamp")
@@ -927,6 +957,9 @@ class SetLanguageView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        logger.info(
+            "SetLanguageView POST, user=%s, data=%s", request.user, request.data
+        )
         lang = request.data.get("language")
 
         if lang not in dict(LANGUAGE_CHOICES):
@@ -954,6 +987,7 @@ def test_login(request):
 
 def login_view(request):
     if request.method == "POST":
+        logger.info("LoginView POST, data=%s", request.POST)
         email = request.POST.get("email")
         password = request.POST.get("password")
         user = authenticate(request, username=email, password=password)
@@ -999,6 +1033,7 @@ class MetaChoicesView(APIView):
         # user_model = get_user_model()
         # race_choices = user_model._meta.get_field("race").choices
         # но ниже — напрямую из констант (эквивалентно и быстрее)
+        logger.info("MetaChoicesView GET")
         data = {
             "languages": _map_choices(LANGUAGE_CHOICES),
             "races": _map_choices(User.RACE_CHOICES),
@@ -1039,6 +1074,7 @@ class ExposureHistoryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        logger.info("ExposureHistoryView GET, user=%s", request.user)
         # parse & clamp days
         try:
             days = int(request.query_params.get("days", 7))

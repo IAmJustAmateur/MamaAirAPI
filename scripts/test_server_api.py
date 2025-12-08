@@ -13,8 +13,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-BASE_URL = "http://52.4.150.16/"
+# BASE_URL = "http://52.4.150.16/"
 # BASE_URL = "http://127.0.0.1:8000/"
+BASE_URL = "https://api.mamaair.app/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
 EMAIL = "testuser115@example.com"
@@ -828,6 +829,7 @@ def step_movements_upload_many(access_token: str) -> tuple[str, dict]:
     # на бэке обычно 201 (created) или 207 (multi-status, если были частичные ошибки)
     assert_status(r, [201, 207], "Movements upload failed")
     body = safe_json(r)
+    pp("movements upload status code", r.status_code)
     pp("Movements upload response", body)
 
     # Мягкая проверка типичных ключей (если возвращаются)
