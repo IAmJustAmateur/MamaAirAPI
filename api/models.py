@@ -2,7 +2,6 @@
 
 from django.db import models, transaction
 
-from django.contrib.auth.models import BaseUserManager
 from datetime import date, timedelta
 
 from django.utils.translation import gettext_lazy as _, get_language
@@ -12,9 +11,6 @@ from logging import getLogger
 
 import pandas as pd
 
-logger = getLogger(__name__)
-
-# models.py
 
 from django.contrib.auth.models import (
     BaseUserManager,
@@ -25,6 +21,9 @@ from django.contrib.auth.models import (
 from api.services.aq_inputs import get_air_quality_inputs_for_risks_from_logs
 from api.services.services import round_coord, fetch_air_quality_data_interval
 from api.services.aggregation import agg_max_plus_logistic_tail
+
+
+logger = getLogger(__name__)
 
 
 USER_RISK_FACTORS = [
