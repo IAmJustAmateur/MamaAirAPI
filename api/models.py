@@ -528,6 +528,13 @@ class UserLifeStyle(models.Model):
         # standart work
         # work hours уберу
     ]
+    USUALLY_OUTDOORS_CHOICES = []
+    WORK_INDOOR_OR_OUTDOOR_CHOICES = [
+        ("Mostly Indoor", _("Mostly Indoor")),
+        ("Mostly Outdoor", _("Mostly Outdoor")),
+        ("Both equally", _("Both equally")),
+    ]
+
     work_type = models.CharField(
         max_length=64, choices=WORK_TYPE_CHOICES, null=True, blank=True
     )
