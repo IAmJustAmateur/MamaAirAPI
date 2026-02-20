@@ -13,11 +13,9 @@ from .models import (
     Exposure,
 )
 
-from django.contrib.auth import get_user_model
+
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-
-User = get_user_model()
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -42,17 +40,71 @@ class UserProfileSerializer(serializers.ModelSerializer):
     )
     pregnancy_start_date = serializers.DateField(read_only=True)
 
-    read_only_fields = ("current_pregnancy_week", "pregnancy_start_date")
+    bmi = serializers.FloatField(read_only=True)
 
     class Meta:
         model = User
-        exclude = ["password", "groups", "user_permissions", "is_superuser", "is_staff"]
+        exclude = [
+            "password",
+            "groups",
+            "user_permissions",
+            "is_superuser",
+            "is_staff",
+        ]
+        read_only_fields = (
+            "registered_at",
+            "current_pregnancy_week",
+            "pregnancy_start_date",
+            "bmi",
+        )
+
+    def validate(self, attrs):
+        """
+        Мягкая логика согласия:
+        - если consent=True и consent_accepted_at не передали — ставим сейчас
+        - если consent=False — можно (по желанию) чистить consent_accepted_at
+        """
+        consent = attrs.get("consent", getattr(self.instance, "consent", None))
+
+        # consent_accepted_at в attrs лежит под своим именем (не source)
+        consent_accepted_at = attrs.get(
+            "consent_accepted_at",
+            getattr(self.instance, "consent_accepted_at", None),
+        )
+
+        if consent is True and not consent_accepted_at:
+            attrs["consent_accepted_at"] = timezone.now()
+
+        if consent is False:
+            attrs["consent_accepted_at"] = None
+
+        return attrs
 
 
 class UserLifeStyleSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = UserLifeStyle
-        fields = "__all__"
+        fields = [
+            "id",
+            "user",
+            "average_sleep_hours",
+            "work_type",
+            "diet_type",
+            "cooking_method",
+            "activity_duration_minutes",
+            "work_schedule_pattern",
+            "standing_hours_per_day",
+            # new fields
+            "commute_mode",
+            "hydration_target_ml_per_day",
+            "sleep_target_window",
+            "rest_microbreak_preference",
+            "supplement_preferences",
+            "cooking_venue",
+            "ventilation_level",
+        ]
 
 
 class SymptomSelectionSerializer(serializers.Serializer):

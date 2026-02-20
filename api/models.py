@@ -121,6 +121,13 @@ LANGUAGE_CHOICES = [
     ("sw", "Swahili"),
     ("pl", "Polish"),
 ]
+COUNTRY_REGION_MAP = {
+    "KE": "East Africa",
+    "GH": "West Africa",
+    "NG": "West Africa",
+    "PL": "Europe",
+    "other": "other",
+}
 
 
 class User(MyUser, PermissionsMixin):
@@ -140,6 +147,12 @@ class User(MyUser, PermissionsMixin):
         ("GH", "Ghana"),
         ("KE", "Kenya"),
         ("other", "Other"),
+    ]
+
+    SHARE_CHANNELS = [
+        ("email", _("Email")),
+        ("whatsapp", _("WhatsApp")),
+        ("telegram", _("Telegram")),
     ]
 
     is_active = models.BooleanField(default=True)
@@ -168,6 +181,11 @@ class User(MyUser, PermissionsMixin):
     auth_provider = models.CharField(max_length=20, default="password")
     google_sub = models.CharField(max_length=255, null=True, blank=True, unique=True)
     avatar_url = models.URLField(null=True, blank=True)
+    consent = models.BooleanField(default=False)
+    consent_accepted_at = models.DateTimeField(null=True, blank=True)
+    preferred_share_channel = models.CharField(
+        max_length=255, null=True, blank=True, choices=SHARE_CHANNELS
+    )
 
     def __str__(self):
         if self.name:
@@ -238,6 +256,10 @@ class User(MyUser, PermissionsMixin):
         "full_year",
         "race",
     ]
+
+    @property
+    def region(self):
+        return COUNTRY_REGION_MAP.get(self.country, "other")
 
     def calculate_risk_factors(self):
         lifestyle_risks, ls_integrated_risk = (
@@ -523,15 +545,18 @@ class UserLifeStyle(models.Model):
         ("Field", _("Field")),
         ("Domestic", _("Domestic")),
         ("Night Shift", _("Night Shift")),
-        # shift work
-        # standart work
-        # work hours уберу
     ]
-    USUALLY_OUTDOORS_CHOICES = []
+
     WORK_INDOOR_OR_OUTDOOR_CHOICES = [
         ("Mostly Indoor", _("Mostly Indoor")),
         ("Mostly Outdoor", _("Mostly Outdoor")),
         ("Both equally", _("Both equally")),
+    ]
+
+    WORK_SCHEDULE_PATTERN = [
+        ("day", _("Day")),
+        ("evening", _("Evening")),
+        ("irregular", _("Irregular")),
     ]
 
     work_type = models.CharField(
@@ -556,9 +581,66 @@ class UserLifeStyle(models.Model):
         max_length=64, choices=COOKING_METHOD_CHOICES, null=True, blank=True
     )
 
-    activity_duration_minutes = models.IntegerField(
-        null=True, blank=True
-    )  # в минутах в неделю
+    activity_duration_minutes = models.IntegerField(null=True, blank=True)  # per week
+    work_schedule_pattern = models.CharField(
+        blank=True,
+        null=True,
+        choices=WORK_SCHEDULE_PATTERN,
+        max_length=60,
+    )
+
+    standing_hours_per_day = models.FloatField(null=True, blank=True)
+
+    # -------------------------
+    # NEW FIELDS (customer request)
+    # -------------------------
+
+    COMMUTE_MODE_CHOICES = [
+        ("walk", _("Walk")),
+        ("matatu-bus", _("Matatu/Bus")),
+        ("bike", _("Bike")),
+        ("car", _("Car")),
+        ("mixed", _("Mixed")),
+    ]
+    commute_mode = models.CharField(
+        max_length=32, choices=COMMUTE_MODE_CHOICES, null=True, blank=True
+    )
+
+    hydration_target_ml_per_day = models.IntegerField(null=True, blank=True)
+
+    # Лучше хранить как строку (как просили), но я бы держал единый формат "HH:MM-HH:MM"
+    sleep_target_window = models.CharField(max_length=32, null=True, blank=True)
+
+    REST_MICROBREAK_CHOICES = [
+        ("5min", _("5 min")),
+        ("10min", _("10 min")),
+        ("15min", _("15 min")),
+    ]
+    rest_microbreak_preference = models.CharField(
+        max_length=16, choices=REST_MICROBREAK_CHOICES, null=True, blank=True
+    )
+
+    supplement_preferences = models.TextField(null=True, blank=True)
+
+    COOKING_VENUE_CHOICES = [
+        ("indoor", _("Indoor")),
+        ("veranda", _("Veranda")),
+        ("outdoor", _("Outdoor")),
+    ]
+    cooking_venue = models.CharField(
+        max_length=16, choices=COOKING_VENUE_CHOICES, null=True, blank=True
+    )
+
+    VENTILATION_LEVEL_CHOICES = [
+        ("low", _("Low")),
+        ("medium", _("Medium")),
+        ("high", _("High")),
+    ]
+    ventilation_level = models.CharField(
+        max_length=16, choices=VENTILATION_LEVEL_CHOICES, null=True, blank=True
+    )
+
+    # -------------------------
 
     RISK_FIELDS = [
         "average_sleep_hours",
@@ -566,6 +648,13 @@ class UserLifeStyle(models.Model):
         "diet_type",
         "cooking_method",
         "activity_duration_minutes",
+        # новые — если вы реально используете их в расчёте риска:
+        # "commute_mode",
+        # "hydration_target_ml_per_day",
+        # "sleep_target_window",
+        # "rest_microbreak_preference",
+        # "cooking_venue",
+        # "ventilation_level",
     ]
 
     def __str__(self):
