@@ -45,6 +45,7 @@ ADVICE_URL = urljoin(BASE_URL, "api/advice/")
 DEBUG_EXPOSURE_UPSERT_URL = urljoin(BASE_URL, "api/debug/air-exposure/upsert/")
 
 SUMMARY_URL = urljoin(BASE_URL, "api/summary/")
+RECOMMENDATION_COMPLETION_URL = urljoin(BASE_URL, "api/recommendation-completion/")
 
 
 TIMEOUT = 200
@@ -168,6 +169,31 @@ def _assert_choice_list(arr, field_name: str):
             raise AssertionError(f"{field_name} value/label must be str")
         if item["value"] == "":
             raise AssertionError(f"{field_name}.value must not be empty")
+
+
+def _assert_recommendation_item(it: dict):
+    # New format: alert + optional recommendation_* fields
+    req = ("id", "severity", "title", "alert", "ttl_hours", "priority")
+    if not isinstance(it, dict):
+        raise AssertionError(f"Recommendation item must be dict, got {type(it)}")
+    missing = [k for k in req if k not in it]
+    if missing:
+        raise AssertionError(f"Recommendation item missing keys: {missing}")
+    if not isinstance(it["ttl_hours"], int):
+        raise AssertionError("ttl_hours must be int")
+    if not isinstance(it["priority"], int):
+        raise AssertionError("priority must be int")
+
+    # Optional fields (should be strings if present)
+    for k in (
+        "recommendation_diet",
+        "recommendation_activity",
+        "recommendation_behavior",
+    ):
+        if k in it and it[k] is not None and not isinstance(it[k], str):
+            raise AssertionError(f"{k} must be str (or absent/null)")
+
+    # Backward compat (optional): if server still includes 'message', ignore it
 
 
 def _contains_value(arr, value: str) -> bool:
@@ -315,6 +341,8 @@ def step_summary_get(access_token: str):
 
     # Верхний уровень
     for key in (
+        "snapshot_id",
+        "snapshot_created_at",
         "aq_weather_uv",
         "mom_exposure",
         "baby_exposure",
@@ -327,6 +355,14 @@ def step_summary_get(access_token: str):
     ):
         if key not in body:
             raise AssertionError(f"Summary missing '{key}'")
+
+    if not isinstance(body["snapshot_id"], int):
+        raise AssertionError("snapshot_id must be int")
+    if (
+        not isinstance(body["snapshot_created_at"], str)
+        or not body["snapshot_created_at"]
+    ):
+        raise AssertionError("snapshot_created_at must be non-empty string")
 
     # aq_weather_uv — сериализованный AirExposureLog
     _assert_air_exposure_log_payload(body["aq_weather_uv"])
@@ -1016,6 +1052,66 @@ def step_validate_aq_via_debug(access_token: str, min_pm25: float = 10.0):
     print("✔ AQ via debug upsert validated (pm25_avg_24h >= threshold).")
 
 
+def step_recommendation_completion_upsert(
+    access_token: str, snapshot_id: int, rule_id: str, rule_version: int = 1
+):
+    payload = {
+        "snapshot_id": snapshot_id,
+        "rule_id": rule_id,
+        "rule_version": rule_version,
+        "dimension": "activity",
+        "status": "done",
+    }
+    r = requests.post(
+        RECOMMENDATION_COMPLETION_URL,
+        json=payload,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, [200, 201], "Recommendation completion POST failed")
+    body = safe_json(r)
+    pp("Recommendation completion POST", body)
+
+    # minimal schema checks
+    for k in (
+        "id",
+        "snapshot_id",
+        "rule_id",
+        "rule_version",
+        "dimension",
+        "status",
+        "created_at",
+        "updated_at",
+    ):
+        if k not in body:
+            raise AssertionError(f"Completion response missing '{k}'")
+
+    if body["snapshot_id"] != snapshot_id:
+        raise AssertionError("Completion snapshot_id mismatch")
+    if body["rule_id"] != rule_id:
+        raise AssertionError("Completion rule_id mismatch")
+
+    return body
+
+
+def step_recommendation_completion_list(access_token: str, snapshot_id: int):
+    r = requests.get(
+        RECOMMENDATION_COMPLETION_URL,
+        params={"snapshot_id": snapshot_id},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Recommendation completion GET failed")
+    body = safe_json(r)
+    pp("Recommendation completion GET", body)
+
+    if not isinstance(body, list):
+        raise AssertionError("Completion GET must return list")
+    return body
+
+
 # ---------- main --------------------------------------------------------------
 
 
@@ -1381,6 +1477,33 @@ def main():
     )
 
     step_summary_get(token)
+    # --- Recommendation completion E2E ---
+    summary_r = requests.get(
+        SUMMARY_URL,
+        headers=auth_headers(token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(summary_r, 200, "Summary GET (for completion) failed")
+    summary_body = summary_r.json()
+
+    snapshot_id = summary_body["snapshot_id"]
+    recs = summary_body.get("recommendations", [])
+    rule_id = recs[0].get("rule_id") if recs else None
+
+    # If no recs or rule_id missing, just skip completion step (soft)
+    if rule_id:
+        step_recommendation_completion_upsert(
+            token,
+            snapshot_id=snapshot_id,
+            rule_id=rule_id,
+            rule_version=recs[0].get("version", 1),
+        )
+        _ = step_recommendation_completion_list(token, snapshot_id=snapshot_id)
+    else:
+        print(
+            "[!] No recommendations/rule_id in summary; skipping completion E2E step."
+        )
 
     print("✔ Debug exposure upsert done, now validating advice...")
     step_validate_aq_via_debug(access_token=token, min_pm25=15.0)
