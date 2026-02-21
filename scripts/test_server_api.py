@@ -1477,7 +1477,7 @@ def main():
     )
 
     step_summary_get(token)
-    # --- Recommendation completion E2E ---
+
     summary_r = requests.get(
         SUMMARY_URL,
         headers=auth_headers(token),
@@ -1508,6 +1508,7 @@ def main():
     print("✔ Debug exposure upsert done, now validating advice...")
     step_validate_aq_via_debug(access_token=token, min_pm25=15.0)
 
+    # --- Recommendation completion E2E ---
     print("\n✅ E2E flow passed.")
 
 
