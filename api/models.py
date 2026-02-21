@@ -1041,3 +1041,56 @@ class GuidelineLimit(models.Model):
             if key not in out:
                 out[key] = gl
         return out
+
+
+class RecommendationCompletion(models.Model):
+    DIMENSION_CHOICES = [
+        ("diet", "Diet"),
+        ("activity", "Activity"),
+        ("behavior", "Behavior"),
+    ]
+
+    STATUS_CHOICES = [
+        ("done", "Done"),
+        ("skipped", "Skipped"),
+        ("dismissed", "Dismissed"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="recommendation_completions",
+    )
+
+    snapshot = models.ForeignKey(
+        HealthInsightSnapshot,
+        on_delete=models.CASCADE,
+        related_name="completions",
+    )
+
+    # link to rule (stable even if snapshot JSON changes)
+    rule_id = models.CharField(max_length=128)
+    rule_version = models.PositiveIntegerField(default=1)
+
+    dimension = models.CharField(max_length=16, choices=DIMENSION_CHOICES)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="done")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "recommendation_completions"
+        ordering = ["-updated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "snapshot", "rule_id", "rule_version", "dimension"],
+                name="uniq_user_snapshot_rule_dimension",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user", "-updated_at"]),
+            models.Index(fields=["snapshot", "rule_id", "rule_version"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} {self.rule_id}.v{self.rule_version} {self.dimension}={self.status}"

@@ -11,6 +11,7 @@ from .models import (
     AirExposureLog,
     AdviceTemplate,
     Exposure,
+    RecommendationCompletion,
 )
 
 
@@ -394,3 +395,40 @@ class GoogleAuthResponseSerializer(serializers.Serializer):
 
 class ErrorSerializer(serializers.Serializer):
     detail = serializers.CharField()
+
+
+class RecommendationCompletionUpsertSerializer(serializers.Serializer):
+    snapshot_id = serializers.IntegerField()
+    rule_id = serializers.CharField(max_length=128)
+    rule_version = serializers.IntegerField(min_value=1, default=1)
+    dimension = serializers.ChoiceField(
+        choices=[c[0] for c in RecommendationCompletion.DIMENSION_CHOICES]
+    )
+    status = serializers.ChoiceField(
+        choices=[c[0] for c in RecommendationCompletion.STATUS_CHOICES], default="done"
+    )
+
+    def validate_snapshot_id(self, value):
+        request = self.context["request"]
+        if not HealthInsightSnapshot.objects.filter(
+            id=value, user=request.user
+        ).exists():
+            raise serializers.ValidationError("Snapshot not found for this user.")
+        return value
+
+
+class RecommendationCompletionSerializer(serializers.ModelSerializer):
+    snapshot_id = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = RecommendationCompletion
+        fields = [
+            "id",
+            "snapshot_id",
+            "rule_id",
+            "rule_version",
+            "dimension",
+            "status",
+            "created_at",
+            "updated_at",
+        ]

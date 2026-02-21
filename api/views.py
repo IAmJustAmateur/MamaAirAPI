@@ -20,6 +20,15 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # )
 from api.services.guidelines import compute_pollutant_compliance
 
+from rest_framework.response import Response
+
+
+from .serializers import (
+    RecommendationCompletionUpsertSerializer,
+    RecommendationCompletionSerializer,
+)
+
+
 # from django.utils.translation import gettext as _
 
 
@@ -38,11 +47,9 @@ from drf_spectacular.utils import (
 
 from rest_framework import generics, permissions, serializers
 
-from rest_framework.response import Response
 from django.utils import timezone
 from .models import (
     # Movement,
-    # HealthInsightSnapshot,
     AirExposureLog,
     WeeklyExposure,
     LANGUAGE_CHOICES,
@@ -52,6 +59,7 @@ from .models import (
     BabySymptom,
     UserBabySymptoms,
     Exposure,
+    RecommendationCompletion,
 )
 from .choices_emoji import (
     map_choices_with_emoji,
@@ -1105,3 +1113,39 @@ class ExposureHistoryView(APIView):
             "items": items,
         }
         return Response(payload)
+
+
+class RecommendationCompletionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = RecommendationCompletion.objects.filter(user=request.user).order_by(
+            "-updated_at"
+        )
+
+        snapshot_id = request.query_params.get("snapshot_id")
+        if snapshot_id:
+            qs = qs.filter(snapshot_id=snapshot_id)
+
+        return Response(RecommendationCompletionSerializer(qs, many=True).data)
+
+    def post(self, request):
+        s = RecommendationCompletionUpsertSerializer(
+            data=request.data, context={"request": request}
+        )
+        s.is_valid(raise_exception=True)
+        data = s.validated_data
+
+        obj, created = RecommendationCompletion.objects.update_or_create(
+            user=request.user,
+            snapshot_id=data["snapshot_id"],
+            rule_id=data["rule_id"],
+            rule_version=data["rule_version"],
+            dimension=data["dimension"],
+            defaults={"status": data["status"]},
+        )
+
+        out = RecommendationCompletionSerializer(obj).data
+        return Response(
+            out, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        )

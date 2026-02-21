@@ -28,6 +28,8 @@ from .views import (
     MetaChoicesView,
     #
     ExposureHistoryView,
+    #
+    RecommendationCompletionView,
 )
 from .auth_views import GoogleAuthView
 from .auth.views_firebase import FirebaseAuthView
@@ -96,6 +98,11 @@ urlpatterns = [
     # Swagger/OpenAPI
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path(
+        "recommendation-completion/",
+        RecommendationCompletionView.as_view(),
+        name="recommendation-completion",
+    ),
 ]
 urlpatterns += [
     path("auth/google/", GoogleAuthView.as_view(), name="auth-google"),

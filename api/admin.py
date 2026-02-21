@@ -23,6 +23,7 @@ from .models import (
     AQRiskFactor,
     Exposure,
     GuidelineLimit,
+    RecommendationCompletion,
 )
 from django.contrib.auth import authenticate, login
 
@@ -250,3 +251,25 @@ class GuidelineLimitAdmin(admin.ModelAdmin):
     @admin.action(description="Mark selected limits as inactive")
     def deactivate_selected(self, request, queryset):
         queryset.update(is_active=False)
+
+
+@admin.register(RecommendationCompletion)
+class RecommendationCompletionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "snapshot_id",
+        "rule_id",
+        "rule_version",
+        "dimension",
+        "status",
+        "updated_at",
+        "created_at",
+    )
+    list_filter = ("dimension", "status", "created_at", "updated_at")
+    search_fields = ("user__email", "rule_id")
+    ordering = ("-updated_at",)
+    readonly_fields = ("created_at", "updated_at")
+
+    # Чтобы было проще разбирать конкретный snapshot
+    list_select_related = ("user", "snapshot")
