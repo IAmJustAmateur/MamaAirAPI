@@ -1,8 +1,6 @@
 from django.db import models
 
-# Create your models here.
-# recommendations/models.py
-from django.db import models
+from django.db.models import Q, UniqueConstraint
 
 
 class RecommendationRuleQuerySet(models.QuerySet):
@@ -81,7 +79,10 @@ class RecommendationRule(models.Model):
     condition = models.TextField(
         help_text="Python expression, returns True/False against eval context."
     )
-    message = models.TextField()
+    alert = models.TextField()
+    recommendation_diet = models.TextField(blank=True, default="")
+    recommendation_activity = models.TextField(blank=True, default="")
+    recommendation_behavior = models.TextField(blank=True, default="")
 
     # Метаданные
     severity = models.CharField(max_length=16, choices=SEVERITY_CHOICES, default="info")
@@ -116,9 +117,6 @@ class RecommendationRule(models.Model):
 
     def __str__(self):
         return f"{self.rule_id}.v{self.version} ({'on' if self.enabled else 'off'})"
-
-
-from django.db.models import Q, UniqueConstraint
 
 
 class MamaAirWeeklyMessage(models.Model):

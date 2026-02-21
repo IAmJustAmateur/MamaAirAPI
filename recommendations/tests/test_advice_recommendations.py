@@ -1,6 +1,6 @@
 # tests/test_advice_recommendations.py
 from unittest.mock import patch
-from datetime import datetime, timedelta, timezone as dt_tz
+
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth import get_user_model
@@ -13,7 +13,7 @@ from api.models import (
     BabySymptom,
     UserBabySymptoms,
 )
-from api.models import AirExposureLog
+
 from api.models import (
     HealthInsightSnapshot,
 )

@@ -49,7 +49,7 @@ class EvaluatorTests(TestCase):
             version=1,
             title="Bad",
             condition="open('/etc/passwd') or True",
-            message="...",
+            alert="...",
             severity="info",
             category="general",
             enabled=True,

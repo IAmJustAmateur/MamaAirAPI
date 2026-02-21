@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django import forms
 from django.utils.safestring import mark_safe
+
 from .models import RecommendationRule, MamaAirWeeklyMessage
+
 
 CHEATSHEET_HTML = """
 <details open>
@@ -43,6 +45,10 @@ class RecommendationRuleForm(forms.ModelForm):
             "priority": "Lower = more important. See the priority bands in the cheat sheet.",
             "cooldown_hours": "Minimum interval between repeated firings of this rule for a user.",
             "ttl_hours": "How long the card stays fresh/visible after snapshot generation.",
+            "alert": "Alert text (the main message shown to the user).",
+            "recommendation_diet": "Diet recommendations (plain text; bullets/markdown allowed).",
+            "recommendation_activity": "Activity recommendations (plain text; bullets/markdown allowed).",
+            "recommendation_behavior": "Behavior recommendations (plain text; bullets/markdown allowed).",
         }
 
 
@@ -57,13 +63,23 @@ class RecommendationRuleAdmin(admin.ModelAdmin):
         "severity",
         "category",
         "priority",
+        "has_diet",
+        "has_activity",
+        "has_behavior",
         "updated_at",
     )
     list_filter = ("enabled", "severity", "category")
-    search_fields = ("rule_id", "title", "condition", "message")
+    search_fields = (
+        "rule_id",
+        "title",
+        "condition",
+        "alert",
+        "recommendation_diet",
+        "recommendation_activity",
+        "recommendation_behavior",
+    )
     ordering = ("priority", "-updated_at")
 
-    # Show a cheat sheet at the top of the add/change form
     fieldsets = (
         ("Cheat sheet", {"fields": tuple(), "description": mark_safe(CHEATSHEET_HTML)}),
         (
@@ -80,17 +96,39 @@ class RecommendationRuleAdmin(admin.ModelAdmin):
             },
         ),
         ("Logic", {"fields": ("condition",)}),
-        ("Content", {"fields": ("title", "message")}),
+        ("Content", {"fields": ("title", "alert")}),
+        (
+            "Recommendations",
+            {
+                "fields": (
+                    "recommendation_diet",
+                    "recommendation_activity",
+                    "recommendation_behavior",
+                ),
+                "classes": ("collapse",),  # optional: makes the section collapsible
+            },
+        ),
         ("Delivery", {"fields": ("cooldown_hours", "ttl_hours")}),
     )
 
-    # Also show the cheat sheet on the changelist page
     change_list_template = "admin/recommendations/recommendationrule/change_list.html"
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
         extra_context["cheatsheet_html"] = mark_safe(CHEATSHEET_HTML)
         return super().changelist_view(request, extra_context=extra_context)
+
+    @admin.display(boolean=True, description="Diet")
+    def has_diet(self, obj):
+        return bool((obj.recommendation_diet or "").strip())
+
+    @admin.display(boolean=True, description="Activity")
+    def has_activity(self, obj):
+        return bool((obj.recommendation_activity or "").strip())
+
+    @admin.display(boolean=True, description="Behavior")
+    def has_behavior(self, obj):
+        return bool((obj.recommendation_behavior or "").strip())
 
 
 @admin.register(MamaAirWeeklyMessage)

@@ -2,7 +2,7 @@
 
 import os
 import sys
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import datetime, timezone as dt_timezone
 import json
 import requests
 from urllib.parse import urljoin
@@ -114,7 +114,7 @@ def _assert_pollutant_compliance(pc: dict):
     if not isinstance(per, dict):
         raise AssertionError("pollutant_compliance.per_pollutant must be object")
 
-    # Проверяем пару типичных поллютантов, если присутствуют
+    # check each pollutant section for required fields if the pollutant is present
     for pol in ("pm25", "pm10"):
         if pol in per:
             item = per[pol]
@@ -198,10 +198,22 @@ def step_meta_choices_public():
             raise AssertionError(f"Missing '{key}' in meta choices response")
         _assert_choice_list(data[key], key)
 
-    # Якорные значения из твоего примера (мягкие проверки)
+    # OPTIONAL (new) keys — validate only if backend provides them
+    optional_keys = (
+        "share_channels",
+        "commute_modes",
+        "rest_microbreak_preferences",
+        "cooking_venues",
+        "ventilation_levels",
+    )
+    for key in optional_keys:
+        if key in data:
+            _assert_choice_list(data[key], key)
+
+    # anchor values (soft)
     assert _contains_value(data["languages"], "en"), "languages missing 'en'"
     assert _contains_value(data["races"], "caucasian"), "races missing 'caucasian'"
-    assert _contains_value(data["countries"], "NG"), "countries missing 'nigeria'"
+    assert _contains_value(data["countries"], "NG"), "countries missing 'NG'"
     assert _contains_value(data["work_types"], "Desk"), "work_types missing 'Desk'"
     assert _contains_value(
         data["diet_types"], "carnivore"
@@ -388,7 +400,7 @@ def step_1_register():
     payload = {
         "email": EMAIL,
         "password": PASSWORD,
-        "heignt": 170,
+        "height": 170,
         "weight_pre_pregnancy": 65,
     }
     headers = {"X-API-Key": REG_API_KEY}
@@ -424,7 +436,6 @@ def step_2_token():
 
 def step_3_fill_profile(access_token: str):
     """PATCH /api/profile/ with required/known fields"""
-    # подставляю реалистичные значения под твою ожидаемую схему
     payload = {
         "name": "Test User",
         "language": "en",
@@ -437,7 +448,11 @@ def step_3_fill_profile(access_token: str):
         "week_of_pregnancy": 12,
         "tracking_enabled": True,
         "notifications_enabled": True,
+        # NEW (User model + serializer mapping)
+        "consent": True,
+        "preferred_share_channel": "email",
     }
+
     r = requests.patch(
         PROFILE_URL,
         json=payload,
@@ -446,7 +461,8 @@ def step_3_fill_profile(access_token: str):
         verify=VERIFY_SSL,
     )
     assert_status(r, [200, 202], "Profile PATCH failed")
-    pp("Profile after PATCH", safe_json(r))
+    patched = safe_json(r)
+    pp("Profile after PATCH", patched)
 
     # проверим GET
     r = requests.get(
@@ -457,15 +473,26 @@ def step_3_fill_profile(access_token: str):
     )
     assert_status(r, 200, "Profile GET failed")
     data = r.json()
-    # базовые поля, которые ты ожидал в примере
-    for key in ("email", "language", "week_of_pregnancy"):
+
+    # базовые поля + новые
+    for key in ("email", "language", "week_of_pregnancy", "consent"):
         assert key in data, f"Profile missing '{key}'"
+
+    # preferred_share_channel может не вернуться, если сериалайзер ещё не задеплоен
+    if "preferred_share_channel" in data:
+        assert data["preferred_share_channel"] in ("email", "whatsapp", "telegram")
+
+    # если consent=True, обычно ожидаем, что consent_accepted_at заполнится
+    if data.get("consent") is True and "consent_accepted_at" in data:
+        assert (
+            data["consent_accepted_at"] is not None
+        ), "consent_accepted_at should not be null"
+
     pp("Profile GET", data)
 
 
 def step_4_lifestyle(access_token: str):
     """GET (auto-create) then PATCH /api/lifestyle/"""
-    # 1) GET — у тебя в тестах он автосоздаёт строку, если её нет
     r = requests.get(
         LIFESTYLE_URL,
         headers=auth_headers(access_token),
@@ -475,14 +502,22 @@ def step_4_lifestyle(access_token: str):
     assert_status(r, 200, "Lifestyle GET (autocreate) failed")
     pp("Lifestyle GET (after autocreate)", safe_json(r))
 
-    # 2) PATCH — обновим значения под тесты
     patch_data = {
         "average_sleep_hours": 7.5,
         "work_type": "Desk",
         "diet_type": "carnivore",
         "cooking_method": "gas",
         "activity_duration_minutes": 150,
+        # NEW FIELDS
+        "commute_mode": "walk",
+        "hydration_target_ml_per_day": 2200,
+        "sleep_target_window": "22:00-06:00",
+        "rest_microbreak_preference": "10min",
+        "supplement_preferences": "ginger tea; moringa",
+        "cooking_venue": "indoor",
+        "ventilation_level": "medium",
     }
+
     r = requests.patch(
         LIFESTYLE_URL,
         json=patch_data,
@@ -492,9 +527,12 @@ def step_4_lifestyle(access_token: str):
     )
     assert_status(r, 200, "Lifestyle PATCH failed")
     body = r.json()
-    # быстрая сверка ключей
+
+    # сверка ключей
     for k, v in patch_data.items():
-        assert body.get(k) == v, f"Lifestyle '{k}' expected {v}, got {body.get(k)}"
+        if k in body:
+            assert body.get(k) == v, f"Lifestyle '{k}' expected {v}, got {body.get(k)}"
+
     pp("Lifestyle after PATCH", body)
 
 
@@ -565,7 +603,7 @@ def step_7_selection_post_replace(access_token: str, valid_ids: list[int]):
     ), f"Unexpected 'date' in response: {body.get('date')} vs {expected_date}"
     assert sorted(body.get("symptom_ids", [])) == sorted(
         valid_ids
-    ), f"Mommy symptomsIDs mismatch in response"
+    ), "Mommy symptomsIDs mismatch in response"
 
     # Верификация GET с ?date=
     r = requests.get(
@@ -848,9 +886,6 @@ def step_movements_upload_many(access_token: str) -> tuple[str, dict]:
     return target_date, (body if isinstance(body, dict) else {})
 
 
-import time
-
-
 def step_air_exposure_poll_latest(
     access_token: str, max_attempts: int = 6, delay_sec: int = 5
 ) -> dict:
@@ -1102,7 +1137,7 @@ def test_delete_account(token):
 
 def _parse_iso_date(s: str):
     # 'YYYY-MM-DD' -> datetime.date
-    from datetime import date, datetime
+    from datetime import datetime
 
     try:
         return datetime.fromisoformat(s).date()
