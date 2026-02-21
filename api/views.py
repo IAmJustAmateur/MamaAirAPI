@@ -1115,6 +1115,21 @@ class ExposureHistoryView(APIView):
         return Response(payload)
 
 
+@extend_schema(
+    summary="List recommendation completions",
+    description="Returns recommendation completion records for the authenticated user. "
+    "Optional filtering by snapshot_id.",
+    parameters=[
+        OpenApiParameter(
+            name="snapshot_id",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description="Filter completions by snapshot ID",
+            required=False,
+        ),
+    ],
+    responses=RecommendationCompletionSerializer(many=True),
+)
 class RecommendationCompletionView(APIView):
     permission_classes = [IsAuthenticated]
 
