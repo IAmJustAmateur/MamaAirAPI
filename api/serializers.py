@@ -220,18 +220,18 @@ class SimpleExposureSerializer(serializers.ModelSerializer):
         fields = ("id", "timestamp", "exposure_level", "risks")
 
 
-class RecommendationSerializer(serializers.Serializer):
-    """
-    Отбираем только нужные поля из recommendation-объектов.
-    Остальные ключи игнорируются без ошибок.
-    """
+# class RecommendationSerializer(serializers.Serializer):
+#     """
+#     Отбираем только нужные поля из recommendation-объектов.
+#     Остальные ключи игнорируются без ошибок.
+#     """
 
-    id = serializers.CharField()
-    severity = serializers.CharField()
-    title = serializers.CharField()
-    message = serializers.CharField()
-    ttl_hours = serializers.IntegerField()
-    priority = serializers.IntegerField()
+#     id = serializers.CharField()
+#     severity = serializers.CharField()
+#     title = serializers.CharField()
+#     message = serializers.CharField()
+#     ttl_hours = serializers.IntegerField()
+#     priority = serializers.IntegerField()
 
 
 class RiskDeltaSerializer(serializers.Serializer):
@@ -284,6 +284,48 @@ class PollutantComplianceSerializer(serializers.Serializer):
     per_pollutant = serializers.DictField(child=PollutantComplianceItemSerializer())
 
 
+class RecommendationSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    rule_id = serializers.CharField(required=False, allow_blank=True)
+    version = serializers.IntegerField(required=False)
+
+    severity = serializers.CharField(required=False, allow_blank=True)
+    category = serializers.CharField(required=False, allow_blank=True)
+    priority = serializers.IntegerField(required=False)
+
+    title = serializers.CharField(required=False, allow_blank=True)
+
+    alert = serializers.CharField(required=False, allow_blank=True)
+
+    recommendation_diet = serializers.CharField(required=False, allow_blank=True)
+    recommendation_activity = serializers.CharField(required=False, allow_blank=True)
+    recommendation_behavior = serializers.CharField(required=False, allow_blank=True)
+
+    ttl_hours = serializers.IntegerField(required=False)
+
+    # IMPORTANT: keep as string because snapshot stores JSON
+    expires_at = serializers.CharField(required=False, allow_blank=True)
+
+    sources = serializers.ListField(child=serializers.CharField(), required=False)
+    engine_version = serializers.CharField(required=False, allow_blank=True)
+
+    # Backward compatibility
+    message = serializers.CharField(required=False, allow_blank=True)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        # old -> new
+        if not data.get("alert") and data.get("message"):
+            data["alert"] = data["message"]
+
+        # new -> old (temporary, for mobile)
+        if not data.get("message") and data.get("alert"):
+            data["message"] = data["alert"]
+
+        return data
+
+
 class SummaryResponseSerializer(serializers.Serializer):
     """
     Гибкий ответ для /summary:
@@ -297,13 +339,17 @@ class SummaryResponseSerializer(serializers.Serializer):
     aq_weather_uv = AirExposureLogSerializer()
     mom_exposure = SimpleExposureSerializer(allow_null=True)
     baby_exposure = SimpleExposureSerializer(allow_null=True)
-    risks_delta = serializers.FloatField(allow_null=True)
-    recommendations = serializers.SerializerMethodField()
+
+    recommendations = RecommendationSerializer(many=True)
+
     today_journey = TodayJourneySerializer()
     risks_delta = RiskDeltaSerializer()
     week_info = serializers.JSONField()
     exposure_history = ExposureHistoryResponseSerializer()
     pollutant_compliance = PollutantComplianceSerializer()
+
+    snapshot_id = serializers.IntegerField()
+    snapshot_created_at = serializers.CharField()
 
     def get_recommendations(self, obj):
         """

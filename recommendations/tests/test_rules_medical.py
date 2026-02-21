@@ -5,12 +5,11 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 
 from recommendations.evaluator import evaluate_recommendations
-from recommendations.models import RecommendationRule
+
 from api.models import (
     MommySymptom,
     BabySymptom,
     UserMommySymptoms,
-    UserBabySymptoms,
     UserLifeStyle,
     Exposure,
 )

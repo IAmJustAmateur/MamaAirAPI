@@ -10,8 +10,6 @@ from django.contrib.auth import get_user_model
 
 from api.models import Exposure, AirExposureLog
 
-from api.models import GuidelineLimit
-
 User = get_user_model()
 
 
@@ -77,17 +75,27 @@ class SummaryViewTests(APITestCase):
                 "id": "AQ_RULE_01.v2",
                 "severity": "medium",
                 "title": "Сократить пребывание на улице",
-                "message": "Сегодня концентрация PM2.5 повышена.",
+                "alert": "Сегодня концентрация PM2.5 повышена.",
+                "recommendation_diet": "drink more water and eat antioxidant-rich foods.",
+                "recommendation_activity": "Consider indoor activities or outdoor activities in low-traffic areas.",
+                "recommendation_behavior": "Use air purifiers at home if available.",
                 "ttl_hours": 6,
                 "priority": 50,
+                "snapshot_id": 123,
+                "snapshot_created_at": timezone.now().isoformat(),
             },
             {
                 "id": "UV_RULE_02.v1",
                 "severity": "high",
-                "title": "Солнцезащита",
-                "message": "УФ-индекс высокий, используйте крем SPF 30+.",
+                "title": "UV index is high",
+                "alert": "The UV index is at a high level today.",
+                "recommendation_diet": "Include foods rich in antioxidants, such as berries and leafy greens.",
+                "recommendation_activity": "Limit outdoor activities during peak sunlight hours (10 AM - 4 PM).",
+                "recommendation_behavior": "Wear protective clothing and use sunscreen with high SPF when outdoors.",
                 "ttl_hours": 8,
                 "priority": 70,
+                "snapshot_id": 123,
+                "snapshot_created_at": timezone.now().isoformat(),
             },
         ]
         return snapshot
@@ -163,9 +171,20 @@ class SummaryViewTests(APITestCase):
         # рекомендации — список нужной формы
         recs = resp.data["recommendations"]
         assert isinstance(recs, list) and len(recs) == 2
-        assert set(
-            ["id", "severity", "title", "message", "ttl_hours", "priority"]
-        ).issubset(recs[0].keys())
+        required_keys = {
+            "id",
+            "severity",
+            "title",
+            "alert",
+            "recommendation_diet",
+            "recommendation_activity",
+            "recommendation_behavior",
+            "ttl_hours",
+            "priority",
+            "snapshot_id",
+            "snapshot_created_at",
+        }
+        assert required_keys.issubset(recs[0].keys())
 
         # today_journey — структура
         j = resp.data["today_journey"]

@@ -3,7 +3,8 @@ import datetime as dt
 import logging
 
 from zoneinfo import ZoneInfo
-from io import TextIOWrapper
+
+# from io import TextIOWrapper
 from rest_framework.parsers import MultiPartParser
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -12,18 +13,19 @@ from rest_framework.exceptions import ValidationError
 from drf_spectacular.types import OpenApiTypes
 
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.token_blacklist.models import (
-    BlacklistedToken,
-    OutstandingToken,
-)
+
+# from rest_framework_simplejwt.token_blacklist.models import (
+#     BlacklistedToken,
+#     OutstandingToken,
+# )
 from api.services.guidelines import compute_pollutant_compliance
 
-from django.utils.translation import gettext as _
-from django.contrib.auth import get_user_model
+# from django.utils.translation import gettext as _
+
 
 from django.contrib.auth import authenticate, login
 
-from django.shortcuts import render, redirect
+from django.shortcuts import render
 from django.db import transaction
 from django.conf import settings
 
@@ -32,7 +34,6 @@ from drf_spectacular.utils import (
     OpenApiResponse,
     OpenApiExample,
     OpenApiParameter,
-    inline_serializer,
 )
 
 from rest_framework import generics, permissions, serializers
@@ -40,8 +41,8 @@ from rest_framework import generics, permissions, serializers
 from rest_framework.response import Response
 from django.utils import timezone
 from .models import (
-    Movement,
-    HealthInsightSnapshot,
+    # Movement,
+    # HealthInsightSnapshot,
     AirExposureLog,
     WeeklyExposure,
     LANGUAGE_CHOICES,
@@ -855,6 +856,7 @@ class SummaryView(APIView):
 
     def get(self, request):
         logger.info("SummaryView GET, user=%s", request.user)
+
         latest_log = (
             AirExposureLog.objects.filter(user=request.user)
             .order_by("-timestamp")
@@ -863,10 +865,10 @@ class SummaryView(APIView):
         if not latest_log:
             return Response({"detail": "No air exposure data found."}, status=204)
 
-        # AQ + Weather + UV (возвращает инстанс AirExposureLog)
+        # AQ + Weather + UV (returns AirExposureLog instance)
         aq_weater_uv = update_air_exposure_log_with_weather(latest_log)
 
-        # Рекомендации
+        # Recommendations snapshot
         from recommendations.evaluator import get_or_create_fresh_snapshot
 
         snapshot = get_or_create_fresh_snapshot(
@@ -874,7 +876,7 @@ class SummaryView(APIView):
         )
         recommendations = snapshot.recommendations
 
-        # Последняя экспозиция и дельта (мама/малыш — пока одинаково)
+        # Latest exposure and delta (mom/baby are the same for now)
         exposures = list(
             Exposure.objects.filter(user=request.user).order_by("-timestamp")[:2]
         )
@@ -885,9 +887,9 @@ class SummaryView(APIView):
             else None
         )
 
-        # История экспозиции за 7 дней (или меньше, если данных меньше)
+        # Exposure history for last 7 calendar days
         end_date = timezone.localdate()
-        start_date = end_date - dt.timedelta(days=7 - 1)  # последние 7 календарных дней
+        start_date = end_date - dt.timedelta(days=7 - 1)
         qs_hist = Exposure.objects.filter(
             user=request.user,
             timestamp__gte=start_date,
@@ -900,12 +902,16 @@ class SummaryView(APIView):
             "days_requested": 7,
             "items": qs_hist,
         }
+
         pollutant_compliance = compute_pollutant_compliance(
             request.user, latest_log, exposure
         )
 
         user: User = request.user
         data = {
+            # NEW: snapshot meta for mobile app
+            "snapshot_id": snapshot.id,
+            "snapshot_created_at": snapshot.created_at.isoformat(),
             "aq_weather_uv": aq_weater_uv,
             "risks_delta": {"mom": risk_delta, "baby": risk_delta},
             "mom_exposure": exposure,
