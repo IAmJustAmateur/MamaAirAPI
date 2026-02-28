@@ -22,6 +22,14 @@ from api.services.guidelines import compute_pollutant_compliance
 
 from rest_framework.response import Response
 
+from drf_spectacular.utils import (
+    extend_schema,
+    OpenApiParameter,
+    OpenApiExample,
+    inline_serializer,
+)
+from rest_framework import serializers, generics, permissions
+
 
 from .serializers import (
     RecommendationCompletionUpsertSerializer,
@@ -38,14 +46,6 @@ from django.shortcuts import render
 from django.db import transaction
 from django.conf import settings
 
-from drf_spectacular.utils import (
-    extend_schema,
-    OpenApiResponse,
-    OpenApiExample,
-    OpenApiParameter,
-)
-
-from rest_framework import generics, permissions, serializers
 
 from django.utils import timezone
 from .models import (
@@ -1181,6 +1181,59 @@ class RecommendationCompletionView(APIView):
 class WellbeingCatalogView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        tags=["Wellbeing"],
+        summary="Wellbeing catalog (water goal + mood chips + feeling chips)",
+        responses={
+            200: inline_serializer(
+                name="WellbeingCatalogResponse",
+                fields={
+                    "water_goal": inline_serializer(
+                        name="WaterGoal",
+                        fields={
+                            "value": serializers.FloatField(allow_null=True),
+                            "unit": serializers.CharField(),
+                        },
+                    ),
+                    "moods": WellbeingItemSerializer(many=True),
+                    "feelings": WellbeingItemSerializer(many=True),
+                },
+            )
+        },
+        examples=[
+            OpenApiExample(
+                "Catalog example",
+                value={
+                    "water_goal": {"value": 72, "unit": "fl_oz"},
+                    "moods": [
+                        {
+                            "id": 1,
+                            "kind": "mood",
+                            "code": "feel_sick",
+                            "title": "Feel sick",
+                            "sort_order": 10,
+                            "number_value": None,
+                            "unit": "",
+                            "is_active": True,
+                        },
+                    ],
+                    "feelings": [
+                        {
+                            "id": 10,
+                            "kind": "feeling",
+                            "code": "headache",
+                            "title": "Headache",
+                            "sort_order": 10,
+                            "number_value": None,
+                            "unit": "",
+                            "is_active": True,
+                        },
+                    ],
+                },
+                response_only=True,
+            )
+        ],
+    )
     def get(self, request):
         moods = Wellbeing.objects.filter(kind="mood", is_active=True)
         feelings = Wellbeing.objects.filter(kind="feeling", is_active=True)
@@ -1204,6 +1257,48 @@ class WellbeingCatalogView(APIView):
 class UserWellbeingLogView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        tags=["Wellbeing"],
+        summary="Get wellbeing log for date",
+        parameters=[
+            OpenApiParameter(
+                name="date",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Date in YYYY-MM-DD",
+            )
+        ],
+        responses={
+            200: inline_serializer(
+                name="UserWellbeingLogResponse",
+                fields={
+                    "date": serializers.DateField(),
+                    "water_amount": serializers.FloatField(),
+                    "water_unit": serializers.CharField(),
+                    "moods": WellbeingItemSerializer(many=True),
+                    "feelings": WellbeingItemSerializer(many=True),
+                },
+            ),
+            400: inline_serializer(
+                name="UserWellbeingLogBadRequest",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Empty log example",
+                value={
+                    "date": "2026-02-28",
+                    "water_amount": 0,
+                    "water_unit": "fl_oz",
+                    "moods": [],
+                    "feelings": [],
+                },
+                response_only=True,
+            )
+        ],
+    )
     def get(self, request):
         date = request.query_params.get("date")
         if not date:
@@ -1225,6 +1320,53 @@ class UserWellbeingLogView(APIView):
 
         return Response(UserWellbeingLogSerializer(log).data)
 
+    @extend_schema(
+        tags=["Wellbeing"],
+        summary="Upsert wellbeing log for date",
+        request=inline_serializer(
+            name="UserWellbeingLogUpsertRequest",
+            fields={
+                "date": serializers.DateField(),
+                "water_amount": serializers.FloatField(required=False, default=0),
+                "water_unit": serializers.CharField(required=False, default="fl_oz"),
+                "mood_ids": serializers.ListField(
+                    child=serializers.IntegerField(), required=False
+                ),
+                "feeling_ids": serializers.ListField(
+                    child=serializers.IntegerField(), required=False
+                ),
+            },
+        ),
+        responses={
+            201: inline_serializer(
+                name="UserWellbeingLogUpsertResponse",
+                fields={
+                    "date": serializers.DateField(),
+                    "water_amount": serializers.FloatField(),
+                    "water_unit": serializers.CharField(),
+                    "moods": WellbeingItemSerializer(many=True),
+                    "feelings": WellbeingItemSerializer(many=True),
+                },
+            ),
+            400: inline_serializer(
+                name="UserWellbeingLogUpsertBadRequest",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Upsert request example",
+                value={
+                    "date": "2026-02-28",
+                    "water_amount": 32,
+                    "water_unit": "fl_oz",
+                    "mood_ids": [1, 2],
+                    "feeling_ids": [10],
+                },
+                request_only=True,
+            )
+        ],
+    )
     def post(self, request):
         s = UserWellbeingLogUpsertSerializer(
             data=request.data, context={"request": request}
