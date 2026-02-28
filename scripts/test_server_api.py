@@ -350,6 +350,7 @@ def step_summary_get(access_token: str):
         "recommendations",
         "today_journey",
         "week_info",
+        "daily_exposure_level",
         "exposure_history",
         "pollutant_compliance",
     ):
@@ -408,6 +409,12 @@ def step_summary_get(access_token: str):
     # week_info — существует; тип свободный (str|dict), просто не None
     if body["week_info"] is None:
         raise AssertionError("week_info must not be null")
+
+    # daily_exposure_level — строка или null
+    if body["daily_exposure_level"] is not None and not isinstance(
+        body["daily_exposure_level"], str
+    ):
+        raise AssertionError("daily_exposure_level must be string or null")
 
     # exposure_history — структура
     hist = body["exposure_history"]
