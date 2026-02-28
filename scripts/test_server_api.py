@@ -47,6 +47,9 @@ DEBUG_EXPOSURE_UPSERT_URL = urljoin(BASE_URL, "api/debug/air-exposure/upsert/")
 SUMMARY_URL = urljoin(BASE_URL, "api/summary/")
 RECOMMENDATION_COMPLETION_URL = urljoin(BASE_URL, "api/recommendation-completion/")
 
+WELLBEING_CATALOG_URL = urljoin(BASE_URL, "api/wellbeing/")
+WELLBEING_LOG_URL = urljoin(BASE_URL, "api/wellbeing/log/")
+
 
 TIMEOUT = 200
 VERIFY_SSL = True  # http у тебя сейчас — флаг игнорируется
@@ -93,6 +96,76 @@ def safe_json(resp):
         return resp.json()
     except Exception:
         return {"raw": resp.text[:500]}
+
+
+def _assert_wellbeing_catalog_schema(data: dict):
+    if not isinstance(data, dict):
+        raise AssertionError(f"wellbeing catalog must be object, got {type(data)}")
+
+    for k in ("water_goal", "moods", "feelings"):
+        if k not in data:
+            raise AssertionError(f"wellbeing catalog missing '{k}'")
+
+    wg = data["water_goal"]
+    if not isinstance(wg, dict):
+        raise AssertionError("water_goal must be object")
+    if "value" not in wg or "unit" not in wg:
+        raise AssertionError("water_goal must have 'value' and 'unit'")
+
+    # value может быть None (если ещё не настроено)
+    if wg["value"] is not None and not isinstance(wg["value"], (int, float)):
+        raise AssertionError("water_goal.value must be number or null")
+    if not isinstance(wg["unit"], str) or not wg["unit"]:
+        raise AssertionError("water_goal.unit must be non-empty string")
+
+    for list_name in ("moods", "feelings"):
+        arr = data[list_name]
+        if not isinstance(arr, list):
+            raise AssertionError(f"{list_name} must be list, got {type(arr)}")
+        # допускаем пустые списки, но элементы должны быть валидные
+        for it in arr[:20]:
+            if not isinstance(it, dict):
+                raise AssertionError(f"{list_name} item must be dict")
+            for k in ("id", "kind", "title", "is_active"):
+                if k not in it:
+                    raise AssertionError(f"{list_name} item missing '{k}': {it}")
+            if not isinstance(it["id"], int):
+                raise AssertionError(f"{list_name}.id must be int")
+            if not isinstance(it["title"], str):
+                raise AssertionError(f"{list_name}.title must be str")
+            if it["kind"] not in ("mood", "feeling"):
+                raise AssertionError(f"{list_name}.kind invalid: {it['kind']}")
+
+
+def _pick_ids(items: list[dict], max_n: int = 2) -> list[int]:
+    ids = []
+    for it in items:
+        if (
+            isinstance(it, dict)
+            and isinstance(it.get("id"), int)
+            and it.get("is_active") is True
+        ):
+            ids.append(it["id"])
+        if len(ids) >= max_n:
+            break
+    return ids
+
+
+def _assert_wellbeing_log_schema(body: dict, expected_date: str):
+    if not isinstance(body, dict):
+        raise AssertionError(f"log must be object, got {type(body)}")
+    for k in ("date", "water_amount", "water_unit", "moods", "feelings"):
+        if k not in body:
+            raise AssertionError(f"log missing '{k}'")
+
+    if body["date"] != expected_date:
+        raise AssertionError(f"log.date mismatch: {body['date']} vs {expected_date}")
+    if not isinstance(body["water_amount"], (int, float)):
+        raise AssertionError("water_amount must be number")
+    if not isinstance(body["water_unit"], str) or not body["water_unit"]:
+        raise AssertionError("water_unit must be non-empty string")
+    if not isinstance(body["moods"], list) or not isinstance(body["feelings"], list):
+        raise AssertionError("moods/feelings must be lists")
 
 
 def log(msg):
@@ -1119,6 +1192,91 @@ def step_recommendation_completion_list(access_token: str, snapshot_id: int):
     return body
 
 
+def step_wellbeing_catalog(access_token: str) -> dict:
+    r = requests.get(
+        WELLBEING_CATALOG_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Wellbeing catalog GET failed")
+    data = safe_json(r)
+    pp(
+        "Wellbeing catalog",
+        {
+            "water_goal": data.get("water_goal"),
+            "moods_count": len(data.get("moods", []) or []),
+            "feelings_count": len(data.get("feelings", []) or []),
+            "moods_head": (data.get("moods", []) or [])[:3],
+            "feelings_head": (data.get("feelings", []) or [])[:3],
+        },
+    )
+    _assert_wellbeing_catalog_schema(data)
+    return data
+
+
+def step_wellbeing_log_get(access_token: str, target_date: str) -> dict:
+    r = requests.get(
+        WELLBEING_LOG_URL,
+        params={"date": target_date},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Wellbeing log GET failed")
+    body = safe_json(r)
+    pp("Wellbeing log GET", body)
+    _assert_wellbeing_log_schema(body, target_date)
+    return body
+
+
+def step_wellbeing_log_post_upsert(
+    access_token: str,
+    target_date: str,
+    water_amount: float,
+    water_unit: str,
+    mood_ids: list[int],
+    feeling_ids: list[int],
+) -> dict:
+    payload = {
+        "date": target_date,
+        "water_amount": water_amount,
+        "water_unit": water_unit,
+        "mood_ids": mood_ids,
+        "feeling_ids": feeling_ids,
+    }
+    r = requests.post(
+        WELLBEING_LOG_URL,
+        json=payload,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, [201, 200], "Wellbeing log POST (upsert) failed")
+    body = safe_json(r)
+    pp("Wellbeing log POST (upsert)", body)
+
+    _assert_wellbeing_log_schema(body, target_date)
+
+    # мягкая проверка, что ids применились (если сервер возвращает объекты)
+    got_mood_ids = sorted(
+        [x.get("id") for x in body.get("moods", []) if isinstance(x, dict)]
+    )
+    got_feel_ids = sorted(
+        [x.get("id") for x in body.get("feelings", []) if isinstance(x, dict)]
+    )
+    if mood_ids:
+        assert (
+            sorted(mood_ids) == got_mood_ids
+        ), f"mood ids mismatch: {got_mood_ids} vs {mood_ids}"
+    if feeling_ids:
+        assert (
+            sorted(feeling_ids) == got_feel_ids
+        ), f"feeling ids mismatch: {got_feel_ids} vs {feeling_ids}"
+
+    return body
+
+
 # ---------- main --------------------------------------------------------------
 
 
@@ -1420,6 +1578,31 @@ def main():
     token = step_2_token()
     step_3_fill_profile(token)
     step_4_lifestyle(token)
+
+    # --- Wellbeing (Water + Mood + Feeling) ---
+    catalog = step_wellbeing_catalog(token)
+    moods_ids = _pick_ids(catalog.get("moods", []), max_n=2)
+    feelings_ids = _pick_ids(catalog.get("feelings", []), max_n=2)
+
+    today = datetime.now().date().isoformat()
+
+    # 1) GET empty/default
+    _ = step_wellbeing_log_get(token, today)
+
+    # 2) POST upsert
+    water_goal = catalog.get("water_goal") or {}
+    unit = water_goal.get("unit") or "fl_oz"
+    _ = step_wellbeing_log_post_upsert(
+        token,
+        target_date=today,
+        water_amount=32,
+        water_unit=unit,
+        mood_ids=moods_ids,
+        feeling_ids=feelings_ids,
+    )
+
+    # 3) Verify by GET
+    _ = step_wellbeing_log_get(token, today)
     checklist = step_5_check_mommy_checklist(token)
 
     # 6) GET selection for today
