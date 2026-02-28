@@ -18,7 +18,7 @@ load_dotenv()
 BASE_URL = "https://api.mamaair.app/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
-EMAIL = "testuser115@example.com"
+EMAIL = "testuser001@example.com"
 PASSWORD = "testpass123"
 
 REGISTER_URL = urljoin(BASE_URL, "api/auth/register/")

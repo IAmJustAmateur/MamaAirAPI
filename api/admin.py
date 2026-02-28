@@ -24,6 +24,8 @@ from .models import (
     Exposure,
     GuidelineLimit,
     RecommendationCompletion,
+    WeeklyExposure,
+    DailyExposure,
 )
 from django.contrib.auth import authenticate, login
 
@@ -160,6 +162,24 @@ class AirExposureLogAdmin(admin.ModelAdmin):
 
 
 admin.site.register(AirExposureLog, AirExposureLogAdmin)
+
+
+class WeeklyExposureAdmin(admin.ModelAdmin):
+    list_display = ("user", "pregnancy_week", "exposure_level", "recorded_at")
+    list_filter = ("user", "pregnancy_week", "recorded_at", "exposure_level")
+    search_fields = ("user__email",)
+
+
+admin.site.register(WeeklyExposure, WeeklyExposureAdmin)
+
+
+class DailyExposureAdmin(admin.ModelAdmin):
+    list_display = ("user", "date", "exposure_level", "recorded_at")
+    list_filter = ("user", "date", "recorded_at", "exposure_level")
+    search_fields = ("user__email",)
+
+
+admin.site.register(DailyExposure, DailyExposureAdmin)
 
 
 class HealthInsightSnapshotAdmin(admin.ModelAdmin):

@@ -880,6 +880,24 @@ class WeeklyExposure(models.Model):
         return f"{self.user.email} - Week {self.pregnancy_week} - {self.exposure_level}"
 
 
+class DailyExposure(models.Model):
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="daily_exposures"
+    )
+    date = models.DateField()
+    exposure_level = models.CharField(max_length=32, choices=EXPOSURE_LEVEL_CHOICES)
+
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "date")
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.date} - {self.exposure_level}"
+
+
 class AbstractRiskFactor(models.Model):
     risk = models.ForeignKey(RiskDefinition, on_delete=models.CASCADE)
     multiplier = models.FloatField()
