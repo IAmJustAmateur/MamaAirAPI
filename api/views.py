@@ -26,6 +26,7 @@ from drf_spectacular.utils import (
     extend_schema,
     OpenApiParameter,
     OpenApiExample,
+    OpenApiResponse,
     inline_serializer,
 )
 from rest_framework import serializers, generics, permissions
