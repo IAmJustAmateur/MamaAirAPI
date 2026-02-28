@@ -12,6 +12,8 @@ from .models import (
     AdviceTemplate,
     Exposure,
     RecommendationCompletion,
+    Wellbeing,
+    UserWellbeingLog,
 )
 
 
@@ -433,3 +435,76 @@ class RecommendationCompletionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class WellbeingItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Wellbeing
+        fields = [
+            "id",
+            "kind",
+            "code",
+            "title",
+            "sort_order",
+            "number_value",
+            "unit",
+            "is_active",
+        ]
+
+
+class UserWellbeingLogSerializer(serializers.ModelSerializer):
+    moods = WellbeingItemSerializer(many=True)
+    feelings = WellbeingItemSerializer(many=True)
+
+    class Meta:
+        model = UserWellbeingLog
+        fields = ["date", "water_amount", "water_unit", "moods", "feelings"]
+
+
+class UserWellbeingLogUpsertSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    water_amount = serializers.FloatField(required=False, default=0)
+    water_unit = serializers.CharField(required=False, default="fl_oz")
+    mood_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False, default=list
+    )
+    feeling_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False, default=list
+    )
+
+    def validate(self, attrs):
+        mood_ids = set(attrs.get("mood_ids", []))
+        feeling_ids = set(attrs.get("feeling_ids", []))
+
+        if mood_ids:
+            ok = Wellbeing.objects.filter(
+                id__in=mood_ids, kind="mood", is_active=True
+            ).count()
+            if ok != len(mood_ids):
+                raise serializers.ValidationError(
+                    "Some mood_ids not found/inactive or wrong kind."
+                )
+
+        if feeling_ids:
+            ok = Wellbeing.objects.filter(
+                id__in=feeling_ids, kind="feeling", is_active=True
+            ).count()
+            if ok != len(feeling_ids):
+                raise serializers.ValidationError(
+                    "Some feeling_ids not found/inactive or wrong kind."
+                )
+
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        date = self.validated_data["date"]
+
+        log, _ = UserWellbeingLog.objects.get_or_create(user=user, date=date)
+        log.water_amount = self.validated_data.get("water_amount", log.water_amount)
+        log.water_unit = self.validated_data.get("water_unit", log.water_unit)
+        log.save()
+
+        log.moods.set(self.validated_data.get("mood_ids", []))
+        log.feelings.set(self.validated_data.get("feeling_ids", []))
+        return log

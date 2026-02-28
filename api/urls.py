@@ -30,6 +30,8 @@ from .views import (
     ExposureHistoryView,
     #
     RecommendationCompletionView,
+    WellbeingCatalogView,
+    UserWellbeingLogView,
 )
 from .auth_views import GoogleAuthView
 from .auth.views_firebase import FirebaseAuthView
@@ -103,6 +105,8 @@ urlpatterns = [
         RecommendationCompletionView.as_view(),
         name="recommendation-completion",
     ),
+    path("wellbeing/", WellbeingCatalogView.as_view(), name="wellbeing-catalog"),
+    path("wellbeing/log/", UserWellbeingLogView.as_view(), name="wellbeing-log"),
 ]
 urlpatterns += [
     path("auth/google/", GoogleAuthView.as_view(), name="auth-google"),

@@ -26,6 +26,8 @@ from .models import (
     RecommendationCompletion,
     WeeklyExposure,
     DailyExposure,
+    Wellbeing,
+    UserWellbeingLog,
 )
 from django.contrib.auth import authenticate, login
 
@@ -293,3 +295,41 @@ class RecommendationCompletionAdmin(admin.ModelAdmin):
 
     # Чтобы было проще разбирать конкретный snapshot
     list_select_related = ("user", "snapshot")
+
+
+@admin.register(Wellbeing)
+class WellbeingAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "kind",
+        "title",
+        "code",
+        "number_value",
+        "unit",
+        "sort_order",
+        "is_active",
+    )
+    list_filter = ("kind", "is_active", "unit")
+    search_fields = ("title", "code")
+    ordering = ("kind", "sort_order", "title")
+    list_editable = ("sort_order", "is_active")
+    fieldsets = (
+        ("Common", {"fields": ("kind", "is_active", "sort_order")}),
+        ("Mood/Feeling fields", {"fields": ("title", "code")}),
+        ("Water goal fields", {"fields": ("number_value", "unit")}),
+    )
+
+    def get_readonly_fields(self, request, obj=None):
+        # Optional: nothing readonly
+        return ()
+
+
+@admin.register(UserWellbeingLog)
+class UserWellbeingLogAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "date", "water_amount", "water_unit")
+    list_filter = ("water_unit", "date")
+    search_fields = ("user__email", "user__name", "user__username")
+    date_hierarchy = "date"
+    ordering = ("-date",)
+    raw_id_fields = ("user",)
+    filter_horizontal = ("moods", "feelings")

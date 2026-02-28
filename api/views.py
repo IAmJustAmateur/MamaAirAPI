@@ -61,6 +61,8 @@ from .models import (
     Exposure,
     DailyExposure,
     RecommendationCompletion,
+    Wellbeing,
+    UserWellbeingLog,
 )
 from .choices_emoji import (
     map_choices_with_emoji,
@@ -84,6 +86,9 @@ from .serializers import (
     ChecklistItemSerializer,
     ExposureHistoryResponseSerializer,
     ExposureHistoryItemSerializer,
+    WellbeingItemSerializer,
+    UserWellbeingLogSerializer,
+    UserWellbeingLogUpsertSerializer,
 )
 
 from .services.services import (
@@ -1171,3 +1176,59 @@ class RecommendationCompletionView(APIView):
         return Response(
             out, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
         )
+
+
+class WellbeingCatalogView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        moods = Wellbeing.objects.filter(kind="mood", is_active=True)
+        feelings = Wellbeing.objects.filter(kind="feeling", is_active=True)
+        water = (
+            Wellbeing.objects.filter(kind="water_goal", is_active=True)
+            .order_by("id")
+            .first()
+        )
+
+        data = {
+            "water_goal": {
+                "value": water.number_value if water else None,
+                "unit": water.unit if water else "fl_oz",
+            },
+            "moods": WellbeingItemSerializer(moods, many=True).data,
+            "feelings": WellbeingItemSerializer(feelings, many=True).data,
+        }
+        return Response(data)
+
+
+class UserWellbeingLogView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        date = request.query_params.get("date")
+        if not date:
+            return Response(
+                {"detail": "date query param is required (YYYY-MM-DD)"}, status=400
+            )
+
+        log = UserWellbeingLog.objects.filter(user=request.user, date=date).first()
+        if not log:
+            return Response(
+                {
+                    "date": date,
+                    "water_amount": 0,
+                    "water_unit": "fl_oz",
+                    "moods": [],
+                    "feelings": [],
+                }
+            )
+
+        return Response(UserWellbeingLogSerializer(log).data)
+
+    def post(self, request):
+        s = UserWellbeingLogUpsertSerializer(
+            data=request.data, context={"request": request}
+        )
+        s.is_valid(raise_exception=True)
+        log = s.save()
+        return Response(UserWellbeingLogSerializer(log).data, status=201)

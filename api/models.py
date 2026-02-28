@@ -22,6 +22,7 @@ from api.services.aq_inputs import get_air_quality_inputs_for_risks_from_logs
 from api.services.services import round_coord, fetch_air_quality_data_interval
 from api.services.aggregation import agg_max_plus_logistic_tail
 
+from django.conf import settings
 
 logger = getLogger(__name__)
 
@@ -1112,3 +1113,60 @@ class RecommendationCompletion(models.Model):
 
     def __str__(self):
         return f"{self.user_id} {self.rule_id}.v{self.rule_version} {self.dimension}={self.status}"
+
+
+class Wellbeing(models.Model):
+    KIND_CHOICES = (
+        ("mood", "Mood (chips)"),
+        ("feeling", "Feeling (chips)"),
+        ("water_goal", "Water goal/setting"),
+    )
+
+    kind = models.CharField(max_length=32, choices=KIND_CHOICES)
+
+    # for mood/feeling
+    code = models.SlugField(
+        max_length=64, unique=True, null=True, blank=True
+    )  # optional stable key
+    title = models.CharField(max_length=255, blank=True, default="")
+    sort_order = models.PositiveIntegerField(default=0)
+
+    # for water_goal
+    number_value = models.FloatField(null=True, blank=True)  # e.g. 72
+    unit = models.CharField(
+        max_length=16, blank=True, default="fl_oz"
+    )  # fl_oz / ml / l
+
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["kind", "sort_order", "title"]
+
+    def __str__(self):
+        if self.kind == "water_goal":
+            return f"Water goal: {self.number_value} {self.unit}"
+        return f"{self.kind}: {self.title}"
+
+
+class UserWellbeingLog(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="wellbeing_logs",
+    )
+    date = models.DateField()
+
+    water_amount = models.FloatField(default=0)  # e.g. 32
+    water_unit = models.CharField(max_length=16, default="fl_oz")
+
+    moods = models.ManyToManyField(Wellbeing, blank=True, related_name="mood_logs")
+    feelings = models.ManyToManyField(
+        Wellbeing, blank=True, related_name="feeling_logs"
+    )
+
+    class Meta:
+        unique_together = (("user", "date"),)
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"{self.user_id} {self.date}"
