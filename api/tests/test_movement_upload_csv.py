@@ -20,6 +20,7 @@ from api.services.air_exposure import AQSample
 
 Movement = apps.get_model("api", "Movement")
 AirExposureLog = apps.get_model("api", "AirExposureLog")
+DailyExposure = apps.get_model("api", "DailyExposure")
 
 
 @override_settings(
@@ -95,6 +96,10 @@ class MovementUploadCSVTests(APITestCase):
         date_local = timezone.localtime(
             AirExposureLog.objects.filter(user=self.user).first().timestamp, vilnius
         ).date()
+
+        daily = DailyExposure.objects.get(user=self.user, date=date_local)
+        self.assertEqual(daily.exposure_level, "Very Good")
+
         recompute_daily_exposure(self.user.id, date_local)
 
         Exposure = apps.get_model("api", "Exposure")

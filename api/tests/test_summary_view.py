@@ -8,7 +8,7 @@ from rest_framework import status
 
 from django.contrib.auth import get_user_model
 
-from api.models import Exposure, AirExposureLog
+from api.models import Exposure, AirExposureLog, DailyExposure
 
 User = get_user_model()
 
@@ -67,6 +67,11 @@ class SummaryViewTests(APITestCase):
 
         self.exp_new.pollutants = {"pm25": 18.0, "pm10": 30.0}
         self.exp_new.save(update_fields=["pollutants"])
+        DailyExposure.objects.create(
+            user=self.user,
+            date=timezone.localdate(),
+            exposure_level="Moderate",
+        )
 
     def _mock_recommendations(self):
         snapshot = Mock()
@@ -136,9 +141,11 @@ class SummaryViewTests(APITestCase):
             "risks_delta",
             "recommendations",
             "today_journey",
+            "daily_exposure_level",
             "pollutant_compliance",
         ]:
             assert key in resp.data, f"Missing key: {key}"
+        assert resp.data["daily_exposure_level"] == "Moderate"
 
         # aq_weather_uv — результаты AirExposureLogSerializer
         aq = resp.data["aq_weather_uv"]
@@ -289,6 +296,7 @@ class SummaryViewTests(APITestCase):
 
         # поля присутствуют
         assert "week_info" in resp.data  # ← добавлено
+        assert "daily_exposure_level" in resp.data
         assert "exposure_history" in resp.data  # ← добавлено
 
         # exposure_history — корректная структура
@@ -301,6 +309,7 @@ class SummaryViewTests(APITestCase):
 
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["mom_exposure"] is None
+        assert resp.data["daily_exposure_level"] == "Moderate"
         assert resp.data["risks_delta"]["mom"] is None
         assert resp.data["risks_delta"]["baby"] is None
 

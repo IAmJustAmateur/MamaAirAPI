@@ -23,6 +23,7 @@ OWM_API_KEY = settings.OWM_API_KEY  # type: ignore
 # Модели через apps.get_model, чтобы не ловить циклические импорты
 Movement = apps.get_model("api", "Movement")
 AirExposureLog = apps.get_model("api", "AirExposureLog")
+DailyExposure = apps.get_model("api", "DailyExposure")
 
 
 # =========================
@@ -82,6 +83,75 @@ def weighted_update(
 
     val = (old_val * old_min + new_val * add_min) / total_min
     return (val, total_min)
+
+
+def _day_bounds_local(day):
+    """Start/end of local calendar day in current timezone."""
+    tz = timezone.get_current_timezone()
+    start = timezone.make_aware(
+        timezone.datetime.combine(day, timezone.datetime.min.time()),
+        tz,
+    )
+    end = start + timedelta(days=1)
+    return start, end
+
+
+def _daily_pm25_avg_24h(user_id: int, day) -> float | None:
+    """Minute-weighted PM2.5 average for the given local day."""
+    start_dt, end_dt = _day_bounds_local(day)
+    rows = AirExposureLog.objects.filter(
+        user_id=user_id, timestamp__gte=start_dt, timestamp__lt=end_dt
+    ).values("pm25", "exposure_minutes")
+
+    numerator = 0.0
+    denominator = 0
+    for row in rows:
+        pm25 = row.get("pm25")
+        minutes = int(row.get("exposure_minutes") or 0)
+        if pm25 is None or minutes <= 0:
+            continue
+        numerator += float(pm25) * minutes
+        denominator += minutes
+
+    if denominator == 0:
+        return None
+    return numerator / denominator
+
+
+def _pm25_to_daily_level(pm25_avg: float | None) -> str:
+    """
+    Maps PM2.5 (ug/m3) to DailyExposure.exposure_level.
+    Thresholds follow AQI-like breakpoints expanded to 8 app levels.
+    """
+    if pm25_avg is None:
+        return "Clean"
+    if pm25_avg <= 12.0:
+        return "Clean"
+    if pm25_avg <= 35.4:
+        return "Very Good"
+    if pm25_avg <= 55.4:
+        return "Moderate"
+    if pm25_avg <= 150.4:
+        return "Acceptable"
+    if pm25_avg <= 250.4:
+        return "Unhealthy"
+    if pm25_avg <= 350.4:
+        return "High"
+    if pm25_avg <= 500.4:
+        return "Hazardous"
+    return "Extreme"
+
+
+@transaction.atomic
+def upsert_daily_exposure(user_id: int, day):
+    """Upsert DailyExposure for (user, date)."""
+    pm25_avg = _daily_pm25_avg_24h(user_id=user_id, day=day)
+    level = _pm25_to_daily_level(pm25_avg)
+    return DailyExposure.objects.update_or_create(
+        user_id=user_id,
+        date=day,
+        defaults={"exposure_level": level},
+    )
 
 
 # =========================
@@ -395,6 +465,12 @@ def ingest_movements_batch(
             created_logs += 1
         else:
             updated_logs += 1
+
+    # Recompute and upsert daily categorical exposure for affected local dates.
+    tz = timezone.get_current_timezone()
+    affected_dates = {timezone.localdate(mv.timestamp, tz) for mv in mv_objs}
+    for day in sorted(affected_dates):
+        upsert_daily_exposure(user_id=user_id, day=day)
 
     return {
         "imported": len(mv_objs),

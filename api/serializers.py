@@ -346,6 +346,7 @@ class SummaryResponseSerializer(serializers.Serializer):
     today_journey = TodayJourneySerializer()
     risks_delta = RiskDeltaSerializer()
     week_info = serializers.JSONField()
+    daily_exposure_level = serializers.CharField(allow_null=True)
     exposure_history = ExposureHistoryResponseSerializer()
     pollutant_compliance = PollutantComplianceSerializer()
 

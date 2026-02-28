@@ -59,6 +59,7 @@ from .models import (
     BabySymptom,
     UserBabySymptoms,
     Exposure,
+    DailyExposure,
     RecommendationCompletion,
 )
 from .choices_emoji import (
@@ -914,6 +915,9 @@ class SummaryView(APIView):
         pollutant_compliance = compute_pollutant_compliance(
             request.user, latest_log, exposure
         )
+        daily_exposure = DailyExposure.objects.filter(
+            user=request.user, date=timezone.localdate()
+        ).first()
 
         user: User = request.user
         data = {
@@ -927,6 +931,9 @@ class SummaryView(APIView):
             "recommendations": recommendations,
             "today_journey": get_today_journey(user),
             "week_info": user.week_info(),
+            "daily_exposure_level": (
+                daily_exposure.exposure_level if daily_exposure else None
+            ),
             "exposure_history": exposure_history_payload,
             "pollutant_compliance": pollutant_compliance,
         }
