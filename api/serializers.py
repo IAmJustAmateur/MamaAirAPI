@@ -39,7 +39,7 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     current_pregnancy_week = serializers.IntegerField(
-        source="current_week_of_pregnancy", read_only=True
+        source="current_week_of_pregnancy"  # , read_only=True
     )
     pregnancy_start_date = serializers.DateField(read_only=True)
 
