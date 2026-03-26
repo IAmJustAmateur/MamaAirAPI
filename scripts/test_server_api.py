@@ -18,7 +18,7 @@ load_dotenv()
 BASE_URL = "https://api.mamaair.app/"
 API_KEY = "super-secret-mobile-key"  # from your .env
 REG_API_KEY = "super-secret-mobile-key"  # from your .env
-EMAIL = "testuser001@example.com"
+EMAIL = "testuser002@example.com"
 PASSWORD = "testpass123"
 
 REGISTER_URL = urljoin(BASE_URL, "api/auth/register/")
@@ -561,7 +561,7 @@ def step_3_fill_profile(access_token: str):
         "race": "caucasian",
         "country": "NG",
         "is_first_pregnancy": True,
-        "week_of_pregnancy": 12,
+        "week_of_pregnancy": 5,
         "tracking_enabled": True,
         "notifications_enabled": True,
         # NEW (User model + serializer mapping)
@@ -1574,7 +1574,7 @@ def main():
     # 0) Публичный эндпойнт
     step_meta_choices_public()
 
-    step_1_register()
+    # step_1_register()
     token = step_2_token()
     step_3_fill_profile(token)
     step_4_lifestyle(token)

@@ -116,6 +116,12 @@ from django.utils.dateparse import parse_datetime
 logger = logging.getLogger(__name__)
 
 
+def _payload_keys(payload):
+    if hasattr(payload, "keys"):
+        return sorted(str(key) for key in payload.keys())
+    return []
+
+
 def _parse_recorded_at_param(request):
     """
     Извлекает recorded_at из query (?recorded_at=) или body, приводит к aware datetime.
@@ -222,9 +228,15 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [AllowAny, HasValidRegistrationAPIKey]
 
     def create(self, request, *args, **kwargs):
+        logger.info(
+            "RegisterView POST, payload_keys=%s, has_api_key=%s",
+            _payload_keys(request.data),
+            bool(request.headers.get("X-API-Key")),
+        )
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
+        logger.info("RegisterView created user_id=%s", serializer.instance.id)
         return Response(
             {"message": "User created successfully"}, status=status.HTTP_201_CREATED
         )
@@ -236,6 +248,20 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+    def retrieve(self, request, *args, **kwargs):
+        logger.info("UserProfileView GET, user=%s", request.user)
+        return super().retrieve(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        logger.info(
+            "UserProfileView PATCH, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
+        )
+        response = super().partial_update(request, *args, **kwargs)
+        logger.info("UserProfileView PATCH completed, user=%s", request.user)
+        return response
 
 
 @extend_schema(
@@ -258,6 +284,20 @@ class UserLifestyleView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         obj, _created = UserLifeStyle.objects.get_or_create(user=self.request.user)
         return obj
+
+    def retrieve(self, request, *args, **kwargs):
+        logger.info("UserLifestyleView GET, user=%s", request.user)
+        return super().retrieve(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        logger.info(
+            "UserLifestyleView PATCH, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
+        )
+        response = super().partial_update(request, *args, **kwargs)
+        logger.info("UserLifestyleView PATCH completed, user=%s", request.user)
+        return response
 
 
 # ---------- MOMMY ----------
@@ -573,13 +613,32 @@ class MovementCSVUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        logger.info("MyAPIView GET, user=%s, data=%s", request.user, request.data)
+        logger.info(
+            "MovementCSVUploadView POST, user=%s, files=%s, payload_keys=%s",
+            request.user,
+            sorted(request.FILES.keys()),
+            _payload_keys(request.data),
+        )
         if "file" not in request.FILES:
+            logger.warning(
+                "MovementCSVUploadView missing file, user=%s", request.user
+            )
             return Response({"error": "No file provided."}, status=400)
 
         records, errors = parse_csv_to_records(request.FILES["file"])
+        logger.info(
+            "MovementCSVUploadView parsed CSV, user=%s, records=%s, errors=%s",
+            request.user,
+            len(records),
+            len(errors),
+        )
 
         if not records and errors:
+            logger.warning(
+                "MovementCSVUploadView rejected CSV, user=%s, errors=%s",
+                request.user,
+                errors,
+            )
             return Response(
                 {"status": "error", "imported": 0, "errors": errors}, status=400
             )
@@ -587,6 +646,9 @@ class MovementCSVUploadView(APIView):
         try:
             summary = ingest_movements_batch(user_id=request.user.id, records=records)
         except Exception as e:
+            logger.exception(
+                "MovementCSVUploadView ingest failed, user=%s", request.user
+            )
             return Response({"status": "error", "detail": str(e)}, status=500)
 
         tz = ZoneInfo(getattr(settings, "TIME_ZONE", "UTC"))
@@ -600,6 +662,12 @@ class MovementCSVUploadView(APIView):
                 exposures_recomputed += 1
             except Exception as e:
                 # не валим весь ответ, просто фиксируем ошибку расчёта конкретного дня
+                logger.warning(
+                    "MovementCSVUploadView recompute failed, user=%s, date=%s, error=%s",
+                    request.user,
+                    d,
+                    e,
+                )
                 exposure_errors.append({"date": d.isoformat(), "error": str(e)})
 
         payload = {
@@ -609,6 +677,14 @@ class MovementCSVUploadView(APIView):
             "exposure_errors": exposure_errors,
             "errors": errors,  # ошибки парсинга CSV
         }
+        logger.info(
+            "MovementCSVUploadView completed, user=%s, imported=%s, parse_errors=%s, recomputed=%s, recompute_errors=%s",
+            request.user,
+            summary.get("imported"),
+            len(errors),
+            exposures_recomputed,
+            len(exposure_errors),
+        )
         return Response(
             payload, status=status.HTTP_201_CREATED if summary["imported"] > 0 else 207
         )
@@ -663,6 +739,10 @@ class EnvironmentView(APIView):
             .order_by("-timestamp")
             .first()
         )
+        if not latest_log:
+            logger.warning("EnvironmentView no latest log, user=%s", request.user)
+            return Response({"detail": "No air exposure data found."}, status=204)
+
         latest_log = update_air_exposure_log_with_weather(latest_log)
 
         # current_weather = get_current_weather(latest_log.latitude, latest_log.longitude)
@@ -673,8 +753,11 @@ class EnvironmentView(APIView):
         # latest_log.uvi_level = current_weather["uvi_level"]
         # latest_log.save()
 
-        if not latest_log:
-            return Response({"detail": "No air exposure data found."}, status=204)
+        logger.info(
+            "EnvironmentView returning latest_log_id=%s for user=%s",
+            latest_log.id,
+            request.user,
+        )
         return Response(AirExposureLogSerializer(latest_log).data)
 
 
@@ -692,6 +775,12 @@ class CurrentAdviceView(APIView):
             pregnancy_week = None
 
         advices = get_current_advices(request.user, pregnancy_week)
+        logger.info(
+            "CurrentAdviceView resolved week=%s, advice_count=%s, user=%s",
+            pregnancy_week,
+            len(advices),
+            request.user,
+        )
         serializer = AdviceTemplateSerializer(advices, many=True)
         return Response(serializer.data)
 
@@ -741,12 +830,18 @@ class LogoutView(APIView):
             refresh_token = serializer.validated_data["refresh"]
             token = RefreshToken(refresh_token)
             token.blacklist()
+            logger.info("LogoutView blacklisted refresh token, user=%s", request.user)
 
             return Response(
                 {"detail": "Successfully logged out."},
                 status=status.HTTP_205_RESET_CONTENT,
             )
         except Exception as e:
+            logger.warning(
+                "LogoutView invalid refresh token, user=%s, error=%s",
+                request.user,
+                e,
+            )
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -770,7 +865,9 @@ class DeleteAccountView(APIView):
     def delete(self, request):
         logger.info("DeleteAccountView DELETE, user=%s", request.user)
         user = request.user
+        user_id = user.id
         user.delete()
+        logger.info("DeleteAccountView deleted user_id=%s", user_id)
         return Response(
             {"detail": "Account deleted successfully"},
             status=status.HTTP_204_NO_CONTENT,
@@ -817,12 +914,16 @@ class PasswordChangeView(APIView):
         serializer.is_valid(raise_exception=True)
 
         if not user.check_password(serializer.validated_data["old_password"]):
+            logger.warning(
+                "PasswordChangeView wrong old password, user=%s", request.user
+            )
             return Response(
                 {"old_password": "Wrong password."}, status=status.HTTP_400_BAD_REQUEST
             )
 
         user.set_password(serializer.validated_data["new_password"])
         user.save()
+        logger.info("PasswordChangeView password changed, user=%s", request.user)
         return Response(
             {"detail": "Password changed successfully"}, status=status.HTTP_200_OK
         )
@@ -878,6 +979,7 @@ class SummaryView(APIView):
             .first()
         )
         if not latest_log:
+            logger.warning("SummaryView no latest log, user=%s", request.user)
             return Response({"detail": "No air exposure data found."}, status=204)
 
         # AQ + Weather + UV (returns AirExposureLog instance)
@@ -945,6 +1047,12 @@ class SummaryView(APIView):
         }
 
         serializer = SummaryResponseSerializer(data)
+        logger.info(
+            "SummaryView assembled response, user=%s, snapshot_id=%s, exposure_history_items=%s",
+            request.user,
+            snapshot.id,
+            len(exposure_history_payload["items"]),
+        )
         return Response(serializer.data)
 
 
@@ -985,17 +1093,29 @@ class SetLanguageView(APIView):
 
     def post(self, request):
         logger.info(
-            "SetLanguageView POST, user=%s, data=%s", request.user, request.data
+            "SetLanguageView POST, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
         )
         lang = request.data.get("language")
 
         if lang not in dict(LANGUAGE_CHOICES):
+            logger.warning(
+                "SetLanguageView invalid language, user=%s, language=%s",
+                request.user,
+                lang,
+            )
             return Response(
                 {"error": "Invalid language code"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         request.user.language = lang
         request.user.save()
+        logger.info(
+            "SetLanguageView updated language, user=%s, language=%s",
+            request.user,
+            lang,
+        )
 
         return Response({"message": "Language updated", "language": lang})
 
@@ -1014,14 +1134,16 @@ def test_login(request):
 
 def login_view(request):
     if request.method == "POST":
-        logger.info("LoginView POST, data=%s", request.POST)
+        logger.info("LoginView POST, payload_keys=%s", _payload_keys(request.POST))
         email = request.POST.get("email")
         password = request.POST.get("password")
         user = authenticate(request, username=email, password=password)
         if user is not None:
             login(request, user)
+            logger.info("LoginView authenticated user_id=%s", user.id)
             return HttpResponse("Logged in successfully")
         else:
+            logger.warning("LoginView invalid credentials for email=%s", email)
             return HttpResponse("Invalid credentials", status=401)
     return render(request, "api/custom_login.html")  # Render a simple login form
 
@@ -1147,6 +1269,11 @@ class RecommendationCompletionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        logger.info(
+            "RecommendationCompletionView GET, user=%s, snapshot_id=%s",
+            request.user,
+            request.query_params.get("snapshot_id"),
+        )
         qs = RecommendationCompletion.objects.filter(user=request.user).order_by(
             "-updated_at"
         )
@@ -1155,9 +1282,20 @@ class RecommendationCompletionView(APIView):
         if snapshot_id:
             qs = qs.filter(snapshot_id=snapshot_id)
 
-        return Response(RecommendationCompletionSerializer(qs, many=True).data)
+        data = RecommendationCompletionSerializer(qs, many=True).data
+        logger.info(
+            "RecommendationCompletionView returning %s items for user=%s",
+            len(data),
+            request.user,
+        )
+        return Response(data)
 
     def post(self, request):
+        logger.info(
+            "RecommendationCompletionView POST, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
+        )
         s = RecommendationCompletionUpsertSerializer(
             data=request.data, context={"request": request}
         )
@@ -1174,6 +1312,12 @@ class RecommendationCompletionView(APIView):
         )
 
         out = RecommendationCompletionSerializer(obj).data
+        logger.info(
+            "RecommendationCompletionView upserted completion_id=%s, created=%s, user=%s",
+            obj.id,
+            created,
+            request.user,
+        )
         return Response(
             out, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
         )
@@ -1236,6 +1380,7 @@ class WellbeingCatalogView(APIView):
         ],
     )
     def get(self, request):
+        logger.info("WellbeingCatalogView GET, user=%s", request.user)
         moods = Wellbeing.objects.filter(kind="mood", is_active=True)
         feelings = Wellbeing.objects.filter(kind="feeling", is_active=True)
         water = (
@@ -1252,6 +1397,12 @@ class WellbeingCatalogView(APIView):
             "moods": WellbeingItemSerializer(moods, many=True).data,
             "feelings": WellbeingItemSerializer(feelings, many=True).data,
         }
+        logger.info(
+            "WellbeingCatalogView returning moods=%s, feelings=%s, user=%s",
+            len(data["moods"]),
+            len(data["feelings"]),
+            request.user,
+        )
         return Response(data)
 
 
@@ -1301,14 +1452,27 @@ class UserWellbeingLogView(APIView):
         ],
     )
     def get(self, request):
+        logger.info(
+            "UserWellbeingLogView GET, user=%s, date=%s",
+            request.user,
+            request.query_params.get("date"),
+        )
         date = request.query_params.get("date")
         if not date:
+            logger.warning(
+                "UserWellbeingLogView missing date param, user=%s", request.user
+            )
             return Response(
                 {"detail": "date query param is required (YYYY-MM-DD)"}, status=400
             )
 
         log = UserWellbeingLog.objects.filter(user=request.user, date=date).first()
         if not log:
+            logger.info(
+                "UserWellbeingLogView returning empty state, user=%s, date=%s",
+                request.user,
+                date,
+            )
             return Response(
                 {
                     "date": date,
@@ -1319,6 +1483,12 @@ class UserWellbeingLogView(APIView):
                 }
             )
 
+        logger.info(
+            "UserWellbeingLogView returning existing log_id=%s, user=%s, date=%s",
+            log.id,
+            request.user,
+            date,
+        )
         return Response(UserWellbeingLogSerializer(log).data)
 
     @extend_schema(
@@ -1369,9 +1539,20 @@ class UserWellbeingLogView(APIView):
         ],
     )
     def post(self, request):
+        logger.info(
+            "UserWellbeingLogView POST, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
+        )
         s = UserWellbeingLogUpsertSerializer(
             data=request.data, context={"request": request}
         )
         s.is_valid(raise_exception=True)
         log = s.save()
+        logger.info(
+            "UserWellbeingLogView upserted log_id=%s, user=%s, date=%s",
+            log.id,
+            request.user,
+            log.date,
+        )
         return Response(UserWellbeingLogSerializer(log).data, status=201)
