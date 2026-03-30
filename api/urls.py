@@ -14,6 +14,7 @@ from .views import (
     UserBabySymptomsSelectionView,
     HealthInsightView,
     MovementCSVUploadView,
+    MovementJSONUploadView,
     EnvironmentView,
     CurrentAdviceView,
     LogoutView,
@@ -82,6 +83,11 @@ urlpatterns = [
         name="symptoms-baby-selection",
     ),
     path("movements/upload/", MovementCSVUploadView.as_view(), name="movements-upload"),
+    path(
+        "movements/upload/json/",
+        MovementJSONUploadView.as_view(),
+        name="movements-upload-json",
+    ),
     #
     path("advice/", HealthInsightView.as_view(), name="advice"),
     path("info/current/", CurrentAdviceView.as_view(), name="current-advices"),

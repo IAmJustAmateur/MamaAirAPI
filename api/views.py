@@ -5,7 +5,7 @@ import logging
 from zoneinfo import ZoneInfo
 
 # from io import TextIOWrapper
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
@@ -98,7 +98,7 @@ from .services.services import (
 from .services.analytics import get_today_journey
 from .services.air_exposure import ingest_movements_batch
 from .services.air_exposure_daily import recompute_daily_exposure
-from .services.helpers import parse_csv_to_records
+from .services.helpers import parse_csv_to_records, parse_json_to_records
 from .permissions import HasValidRegistrationAPIKey
 from .services.aq_logs_services import update_air_exposure_log_with_weather
 
@@ -679,6 +679,132 @@ class MovementCSVUploadView(APIView):
         }
         logger.info(
             "MovementCSVUploadView completed, user=%s, imported=%s, parse_errors=%s, recomputed=%s, recompute_errors=%s",
+            request.user,
+            summary.get("imported"),
+            len(errors),
+            exposures_recomputed,
+            len(exposure_errors),
+        )
+        return Response(
+            payload, status=status.HTTP_201_CREATED if summary["imported"] > 0 else 207
+        )
+
+
+class MovementJSONItemSchema(serializers.Serializer):
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
+    timestamp = serializers.DateTimeField()
+    indoor = serializers.BooleanField(required=False)
+
+
+class MovementJSONUploadRequestSchema(serializers.Serializer):
+    movements = MovementJSONItemSchema(many=True)
+
+
+@extend_schema(
+    summary="Upload user movements via JSON",
+    description=(
+        "Allows uploading movement data as JSON with latitude, longitude and timestamp. "
+        "Each item is parsed and stored as a Movement object associated with the authenticated user. "
+        "The endpoint accepts an `application/json` request with a `movements` array."
+    ),
+    request=MovementJSONUploadRequestSchema,
+    responses={
+        201: OpenApiResponse(
+            description="Movements uploaded successfully.",
+            examples=[
+                OpenApiExample(
+                    "Success Example",
+                    value={"status": "ok", "imported": 42, "errors": []},
+                    response_only=True,
+                )
+            ],
+        ),
+        400: OpenApiResponse(
+            description="Invalid or missing JSON data.",
+            examples=[
+                OpenApiExample(
+                    "Missing movements",
+                    value={"status": "error", "imported": 0, "errors": [{"error": "Missing 'movements' field."}]},
+                    response_only=True,
+                ),
+                OpenApiExample(
+                    "Item error",
+                    value={
+                        "status": "ok",
+                        "imported": 10,
+                        "errors": [{"row": 11, "error": "Bad value: Invalid isoformat string"}],
+                    },
+                    response_only=True,
+                ),
+            ],
+        ),
+    },
+)
+class MovementJSONUploadView(APIView):
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        logger.info(
+            "MovementJSONUploadView POST, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
+        )
+
+        records, errors = parse_json_to_records(request.data)
+        logger.info(
+            "MovementJSONUploadView parsed JSON, user=%s, records=%s, errors=%s",
+            request.user,
+            len(records),
+            len(errors),
+        )
+
+        if not records and errors:
+            logger.warning(
+                "MovementJSONUploadView rejected JSON, user=%s, errors=%s",
+                request.user,
+                errors,
+            )
+            return Response(
+                {"status": "error", "imported": 0, "errors": errors}, status=400
+            )
+
+        try:
+            summary = ingest_movements_batch(user_id=request.user.id, records=records)
+        except Exception as e:
+            logger.exception(
+                "MovementJSONUploadView ingest failed, user=%s", request.user
+            )
+            return Response({"status": "error", "detail": str(e)}, status=500)
+
+        tz = ZoneInfo(getattr(settings, "TIME_ZONE", "UTC"))
+        affected_dates = {timezone.localtime(rec["ts"], tz).date() for rec in records}
+
+        exposures_recomputed = 0
+        exposure_errors = []
+        for d in sorted(affected_dates):
+            try:
+                recompute_daily_exposure(request.user.id, d)
+                exposures_recomputed += 1
+            except Exception as e:
+                logger.warning(
+                    "MovementJSONUploadView recompute failed, user=%s, date=%s, error=%s",
+                    request.user,
+                    d,
+                    e,
+                )
+                exposure_errors.append({"date": d.isoformat(), "error": str(e)})
+
+        payload = {
+            "status": "ok",
+            **summary,
+            "exposures_recomputed": exposures_recomputed,
+            "exposure_errors": exposure_errors,
+            "errors": errors,
+        }
+        logger.info(
+            "MovementJSONUploadView completed, user=%s, imported=%s, parse_errors=%s, recomputed=%s, recompute_errors=%s",
             request.user,
             summary.get("imported"),
             len(errors),
