@@ -607,6 +607,35 @@ def step_3_fill_profile(access_token: str):
     pp("Profile GET", data)
 
 
+def step_3_1_put_profile_update_pregnancy_week(access_token: str):
+    """PUT /api/profile/ to update week_of_pregnancy (test idempotency and PUT semantics)"""
+    payload = {
+        "current_pregngancy_week": 10,
+    }
+
+    r = requests.put(
+        PROFILE_URL,
+        json=payload,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, [200, 202], "Profile PUT failed")
+    patched = safe_json(r)
+    pp("Profile after PUT", patched)
+
+    # проверим GET
+    r = requests.get(
+        PROFILE_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Profile GET failed")
+    data = r.json()
+    assert data["week_of_pregnancy"] == 10
+
+
 def step_4_lifestyle(access_token: str):
     """GET (auto-create) then PATCH /api/lifestyle/"""
     r = requests.get(
@@ -1577,6 +1606,7 @@ def main():
     step_1_register()
     token = step_2_token()
     step_3_fill_profile(token)
+    step_3_1_put_profile_update_pregnancy_week(token)
     step_4_lifestyle(token)
 
     # --- Wellbeing (Water + Mood + Feeling) ---

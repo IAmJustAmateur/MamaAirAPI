@@ -56,8 +56,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = (
             "registered_at",
-            "current_pregnancy_week",
-            "pregnancy_start_date",
+            # "current_pregnancy_week",
+            # "pregnancy_start_date",
             "bmi",
         )
 
