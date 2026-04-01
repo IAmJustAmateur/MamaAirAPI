@@ -612,6 +612,7 @@ def step_3_1_put_profile_update_pregnancy_week(access_token: str):
     """PUT /api/profile/ to update week_of_pregnancy (test idempotency and PUT semantics)"""
     payload = {
         "week_of_pregnancy": 10,
+        "email": EMAIL,  # PUT требует все обязательные поля, поэтому дублируем
     }
 
     r = requests.put(
