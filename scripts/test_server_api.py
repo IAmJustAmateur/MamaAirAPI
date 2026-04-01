@@ -6,7 +6,7 @@ from datetime import datetime, timezone as dt_timezone
 import json
 import requests
 from urllib.parse import urljoin
-from utils import build_csv_many_points
+from utils import build_csv_many_points, build_json_many_points
 import time
 from dotenv import load_dotenv
 
@@ -39,6 +39,7 @@ EXPOSURE_HISTORY_URL = urljoin(BASE_URL, "api/exposure/history/")
 META_CHOICES_URL = urljoin(BASE_URL, "api/meta/choices/")
 
 MOVEMENTS_UPLOAD_URL = urljoin(BASE_URL, "api/movements/upload/")
+MOVEMENTS_UPLOAD_JSON_URL = urljoin(BASE_URL, "api/movements/upload/json/")
 AIR_EXPOSURE_URL = urljoin(BASE_URL, "api/air-exposure/")
 ADVICE_URL = urljoin(BASE_URL, "api/advice/")
 
@@ -1031,6 +1032,40 @@ def step_movements_upload_many(access_token: str) -> tuple[str, dict]:
     return target_date, (body if isinstance(body, dict) else {})
 
 
+def step_movements_upload_many_json(access_token: str) -> tuple[str, dict]:
+    """POST /api/movements/upload/json с множеством точек. Возвращает (target_date, resp_body)."""
+    payload, target_date = build_json_many_points()
+    r = requests.post(
+        MOVEMENTS_UPLOAD_JSON_URL,
+        json=payload,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, [201, 207], "Movements JSON upload failed")
+    body = safe_json(r)
+    pp("movements JSON upload status code", r.status_code)
+    pp("Movements JSON upload response", body)
+
+    if isinstance(body, dict):
+        for k in (
+            "imported",
+            "air_exposure_created",
+            "air_exposure_updated",
+            "exposures_recomputed",
+            "errors",
+            "exposure_errors",
+        ):
+            if k in body:
+                if k in ("errors", "exposure_errors"):
+                    assert isinstance(body[k], list), f"{k} must be a list"
+                else:
+                    assert (
+                        isinstance(body[k], int) and body[k] >= 0
+                    ), f"{k} must be non-negative int"
+    return target_date, (body if isinstance(body, dict) else {})
+
+
 def step_air_exposure_poll_latest(
     access_token: str, max_attempts: int = 6, delay_sec: int = 5
 ) -> dict:
@@ -1395,6 +1430,16 @@ def test_upload_movements(csv_path, token):
     return response
 
 
+def test_upload_movements_json(data, token):
+    url = f"{BASE_URL}/api/movements/upload/json/"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = requests.post(url, json=data, headers=headers)
+    print(f"Status: {response.status_code}")
+    print("Response:", response.json())
+    return response
+
+
 def test_upload_mommy_symptoms(data, token):
     url = f"{BASE_URL}/symptoms/mommy/checklist/"
     headers = {"Authorization": f"Bearer {token}"}
@@ -1688,6 +1733,25 @@ def main():
         pass
 
     print("✔ Movements uploaded and AirExposureLog generated.")
+
+    # --- movements upload JSON -> AirExposureLog ---
+    json_target_date, json_upload_info = step_movements_upload_many_json(token)
+    json_exposure = step_air_exposure_poll_latest(token)
+
+    try:
+        ts = json_exposure.get("timestamp")
+        if ts:
+            expo_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            delta = datetime.now(dt_timezone.utc) - expo_dt.astimezone(dt_timezone.utc)
+            assert (
+                delta.total_seconds() < 12 * 3600
+            ), f"AirExposureLog after JSON upload looks stale: {ts}"
+    except Exception:
+        pass
+
+    pp("JSON movements target date", json_target_date)
+    pp("JSON movements upload info", json_upload_info)
+    print("✔ Movements JSON uploaded and AirExposureLog generated.")
 
     admin_access_token = login_as_superuser()
     # --- Advice + debug upsert -> AQ alert ---

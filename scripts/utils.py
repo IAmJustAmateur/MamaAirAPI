@@ -31,3 +31,37 @@ def build_csv_many_points(
         rows.append(f"{jitter_lat:.6f},{jitter_lon:.6f},{ts}")
     csv_text = "\n".join(rows) + "\n"
     return "movements_many.csv", csv_text.encode("utf-8"), start.date().isoformat()
+
+
+def build_json_many_points(
+    lat=52.2297,
+    lon=21.0122,
+    tz_name="Europe/Warsaw",
+    points=24,
+    step_minutes=5,
+    hours_back_start=2,
+) -> tuple[dict, str]:
+    """
+    Генерирует JSON payload вида {"movements": [...]} с N-точками.
+    Возвращает (payload, target_date_iso).
+    """
+    tz = ZoneInfo(tz_name)
+    now_local = datetime.now(dt_timezone.utc).astimezone(tz)
+    start = now_local.replace(minute=0, second=0, microsecond=0) - timedelta(
+        hours=hours_back_start
+    )
+
+    movements = []
+    for i in range(points):
+        ts = (start + timedelta(minutes=i * step_minutes)).isoformat(timespec="seconds")
+        jitter_lat = lat + (random.random() - 0.5) * 0.001
+        jitter_lon = lon + (random.random() - 0.5) * 0.001
+        movements.append(
+            {
+                "latitude": round(jitter_lat, 6),
+                "longitude": round(jitter_lon, 6),
+                "timestamp": ts,
+            }
+        )
+
+    return {"movements": movements}, start.date().isoformat()
