@@ -39,7 +39,6 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     week_of_pregnancy = serializers.IntegerField()
-    pregnancy_start_date = serializers.DateField()
 
     bmi = serializers.FloatField(read_only=True)
 
