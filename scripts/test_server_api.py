@@ -611,7 +611,7 @@ def step_3_fill_profile(access_token: str):
 def step_3_1_put_profile_update_pregnancy_week(access_token: str):
     """PUT /api/profile/ to update week_of_pregnancy (test idempotency and PUT semantics)"""
     payload = {
-        "current_pregngancy_week": 10,
+        "week_of_pregnancy": 10,
     }
 
     r = requests.put(
