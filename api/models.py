@@ -223,7 +223,7 @@ class User(MyUser, PermissionsMixin):
         today = timezone.localdate()
 
         delta_weeks = max(0, (today - self.pregnancy_start_date).days // 7)
-        current = self.week_of_pregnancy + delta_weeks
+        current = delta_weeks
 
         # Часто практично ограничивать 42, но если не хотите — уберите min(...)
         return min(current, 42)

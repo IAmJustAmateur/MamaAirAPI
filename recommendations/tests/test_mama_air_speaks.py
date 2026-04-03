@@ -11,7 +11,7 @@ class MamaAirWeeklyMessageMethodTest(TestCase):
             email="u@example.com", password="x", language="en"
         )
         # замокаем вычисление недели
-
+        user.week_of_pregnancy = 10
         user.set_pregnancy_start_date()
         mamaair_msg = user.week_info()
         messageText = MamaAirWeeklyMessage.objects.get(

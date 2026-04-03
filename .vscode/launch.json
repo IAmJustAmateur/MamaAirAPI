@@ -38,6 +38,7 @@
                 //"recommendations.tests.test_week_info",
                 //"api.tests.test_today_journey",
                 "api.tests.test_summary_view",
+                //"recommendations.tests.test_mama_air_speaks"
             ],
             "justMyCode": false,
             "django": true,
