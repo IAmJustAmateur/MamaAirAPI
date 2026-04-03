@@ -14,13 +14,15 @@ def make_user_with_bmi(
     """Создаёт пользователя с заданным BMI, вычисляя weight_pre_pregnancy под рост."""
     h2 = (height_cm / 100.0) ** 2
     weight = round(bmi * h2, 1)  # кг, одно десятичное — достаточно
-    return User.objects.create_user(
+    user = User.objects.create_user(
         email=email,
         password=password,
         height=height_cm,
         weight_pre_pregnancy=weight,
         **extra,
     )
+    user.set_pregnancy_start_date()  # чтобы был current_week_of_pregnancy
+    return user
 
 
 def _build_movements_csv_many(points=24, step_minutes=5, tz_name="Europe/Warsaw"):

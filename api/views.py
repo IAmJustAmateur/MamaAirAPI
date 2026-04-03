@@ -253,6 +253,16 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         logger.info("UserProfileView GET, user=%s", request.user)
         return super().retrieve(request, *args, **kwargs)
 
+    def update(self, request, *args, **kwargs):
+        logger.info(
+            "UserProfileView PUT, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
+        )
+        response = super().update(request, *args, **kwargs)
+        logger.info("UserProfileView PUT completed, user=%s", request.user)
+        return response
+
     def partial_update(self, request, *args, **kwargs):
         logger.info(
             "UserProfileView PATCH, user=%s, payload_keys=%s",
@@ -262,6 +272,14 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         response = super().partial_update(request, *args, **kwargs)
         logger.info("UserProfileView PATCH completed, user=%s", request.user)
         return response
+
+    def perform_update(self, serializer):
+        user = serializer.save()
+
+        week_of_pregnancy = serializer.validated_data.get("week_of_pregnancy")
+        if week_of_pregnancy is not None:
+            user.set_pregnancy_start_date(week_of_pregnancy)
+            user.save(update_fields=["pregnancy_start_date"])
 
 
 @extend_schema(
@@ -620,9 +638,7 @@ class MovementCSVUploadView(APIView):
             _payload_keys(request.data),
         )
         if "file" not in request.FILES:
-            logger.warning(
-                "MovementCSVUploadView missing file, user=%s", request.user
-            )
+            logger.warning("MovementCSVUploadView missing file, user=%s", request.user)
             return Response({"error": "No file provided."}, status=400)
 
         records, errors = parse_csv_to_records(request.FILES["file"])
@@ -725,7 +741,11 @@ class MovementJSONUploadRequestSchema(serializers.Serializer):
             examples=[
                 OpenApiExample(
                     "Missing movements",
-                    value={"status": "error", "imported": 0, "errors": [{"error": "Missing 'movements' field."}]},
+                    value={
+                        "status": "error",
+                        "imported": 0,
+                        "errors": [{"error": "Missing 'movements' field."}],
+                    },
                     response_only=True,
                 ),
                 OpenApiExample(
@@ -733,7 +753,9 @@ class MovementJSONUploadRequestSchema(serializers.Serializer):
                     value={
                         "status": "ok",
                         "imported": 10,
-                        "errors": [{"row": 11, "error": "Bad value: Invalid isoformat string"}],
+                        "errors": [
+                            {"row": 11, "error": "Bad value: Invalid isoformat string"}
+                        ],
                     },
                     response_only=True,
                 ),

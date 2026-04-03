@@ -21,6 +21,7 @@ class SummaryViewTests(APITestCase):
             is_active=True,
             week_of_pregnancy=12,
         )
+        self.user.set_pregnancy_start_date()
         self.client.force_authenticate(self.user)
 
         self.now = timezone.now()

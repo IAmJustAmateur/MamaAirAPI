@@ -48,6 +48,8 @@ class AdviceEndpointTests(APITestCase):
         """
         for k, v in kwargs.items():
             setattr(self.user, k, v)
+        if "week_of_pregnancy" in kwargs:
+            self.user.set_pregnancy_start_date()  # чтобы week_of_pregnancy работала корректно
         self.user.save()
 
     def _ensure_lifestyle(self, **kwargs) -> UserLifeStyle:

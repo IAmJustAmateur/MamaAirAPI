@@ -26,6 +26,7 @@ class MedicalRulesTests(TestCase):
             height=170,
             weight_pre_pregnancy=70.0,
         )
+        self.u.set_pregnancy_start_date()
         UserLifeStyle.objects.create(user=self.u)
         Exposure.objects.create(
             user=self.u,

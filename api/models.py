@@ -176,6 +176,8 @@ class User(MyUser, PermissionsMixin):
     is_first_pregnancy = models.BooleanField(null=True, blank=True)
     week_of_pregnancy = models.IntegerField(null=True, blank=True)
 
+    pregnancy_start_date = models.DateField(null=True, blank=True)
+
     tracking_enabled = models.BooleanField(default=False)
     notifications_enabled = models.BooleanField(default=False)
 
@@ -187,6 +189,13 @@ class User(MyUser, PermissionsMixin):
     preferred_share_channel = models.CharField(
         max_length=255, null=True, blank=True, choices=SHARE_CHANNELS
     )
+
+    def set_pregnancy_start_date(self):
+        weeks = self.week_of_pregnancy
+        if not weeks:
+            return
+        self.pregnancy_start_date = date.today() - timedelta(weeks=weeks)
+        self.save()
 
     def __str__(self):
         if self.name:
@@ -210,37 +219,35 @@ class User(MyUser, PermissionsMixin):
             return None
 
         # Дата «якоря» — день регистрации (когда фиксировалась week_of_pregnancy)
-        anchor_date = self.registered_at.astimezone(
-            timezone.get_current_timezone()
-        ).date()
+
         today = timezone.localdate()
 
-        delta_weeks = max(0, (today - anchor_date).days // 7)
+        delta_weeks = max(0, (today - self.pregnancy_start_date).days // 7)
         current = self.week_of_pregnancy + delta_weeks
 
         # Часто практично ограничивать 42, но если не хотите — уберите min(...)
         return min(current, 42)
 
-    @property
-    def pregnancy_start_date(self):
-        """
-        Дата начала беременности (ориентировочно LMP): дата регистрации минус
-        зафиксированная на тот момент неделя беременности.
-        Вернёт None, если данных недостаточно.
-        """
-        if self.week_of_pregnancy is None or not self.registered_at:
-            return None
+    # @property
+    # def pregnancy_start_date(self):
+    #     """
+    #     Дата начала беременности (ориентировочно LMP): дата регистрации минус
+    #     зафиксированная на тот момент неделя беременности.
+    #     Вернёт None, если данных недостаточно.
+    #     """
+    #     if self.week_of_pregnancy is None or not self.registered_at:
+    #         return None
 
-        anchor_date = self.registered_at.astimezone(
-            timezone.get_current_timezone()
-        ).date()
+    #     anchor_date = self.registered_at.astimezone(
+    #         timezone.get_current_timezone()
+    #     ).date()
 
-        try:
-            weeks = int(self.week_of_pregnancy)
-        except (TypeError, ValueError):
-            return None
+    #     try:
+    #         weeks = int(self.week_of_pregnancy)
+    #     except (TypeError, ValueError):
+    #         return None
 
-        return anchor_date - timedelta(weeks=weeks)
+    #     return anchor_date - timedelta(weeks=weeks)
 
     @property
     def full_year(self):

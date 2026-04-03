@@ -11,8 +11,8 @@ class MamaAirWeeklyMessageMethodTest(TestCase):
             email="u@example.com", password="x", language="en"
         )
         # замокаем вычисление недели
-        user.week_of_pregnancy = 10
-        user.save()
+
+        user.set_pregnancy_start_date()
         mamaair_msg = user.week_info()
         messageText = MamaAirWeeklyMessage.objects.get(
             week=10, locale="en", is_active=True
@@ -25,7 +25,7 @@ class MamaAirWeeklyMessageMethodTest(TestCase):
             email="u2@example.com", password="x", language="pl"
         )
         user.week_of_pregnancy = 10
-        user.save()
+        user.set_pregnancy_start_date()
 
         data = user.week_info()
         self.assertEqual(data["locale"], "en")
@@ -36,5 +36,5 @@ class MamaAirWeeklyMessageMethodTest(TestCase):
             email="u3@example.com", password="x", language="en"
         )
         user.week_of_pregnancy = None
-        user.save()
+        user.set_pregnancy_start_date()
         self.assertIsNone(user.week_info())
