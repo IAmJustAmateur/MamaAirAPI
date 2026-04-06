@@ -254,14 +254,18 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return super().retrieve(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        logger.info(
-            "UserProfileView PUT, user=%s, payload_keys=%s",
-            request.user,
-            _payload_keys(request.data),
-        )
-        response = super().update(request, *args, **kwargs)
-        logger.info("UserProfileView PUT completed, user=%s", request.user)
-        return response
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.save()
+
+        if "week_of_pregnancy" in serializer.validated_data:
+            user.set_pregnancy_start_date()
+            user.save(update_fields=["pregnancy_start_date"])
+
+        return Response(self.get_serializer(user).data)
 
     def partial_update(self, request, *args, **kwargs):
         logger.info(
@@ -273,13 +277,13 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         logger.info("UserProfileView PATCH completed, user=%s", request.user)
         return response
 
-    def perform_update(self, serializer):
-        user = serializer.save()
+    # def perform_update(self, serializer):
+    #     user = serializer.save()
 
-        week_of_pregnancy = serializer.validated_data.get("week_of_pregnancy")
-        if week_of_pregnancy is not None:
-            user.set_pregnancy_start_date(week_of_pregnancy)
-            user.save(update_fields=["pregnancy_start_date"])
+    #     week_of_pregnancy = serializer.validated_data.get("week_of_pregnancy")
+    #     if week_of_pregnancy is not None:
+    #         user.set_pregnancy_start_date(week_of_pregnancy)
+    #         user.save(update_fields=["pregnancy_start_date"])
 
 
 @extend_schema(
