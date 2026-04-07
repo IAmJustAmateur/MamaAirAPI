@@ -218,6 +218,12 @@ class User(MyUser, PermissionsMixin):
         if self.week_of_pregnancy is None or not self.registered_at:
             return None
 
+        if not self.pregnancy_start_date:
+            self.set_pregnancy_start_date()
+
+        if not self.pregnancy_start_date:
+            return None
+
         # Дата «якоря» — день регистрации (когда фиксировалась week_of_pregnancy)
 
         today = timezone.localdate()
