@@ -28,6 +28,7 @@ from .models import (
     DailyExposure,
     Wellbeing,
     UserWellbeingLog,
+    DailyCheckin,
 )
 from django.contrib.auth import authenticate, login
 
@@ -333,3 +334,12 @@ class UserWellbeingLogAdmin(admin.ModelAdmin):
     ordering = ("-date",)
     raw_id_fields = ("user",)
     filter_horizontal = ("moods", "feelings")
+
+
+@admin.register(DailyCheckin)
+class DailyCheckinAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "date", "created_at")
+    search_fields = ("user__email", "date")
+    date_hierarchy = "date"
+    ordering = ("-date",)
+    raw_id_fields = ("user",)
