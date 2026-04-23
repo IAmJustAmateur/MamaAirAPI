@@ -86,6 +86,9 @@ class SummaryViewTests(APITestCase):
                 self.checkin_dates.append(checkin_date)
         for checkin_date in self.checkin_dates:
             DailyCheckin.objects.create(user=self.user, date=checkin_date)
+        DailyCheckin.objects.create(
+            user=self.user, date=self.week_start - timedelta(days=1)
+        )
 
     def _mock_recommendations(self):
         snapshot = Mock()
@@ -162,7 +165,9 @@ class SummaryViewTests(APITestCase):
         ]:
             assert key in resp.data, f"Missing key: {key}"
         assert resp.data["daily_exposure_level"] == "Moderate"
-        assert resp.data["daily_checkins"] == [d.isoformat() for d in self.checkin_dates]
+        assert resp.data["daily_checkins"] == [
+            d.isoformat() for d in self.checkin_dates
+        ]
 
         # aq_weather_uv — результаты AirExposureLogSerializer
         aq = resp.data["aq_weather_uv"]
@@ -329,7 +334,9 @@ class SummaryViewTests(APITestCase):
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["mom_exposure"] is None
         assert resp.data["daily_exposure_level"] == "Moderate"
-        assert resp.data["daily_checkins"] == [d.isoformat() for d in self.checkin_dates]
+        assert resp.data["daily_checkins"] == [
+            d.isoformat() for d in self.checkin_dates
+        ]
         assert resp.data["risks_delta"]["mom"] is None
         assert resp.data["risks_delta"]["baby"] is None
 

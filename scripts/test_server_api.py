@@ -50,6 +50,7 @@ RECOMMENDATION_COMPLETION_URL = urljoin(BASE_URL, "api/recommendation-completion
 
 WELLBEING_CATALOG_URL = urljoin(BASE_URL, "api/wellbeing/")
 WELLBEING_LOG_URL = urljoin(BASE_URL, "api/wellbeing/log/")
+DAILY_CHECKIN_URL = urljoin(BASE_URL, "api/daily-checkin/")
 
 
 TIMEOUT = 200
@@ -167,6 +168,38 @@ def _assert_wellbeing_log_schema(body: dict, expected_date: str):
         raise AssertionError("water_unit must be non-empty string")
     if not isinstance(body["moods"], list) or not isinstance(body["feelings"], list):
         raise AssertionError("moods/feelings must be lists")
+
+
+def _assert_daily_checkin_exists_schema(body: dict, expected_date: str):
+    if not isinstance(body, dict):
+        raise AssertionError(f"daily checkin response must be object, got {type(body)}")
+    for k in ("date", "exists"):
+        if k not in body:
+            raise AssertionError(f"daily checkin response missing '{k}'")
+    if body["date"] != expected_date:
+        raise AssertionError(
+            f"daily checkin date mismatch: {body['date']} vs {expected_date}"
+        )
+    if not isinstance(body["exists"], bool):
+        raise AssertionError("daily checkin exists must be bool")
+
+
+def _assert_daily_checkin_create_schema(body: dict, expected_date: str):
+    if not isinstance(body, dict):
+        raise AssertionError(
+            f"daily checkin create response must be object, got {type(body)}"
+        )
+    for k in ("id", "date", "created_at"):
+        if k not in body:
+            raise AssertionError(f"daily checkin create response missing '{k}'")
+    if not isinstance(body["id"], int):
+        raise AssertionError("daily checkin id must be int")
+    if body["date"] != expected_date:
+        raise AssertionError(
+            f"daily checkin create date mismatch: {body['date']} vs {expected_date}"
+        )
+    if not isinstance(body["created_at"], str) or not body["created_at"]:
+        raise AssertionError("daily checkin created_at must be non-empty string")
 
 
 def log(msg):
@@ -399,7 +432,7 @@ def _assert_air_exposure_log_payload(aq: dict):
             raise AssertionError(f"aq_weather_uv.{k} must be number or null")
 
 
-def step_summary_get(access_token: str):
+def step_summary_get(access_token: str, expected_checkin_date: str | None = None):
     """
     GET /api/summary/ — проверка схемы ответа согласно SummaryResponseSerializer.
     """
@@ -425,6 +458,7 @@ def step_summary_get(access_token: str):
         "today_journey",
         "week_info",
         "daily_exposure_level",
+        "daily_checkins",
         "exposure_history",
         "pollutant_compliance",
     ):
@@ -489,6 +523,20 @@ def step_summary_get(access_token: str):
         body["daily_exposure_level"], str
     ):
         raise AssertionError("daily_exposure_level must be string or null")
+
+    daily_checkins = body["daily_checkins"]
+    if not isinstance(daily_checkins, list):
+        raise AssertionError("daily_checkins must be list")
+    for i, item in enumerate(daily_checkins):
+        if not isinstance(item, str):
+            raise AssertionError(f"daily_checkins[{i}] must be string")
+        _ = _parse_iso_date(item)
+    if daily_checkins != sorted(daily_checkins):
+        raise AssertionError(f"daily_checkins must be sorted ascending: {daily_checkins}")
+    if expected_checkin_date and expected_checkin_date not in daily_checkins:
+        raise AssertionError(
+            f"daily_checkins must contain {expected_checkin_date}, got {daily_checkins}"
+        )
 
     # exposure_history — структура
     hist = body["exposure_history"]
@@ -1342,6 +1390,48 @@ def step_wellbeing_log_post_upsert(
     return body
 
 
+def step_daily_checkin_get(access_token: str, target_date: str) -> dict:
+    r = requests.get(
+        DAILY_CHECKIN_URL,
+        params={"date": target_date},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Daily checkin GET failed")
+    body = safe_json(r)
+    pp("Daily checkin GET", body)
+    _assert_daily_checkin_exists_schema(body, target_date)
+    return body
+
+
+def step_daily_checkin_post_create(access_token: str, target_date: str) -> dict:
+    r = requests.post(
+        DAILY_CHECKIN_URL,
+        json={"date": target_date},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 201, "Daily checkin POST failed")
+    body = safe_json(r)
+    pp("Daily checkin POST", body)
+    _assert_daily_checkin_create_schema(body, target_date)
+    return body
+
+
+def step_daily_checkin_ensure_exists(access_token: str, target_date: str) -> None:
+    current = step_daily_checkin_get(access_token, target_date)
+    if current["exists"]:
+        log(f"Daily checkin already exists for {target_date}")
+        return
+
+    _ = step_daily_checkin_post_create(access_token, target_date)
+    after = step_daily_checkin_get(access_token, target_date)
+    if after["exists"] is not True:
+        raise AssertionError("Daily checkin should exist after create")
+
+
 # ---------- main --------------------------------------------------------------
 
 
@@ -1679,6 +1769,7 @@ def main():
 
     # 3) Verify by GET
     _ = step_wellbeing_log_get(token, today)
+    step_daily_checkin_ensure_exists(token, today)
     checklist = step_5_check_mommy_checklist(token)
 
     # 6) GET selection for today
@@ -1761,7 +1852,7 @@ def main():
         admin_access_token, user_email=EMAIL, pollutants={"pm25_avg_24h": 20.0}
     )
 
-    step_summary_get(token)
+    step_summary_get(token, expected_checkin_date=today)
 
     summary_r = requests.get(
         SUMMARY_URL,
