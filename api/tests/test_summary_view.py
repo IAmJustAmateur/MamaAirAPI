@@ -8,7 +8,7 @@ from rest_framework import status
 
 from django.contrib.auth import get_user_model
 
-from api.models import Exposure, AirExposureLog, DailyExposure
+from api.models import Exposure, AirExposureLog, DailyExposure, DailyCheckin
 
 User = get_user_model()
 
@@ -73,6 +73,19 @@ class SummaryViewTests(APITestCase):
             date=timezone.localdate(),
             exposure_level="Moderate",
         )
+        self.today = timezone.localdate()
+        self.week_start = self.today - timedelta(days=self.today.weekday())
+        candidate_checkin_dates = [
+            self.week_start,
+            self.week_start + timedelta(days=2),
+            self.today,
+        ]
+        self.checkin_dates = []
+        for checkin_date in candidate_checkin_dates:
+            if checkin_date <= self.today and checkin_date not in self.checkin_dates:
+                self.checkin_dates.append(checkin_date)
+        for checkin_date in self.checkin_dates:
+            DailyCheckin.objects.create(user=self.user, date=checkin_date)
 
     def _mock_recommendations(self):
         snapshot = Mock()
@@ -144,10 +157,12 @@ class SummaryViewTests(APITestCase):
             "recommendations",
             "today_journey",
             "daily_exposure_level",
+            "daily_checkins",
             "pollutant_compliance",
         ]:
             assert key in resp.data, f"Missing key: {key}"
         assert resp.data["daily_exposure_level"] == "Moderate"
+        assert resp.data["daily_checkins"] == [d.isoformat() for d in self.checkin_dates]
 
         # aq_weather_uv — результаты AirExposureLogSerializer
         aq = resp.data["aq_weather_uv"]
@@ -300,6 +315,7 @@ class SummaryViewTests(APITestCase):
         # поля присутствуют
         assert "week_info" in resp.data  # ← добавлено
         assert "daily_exposure_level" in resp.data
+        assert "daily_checkins" in resp.data
         assert "exposure_history" in resp.data  # ← добавлено
 
         # exposure_history — корректная структура
@@ -313,6 +329,7 @@ class SummaryViewTests(APITestCase):
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["mom_exposure"] is None
         assert resp.data["daily_exposure_level"] == "Moderate"
+        assert resp.data["daily_checkins"] == [d.isoformat() for d in self.checkin_dates]
         assert resp.data["risks_delta"]["mom"] is None
         assert resp.data["risks_delta"]["baby"] is None
 

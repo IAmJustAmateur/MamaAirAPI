@@ -63,6 +63,7 @@ from .models import (
     DailyExposure,
     RecommendationCompletion,
     Wellbeing,
+    DailyCheckin,
     UserWellbeingLog,
 )
 from .choices_emoji import (
@@ -88,6 +89,8 @@ from .serializers import (
     ExposureHistoryResponseSerializer,
     ExposureHistoryItemSerializer,
     WellbeingItemSerializer,
+    DailyCheckinSerializer,
+    DailyCheckinCreateSerializer,
     UserWellbeingLogSerializer,
     UserWellbeingLogUpsertSerializer,
 )
@@ -1175,9 +1178,20 @@ class SummaryView(APIView):
         pollutant_compliance = compute_pollutant_compliance(
             request.user, latest_log, exposure
         )
+        today = timezone.localdate()
         daily_exposure = DailyExposure.objects.filter(
-            user=request.user, date=timezone.localdate()
+            user=request.user, date=today
         ).first()
+        week_start = today - dt.timedelta(days=today.weekday())
+        daily_checkins = list(
+            DailyCheckin.objects.filter(
+                user=request.user,
+                date__gte=week_start,
+                date__lte=today,
+            )
+            .order_by("date")
+            .values_list("date", flat=True)
+        )
 
         user: User = request.user
         data = {
@@ -1194,6 +1208,7 @@ class SummaryView(APIView):
             "daily_exposure_level": (
                 daily_exposure.exposure_level if daily_exposure else None
             ),
+            "daily_checkins": daily_checkins,
             "exposure_history": exposure_history_payload,
             "pollutant_compliance": pollutant_compliance,
         }
@@ -1708,3 +1723,90 @@ class UserWellbeingLogView(APIView):
             log.date,
         )
         return Response(UserWellbeingLogSerializer(log).data, status=201)
+
+
+class DailyCheckinView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Wellbeing"],
+        summary="Check whether daily checkin exists for date",
+        parameters=[
+            OpenApiParameter(
+                name="date",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Date in YYYY-MM-DD",
+            )
+        ],
+        responses={
+            200: inline_serializer(
+                name="DailyCheckinExistsResponse",
+                fields={
+                    "date": serializers.DateField(),
+                    "exists": serializers.BooleanField(),
+                },
+            ),
+            400: inline_serializer(
+                name="DailyCheckinExistsBadRequest",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+    )
+    def get(self, request):
+        logger.info(
+            "DailyCheckinView GET, user=%s, date=%s",
+            request.user,
+            request.query_params.get("date"),
+        )
+        date = request.query_params.get("date")
+        if not date:
+            logger.warning("DailyCheckinView missing date param, user=%s", request.user)
+            return Response(
+                {"detail": "date query param is required (YYYY-MM-DD)"}, status=400
+            )
+
+        exists = DailyCheckin.objects.filter(user=request.user, date=date).exists()
+        return Response({"date": date, "exists": exists})
+
+    @extend_schema(
+        tags=["Wellbeing"],
+        summary="Create daily checkin for date",
+        request=inline_serializer(
+            name="DailyCheckinCreateRequest",
+            fields={"date": serializers.DateField()},
+        ),
+        responses={
+            201: DailyCheckinSerializer,
+            400: inline_serializer(
+                name="DailyCheckinCreateBadRequest",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Create daily checkin request",
+                value={"date": "2026-04-21"},
+                request_only=True,
+            )
+        ],
+    )
+    def post(self, request):
+        logger.info(
+            "DailyCheckinView POST, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
+        )
+        serializer = DailyCheckinCreateSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        daily_checkin = serializer.save()
+        logger.info(
+            "DailyCheckinView created id=%s, user=%s, date=%s",
+            daily_checkin.id,
+            request.user,
+            daily_checkin.date,
+        )
+        return Response(DailyCheckinSerializer(daily_checkin).data, status=201)

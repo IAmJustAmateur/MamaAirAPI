@@ -33,6 +33,7 @@ from .views import (
     RecommendationCompletionView,
     WellbeingCatalogView,
     UserWellbeingLogView,
+    DailyCheckinView,
 )
 from .auth_views import GoogleAuthView
 from .auth.views_firebase import FirebaseAuthView
@@ -113,6 +114,7 @@ urlpatterns = [
     ),
     path("wellbeing/", WellbeingCatalogView.as_view(), name="wellbeing-catalog"),
     path("wellbeing/log/", UserWellbeingLogView.as_view(), name="wellbeing-log"),
+    path("daily-checkin/", DailyCheckinView.as_view(), name="daily-checkin"),
 ]
 urlpatterns += [
     path("auth/google/", GoogleAuthView.as_view(), name="auth-google"),

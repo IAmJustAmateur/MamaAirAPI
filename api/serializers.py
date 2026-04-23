@@ -13,6 +13,7 @@ from .models import (
     Exposure,
     RecommendationCompletion,
     Wellbeing,
+    DailyCheckin,
     UserWellbeingLog,
 )
 
@@ -346,6 +347,7 @@ class SummaryResponseSerializer(serializers.Serializer):
     risks_delta = RiskDeltaSerializer()
     week_info = serializers.JSONField()
     daily_exposure_level = serializers.CharField(allow_null=True)
+    daily_checkins = serializers.ListField(child=serializers.DateField())
     exposure_history = ExposureHistoryResponseSerializer()
     pollutant_compliance = PollutantComplianceSerializer()
 
@@ -505,3 +507,26 @@ class UserWellbeingLogUpsertSerializer(serializers.Serializer):
         log.moods.set(self.validated_data.get("mood_ids", []))
         log.feelings.set(self.validated_data.get("feeling_ids", []))
         return log
+
+
+class DailyCheckinSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DailyCheckin
+        fields = ("id", "date", "created_at")
+        read_only_fields = ("id", "created_at")
+
+
+class DailyCheckinCreateSerializer(serializers.Serializer):
+    date = serializers.DateField()
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if DailyCheckin.objects.filter(user=user, date=attrs["date"]).exists():
+            raise serializers.ValidationError(
+                {"date": "DailyCheckin for this date already exists."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        user = self.context["request"].user
+        return DailyCheckin.objects.create(user=user, **validated_data)
