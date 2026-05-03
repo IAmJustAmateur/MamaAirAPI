@@ -51,6 +51,7 @@ RECOMMENDATION_COMPLETION_URL = urljoin(BASE_URL, "api/recommendation-completion
 WELLBEING_CATALOG_URL = urljoin(BASE_URL, "api/wellbeing/")
 WELLBEING_LOG_URL = urljoin(BASE_URL, "api/wellbeing/log/")
 DAILY_CHECKIN_URL = urljoin(BASE_URL, "api/daily-checkin/")
+TASK_COMPLETION_URL = urljoin(BASE_URL, "api/task-completion/")
 
 
 TIMEOUT = 200
@@ -200,6 +201,29 @@ def _assert_daily_checkin_create_schema(body: dict, expected_date: str):
         )
     if not isinstance(body["created_at"], str) or not body["created_at"]:
         raise AssertionError("daily checkin created_at must be non-empty string")
+
+
+def _assert_task_completion_schema(
+    body: dict, expected_date: str, expected_tasks: list[str] | None = None
+):
+    if not isinstance(body, dict):
+        raise AssertionError(f"task completion response must be object, got {type(body)}")
+    for k in ("date", "tasks"):
+        if k not in body:
+            raise AssertionError(f"task completion response missing '{k}'")
+    if body["date"] != expected_date:
+        raise AssertionError(
+            f"task completion date mismatch: {body['date']} vs {expected_date}"
+        )
+    if not isinstance(body["tasks"], list):
+        raise AssertionError("task completion tasks must be list")
+    for i, task in enumerate(body["tasks"]):
+        if not isinstance(task, str) or not task:
+            raise AssertionError(f"task completion tasks[{i}] must be non-empty string")
+    if expected_tasks is not None and body["tasks"] != expected_tasks:
+        raise AssertionError(
+            f"task completion tasks mismatch: {body['tasks']} vs {expected_tasks}"
+        )
 
 
 def log(msg):
@@ -432,7 +456,12 @@ def _assert_air_exposure_log_payload(aq: dict):
             raise AssertionError(f"aq_weather_uv.{k} must be number or null")
 
 
-def step_summary_get(access_token: str, expected_checkin_date: str | None = None):
+def step_summary_get(
+    access_token: str,
+    expected_checkin_date: str | None = None,
+    expected_task_date: str | None = None,
+    expected_tasks: list[str] | None = None,
+):
     """
     GET /api/summary/ — проверка схемы ответа согласно SummaryResponseSerializer.
     """
@@ -459,6 +488,7 @@ def step_summary_get(access_token: str, expected_checkin_date: str | None = None
         "week_info",
         "daily_exposure_level",
         "daily_checkins",
+        "task_completions",
         "exposure_history",
         "pollutant_compliance",
     ):
@@ -539,6 +569,46 @@ def step_summary_get(access_token: str, expected_checkin_date: str | None = None
         )
 
     # exposure_history — структура
+    task_completions = body["task_completions"]
+    if not isinstance(task_completions, list):
+        raise AssertionError("task_completions must be list")
+    task_dates = []
+    for i, item in enumerate(task_completions):
+        if not isinstance(item, dict):
+            raise AssertionError(f"task_completions[{i}] must be object")
+        for k in ("date", "tasks"):
+            if k not in item:
+                raise AssertionError(f"task_completions[{i}] missing '{k}'")
+        if not isinstance(item["date"], str):
+            raise AssertionError(f"task_completions[{i}].date must be string")
+        _ = _parse_iso_date(item["date"])
+        task_dates.append(item["date"])
+        if not isinstance(item["tasks"], list):
+            raise AssertionError(f"task_completions[{i}].tasks must be list")
+        for j, task in enumerate(item["tasks"]):
+            if not isinstance(task, str) or not task:
+                raise AssertionError(
+                    f"task_completions[{i}].tasks[{j}] must be non-empty string"
+                )
+    if task_dates != sorted(task_dates):
+        raise AssertionError(
+            f"task_completions must be sorted ascending: {task_dates}"
+        )
+    if expected_task_date:
+        match = next(
+            (item for item in task_completions if item["date"] == expected_task_date),
+            None,
+        )
+        if match is None:
+            raise AssertionError(
+                f"task_completions must contain {expected_task_date}, got {task_completions}"
+            )
+        if expected_tasks is not None and match["tasks"] != expected_tasks:
+            raise AssertionError(
+                f"task_completions[{expected_task_date}] tasks mismatch: "
+                f"{match['tasks']} vs {expected_tasks}"
+            )
+
     hist = body["exposure_history"]
     if not isinstance(hist, dict):
         raise AssertionError("exposure_history must be object")
@@ -1432,6 +1502,47 @@ def step_daily_checkin_ensure_exists(access_token: str, target_date: str) -> Non
         raise AssertionError("Daily checkin should exist after create")
 
 
+def step_task_completion_get(access_token: str, target_date: str) -> dict:
+    r = requests.get(
+        TASK_COMPLETION_URL,
+        params={"date": target_date},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Task completion GET failed")
+    body = safe_json(r)
+    pp("Task completion GET", body)
+    _assert_task_completion_schema(body, target_date)
+    return body
+
+
+def step_task_completion_post_replace(
+    access_token: str, target_date: str, tasks: list[str]
+) -> dict:
+    r = requests.post(
+        TASK_COMPLETION_URL,
+        json={"date": target_date, "tasks": tasks},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 201, "Task completion POST failed")
+    body = safe_json(r)
+    pp("Task completion POST", body)
+    _assert_task_completion_schema(body, target_date, expected_tasks=tasks)
+    return body
+
+
+def step_task_completion_replace_and_verify(
+    access_token: str, target_date: str, tasks: list[str]
+) -> None:
+    _ = step_task_completion_get(access_token, target_date)
+    _ = step_task_completion_post_replace(access_token, target_date, tasks)
+    after = step_task_completion_get(access_token, target_date)
+    _assert_task_completion_schema(after, target_date, expected_tasks=tasks)
+
+
 # ---------- main --------------------------------------------------------------
 
 
@@ -1770,6 +1881,8 @@ def main():
     # 3) Verify by GET
     _ = step_wellbeing_log_get(token, today)
     step_daily_checkin_ensure_exists(token, today)
+    task_completion_tasks = ["drink_water", "cooking_smoke"]
+    step_task_completion_replace_and_verify(token, today, task_completion_tasks)
     checklist = step_5_check_mommy_checklist(token)
 
     # 6) GET selection for today
@@ -1852,7 +1965,12 @@ def main():
         admin_access_token, user_email=EMAIL, pollutants={"pm25_avg_24h": 20.0}
     )
 
-    step_summary_get(token, expected_checkin_date=today)
+    step_summary_get(
+        token,
+        expected_checkin_date=today,
+        expected_task_date=today,
+        expected_tasks=task_completion_tasks,
+    )
 
     summary_r = requests.get(
         SUMMARY_URL,
