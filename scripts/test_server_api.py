@@ -120,6 +120,8 @@ def _assert_wellbeing_catalog_schema(data: dict):
         raise AssertionError("water_goal.value must be number or null")
     if not isinstance(wg["unit"], str) or not wg["unit"]:
         raise AssertionError("water_goal.unit must be non-empty string")
+    if wg["unit"] != "ml":
+        raise AssertionError(f"water_goal.unit must be 'ml', got {wg['unit']}")
 
     for list_name in ("moods", "feelings"):
         arr = data[list_name]
@@ -169,6 +171,43 @@ def _assert_wellbeing_log_schema(body: dict, expected_date: str):
         raise AssertionError("water_unit must be non-empty string")
     if not isinstance(body["moods"], list) or not isinstance(body["feelings"], list):
         raise AssertionError("moods/feelings must be lists")
+
+
+def _ids_from_items(items: list[dict]) -> list[int]:
+    return sorted(x.get("id") for x in items if isinstance(x, dict))
+
+
+def _assert_wellbeing_item_ids(body: dict, mood_ids=None, feeling_ids=None):
+    got_mood_ids = _ids_from_items(body.get("moods", []))
+    got_feel_ids = _ids_from_items(body.get("feelings", []))
+    if mood_ids is not None and sorted(mood_ids) != got_mood_ids:
+        raise AssertionError(f"mood ids mismatch: {got_mood_ids} vs {mood_ids}")
+    if feeling_ids is not None and sorted(feeling_ids) != got_feel_ids:
+        raise AssertionError(f"feeling ids mismatch: {got_feel_ids} vs {feeling_ids}")
+
+
+def _assert_summary_water_schema(
+    body: dict,
+    expected_date: str | None = None,
+    expected_amount: float | None = None,
+    expected_unit: str = "ml",
+):
+    water = body.get("water")
+    if not isinstance(water, dict):
+        raise AssertionError(f"summary.water must be object, got {type(water)}")
+    for key in ("date", "amount", "unit"):
+        if key not in water:
+            raise AssertionError(f"summary.water missing '{key}'")
+    if expected_date is not None and water["date"] != expected_date:
+        raise AssertionError(f"summary.water.date mismatch: {water['date']} vs {expected_date}")
+    if not isinstance(water["amount"], (int, float)):
+        raise AssertionError("summary.water.amount must be number")
+    if expected_amount is not None and water["amount"] != expected_amount:
+        raise AssertionError(
+            f"summary.water.amount mismatch: {water['amount']} vs {expected_amount}"
+        )
+    if water["unit"] != expected_unit:
+        raise AssertionError(f"summary.water.unit mismatch: {water['unit']} vs {expected_unit}")
 
 
 def _assert_daily_checkin_exists_schema(body: dict, expected_date: str):
@@ -461,6 +500,9 @@ def step_summary_get(
     expected_checkin_date: str | None = None,
     expected_task_date: str | None = None,
     expected_tasks: list[str] | None = None,
+    expected_water_date: str | None = None,
+    expected_water_amount: float | None = None,
+    expected_water_unit: str = "ml",
 ):
     """
     GET /api/summary/ — проверка схемы ответа согласно SummaryResponseSerializer.
@@ -488,6 +530,7 @@ def step_summary_get(
         "week_info",
         "daily_exposure_level",
         "daily_checkins",
+        "water",
         "task_completions",
         "exposure_history",
         "pollutant_compliance",
@@ -567,6 +610,13 @@ def step_summary_get(
         raise AssertionError(
             f"daily_checkins must contain {expected_checkin_date}, got {daily_checkins}"
         )
+
+    _assert_summary_water_schema(
+        body,
+        expected_date=expected_water_date,
+        expected_amount=expected_water_amount,
+        expected_unit=expected_water_unit,
+    )
 
     # exposure_history — структура
     task_completions = body["task_completions"]
@@ -1418,16 +1468,19 @@ def step_wellbeing_log_post_upsert(
     target_date: str,
     water_amount: float,
     water_unit: str,
-    mood_ids: list[int],
-    feeling_ids: list[int],
+    mood_ids: list[int] | None = None,
+    feeling_ids: list[int] | None = None,
+    expected_water_amount: float | None = None,
 ) -> dict:
     payload = {
         "date": target_date,
         "water_amount": water_amount,
         "water_unit": water_unit,
-        "mood_ids": mood_ids,
-        "feeling_ids": feeling_ids,
     }
+    if mood_ids is not None:
+        payload["mood_ids"] = mood_ids
+    if feeling_ids is not None:
+        payload["feeling_ids"] = feeling_ids
     r = requests.post(
         WELLBEING_LOG_URL,
         json=payload,
@@ -1440,22 +1493,15 @@ def step_wellbeing_log_post_upsert(
     pp("Wellbeing log POST (upsert)", body)
 
     _assert_wellbeing_log_schema(body, target_date)
+    if body["water_unit"] != water_unit:
+        raise AssertionError(f"water_unit mismatch: {body['water_unit']} vs {water_unit}")
+    if expected_water_amount is not None and body["water_amount"] != expected_water_amount:
+        raise AssertionError(
+            f"water_amount mismatch: {body['water_amount']} vs {expected_water_amount}"
+        )
 
     # мягкая проверка, что ids применились (если сервер возвращает объекты)
-    got_mood_ids = sorted(
-        [x.get("id") for x in body.get("moods", []) if isinstance(x, dict)]
-    )
-    got_feel_ids = sorted(
-        [x.get("id") for x in body.get("feelings", []) if isinstance(x, dict)]
-    )
-    if mood_ids:
-        assert (
-            sorted(mood_ids) == got_mood_ids
-        ), f"mood ids mismatch: {got_mood_ids} vs {mood_ids}"
-    if feeling_ids:
-        assert (
-            sorted(feeling_ids) == got_feel_ids
-        ), f"feeling ids mismatch: {got_feel_ids} vs {feeling_ids}"
+    _assert_wellbeing_item_ids(body, mood_ids=mood_ids, feeling_ids=feeling_ids)
 
     return body
 
@@ -1863,23 +1909,49 @@ def main():
 
     today = datetime.now().date().isoformat()
 
-    # 1) GET empty/default
-    _ = step_wellbeing_log_get(token, today)
+    # 1) GET current/default state
+    initial_wellbeing_log = step_wellbeing_log_get(token, today)
+    initial_water_amount = initial_wellbeing_log["water_amount"]
 
-    # 2) POST upsert
+    # 2) POST adds water and replaces mood/feeling selections
     water_goal = catalog.get("water_goal") or {}
-    unit = water_goal.get("unit") or "fl_oz"
-    _ = step_wellbeing_log_post_upsert(
+    unit = water_goal.get("unit") or "ml"
+    if unit != "ml":
+        raise AssertionError(f"Expected wellbeing water unit 'ml', got {unit}")
+    first_water_add = 250
+    first_wellbeing_log = step_wellbeing_log_post_upsert(
         token,
         target_date=today,
-        water_amount=32,
+        water_amount=first_water_add,
         water_unit=unit,
         mood_ids=moods_ids,
         feeling_ids=feelings_ids,
+        expected_water_amount=initial_water_amount + first_water_add,
     )
 
-    # 3) Verify by GET
-    _ = step_wellbeing_log_get(token, today)
+    # 3) Water-only POST must add water without clearing mood/feeling selections
+    second_water_add = 125
+    water_only_log = step_wellbeing_log_post_upsert(
+        token,
+        target_date=today,
+        water_amount=second_water_add,
+        water_unit=unit,
+        expected_water_amount=first_wellbeing_log["water_amount"] + second_water_add,
+    )
+    _assert_wellbeing_item_ids(
+        water_only_log, mood_ids=moods_ids, feeling_ids=feelings_ids
+    )
+
+    # 4) Verify by GET
+    final_wellbeing_log = step_wellbeing_log_get(token, today)
+    if final_wellbeing_log["water_amount"] != water_only_log["water_amount"]:
+        raise AssertionError(
+            f"Final water amount mismatch: {final_wellbeing_log['water_amount']} "
+            f"vs {water_only_log['water_amount']}"
+        )
+    _assert_wellbeing_item_ids(
+        final_wellbeing_log, mood_ids=moods_ids, feeling_ids=feelings_ids
+    )
     step_daily_checkin_ensure_exists(token, today)
     task_completion_tasks = ["drink_water", "cooking_smoke"]
     step_task_completion_replace_and_verify(token, today, task_completion_tasks)
@@ -1970,6 +2042,9 @@ def main():
         expected_checkin_date=today,
         expected_task_date=today,
         expected_tasks=task_completion_tasks,
+        expected_water_date=today,
+        expected_water_amount=final_wellbeing_log["water_amount"],
+        expected_water_unit=unit,
     )
 
     summary_r = requests.get(
