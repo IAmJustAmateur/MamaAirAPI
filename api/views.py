@@ -37,7 +37,6 @@ from .serializers import (
     RecommendationCompletionSerializer,
 )
 
-
 # from django.utils.translation import gettext as _
 
 
@@ -117,7 +116,6 @@ from api.models import (
 
 from datetime import date as date_cls
 from django.utils.dateparse import parse_datetime
-
 
 logger = logging.getLogger(__name__)
 
@@ -1875,7 +1873,9 @@ class TaskCompletionView(APIView):
         )
         date = request.query_params.get("date")
         if not date:
-            logger.warning("TaskCompletionView missing date param, user=%s", request.user)
+            logger.warning(
+                "TaskCompletionView missing date param, user=%s", request.user
+            )
             return Response(
                 {"detail": "date query param is required (YYYY-MM-DD)"}, status=400
             )
