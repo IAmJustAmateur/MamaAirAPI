@@ -64,6 +64,7 @@ from .models import (
     RecommendationCompletion,
     Wellbeing,
     DailyCheckin,
+    UserDailyTaskCompletion,
     UserWellbeingLog,
 )
 from .choices_emoji import (
@@ -91,6 +92,8 @@ from .serializers import (
     WellbeingItemSerializer,
     DailyCheckinSerializer,
     DailyCheckinCreateSerializer,
+    TaskCompletionDaySerializer,
+    TaskCompletionUpsertSerializer,
     UserWellbeingLogSerializer,
     UserWellbeingLogUpsertSerializer,
 )
@@ -117,6 +120,27 @@ from django.utils.dateparse import parse_datetime
 
 
 logger = logging.getLogger(__name__)
+
+
+def _task_completion_history(user, start_date, end_date):
+    completions = (
+        UserDailyTaskCompletion.objects.filter(
+            user=user,
+            date__gte=start_date,
+            date__lte=end_date,
+            completed=True,
+            task__is_active=True,
+        )
+        .select_related("task")
+        .order_by("date", "task__sort_order", "task__title")
+    )
+    by_date = {}
+    for completion in completions:
+        by_date.setdefault(completion.date, []).append(completion.task.code)
+    return [
+        {"date": completion_date, "tasks": tasks}
+        for completion_date, tasks in by_date.items()
+    ]
 
 
 def _payload_keys(payload):
@@ -1192,6 +1216,7 @@ class SummaryView(APIView):
             .order_by("date")
             .values_list("date", flat=True)
         )
+        task_completions = _task_completion_history(request.user, week_start, today)
 
         user: User = request.user
         data = {
@@ -1209,6 +1234,7 @@ class SummaryView(APIView):
                 daily_exposure.exposure_level if daily_exposure else None
             ),
             "daily_checkins": daily_checkins,
+            "task_completions": task_completions,
             "exposure_history": exposure_history_payload,
             "pollutant_compliance": pollutant_compliance,
         }
@@ -1810,3 +1836,118 @@ class DailyCheckinView(APIView):
             daily_checkin.date,
         )
         return Response(DailyCheckinSerializer(daily_checkin).data, status=201)
+
+
+class TaskCompletionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Wellbeing"],
+        summary="Get completed daily tasks for date",
+        parameters=[
+            OpenApiParameter(
+                name="date",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Date in YYYY-MM-DD",
+            )
+        ],
+        responses={
+            200: inline_serializer(
+                name="TaskCompletionDayResponse",
+                fields={
+                    "date": serializers.DateField(),
+                    "tasks": serializers.ListField(child=serializers.SlugField()),
+                },
+            ),
+            400: inline_serializer(
+                name="TaskCompletionBadRequest",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+    )
+    def get(self, request):
+        logger.info(
+            "TaskCompletionView GET, user=%s, date=%s",
+            request.user,
+            request.query_params.get("date"),
+        )
+        date = request.query_params.get("date")
+        if not date:
+            logger.warning("TaskCompletionView missing date param, user=%s", request.user)
+            return Response(
+                {"detail": "date query param is required (YYYY-MM-DD)"}, status=400
+            )
+
+        try:
+            parsed_date = serializers.DateField().run_validation(date)
+        except serializers.ValidationError as exc:
+            return Response({"date": exc.detail}, status=400)
+
+        tasks = list(
+            UserDailyTaskCompletion.objects.filter(
+                user=request.user,
+                date=parsed_date,
+                completed=True,
+                task__is_active=True,
+            )
+            .select_related("task")
+            .order_by("task__sort_order", "task__title")
+            .values_list("task__code", flat=True)
+        )
+        data = {"date": parsed_date, "tasks": tasks}
+        return Response(TaskCompletionDaySerializer(data).data)
+
+    @extend_schema(
+        tags=["Wellbeing"],
+        summary="Replace completed daily tasks for date",
+        request=inline_serializer(
+            name="TaskCompletionUpsertRequest",
+            fields={
+                "date": serializers.DateField(),
+                "tasks": serializers.ListField(child=serializers.SlugField()),
+            },
+        ),
+        responses={
+            201: inline_serializer(
+                name="TaskCompletionUpsertResponse",
+                fields={
+                    "date": serializers.DateField(),
+                    "tasks": serializers.ListField(child=serializers.SlugField()),
+                },
+            ),
+            400: inline_serializer(
+                name="TaskCompletionUpsertBadRequest",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Task completion request",
+                value={
+                    "date": "2026-04-30",
+                    "tasks": ["cooking_smoke", "drink_water"],
+                },
+                request_only=True,
+            )
+        ],
+    )
+    def post(self, request):
+        logger.info(
+            "TaskCompletionView POST, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
+        )
+        serializer = TaskCompletionUpsertSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        data = serializer.save()
+        logger.info(
+            "TaskCompletionView upserted user=%s, date=%s, tasks=%s",
+            request.user,
+            data["date"],
+            data["tasks"],
+        )
+        return Response(TaskCompletionDaySerializer(data).data, status=201)

@@ -1197,3 +1197,50 @@ class DailyCheckin(models.Model):
     class Meta:
         unique_together = (("user", "date"),)
         ordering = ["-date"]
+
+
+class DailyTask(models.Model):
+    code = models.SlugField(max_length=64, unique=True)
+    title = models.CharField(max_length=255)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "title"]
+
+    def __str__(self):
+        return self.title
+
+
+class UserDailyTaskCompletion(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="task_completions",
+    )
+    task = models.ForeignKey(
+        DailyTask,
+        on_delete=models.PROTECT,
+        related_name="completions",
+    )
+    date = models.DateField()
+    completed = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "task", "date"],
+                name="uniq_user_task_completion_date",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user", "date"]),
+            models.Index(fields=["user", "task", "date"]),
+        ]
+        ordering = ["-date", "task__sort_order", "task__title"]
+
+    def __str__(self):
+        return f"{self.user_id} {self.date} {self.task.code}={self.completed}"

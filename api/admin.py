@@ -29,6 +29,8 @@ from .models import (
     Wellbeing,
     UserWellbeingLog,
     DailyCheckin,
+    DailyTask,
+    UserDailyTaskCompletion,
 )
 from django.contrib.auth import authenticate, login
 
@@ -343,3 +345,35 @@ class DailyCheckinAdmin(admin.ModelAdmin):
     date_hierarchy = "date"
     ordering = ("-date",)
     raw_id_fields = ("user",)
+
+
+@admin.register(DailyTask)
+class DailyTaskAdmin(admin.ModelAdmin):
+    list_display = ("id", "code", "title", "sort_order", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("code", "title")
+    ordering = ("sort_order", "title")
+
+
+@admin.register(UserDailyTaskCompletion)
+class UserDailyTaskCompletionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "task",
+        "date",
+        "completed",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("completed", "task", "date")
+    search_fields = (
+        "user__email",
+        "user__name",
+        "user__username",
+        "task__code",
+        "task__title",
+    )
+    date_hierarchy = "date"
+    ordering = ("-date", "task__sort_order", "task__title")
+    raw_id_fields = ("user", "task")

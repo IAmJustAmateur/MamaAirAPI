@@ -8,7 +8,14 @@ from rest_framework import status
 
 from django.contrib.auth import get_user_model
 
-from api.models import Exposure, AirExposureLog, DailyExposure, DailyCheckin
+from api.models import (
+    Exposure,
+    AirExposureLog,
+    DailyExposure,
+    DailyCheckin,
+    DailyTask,
+    UserDailyTaskCompletion,
+)
 
 User = get_user_model()
 
@@ -89,6 +96,32 @@ class SummaryViewTests(APITestCase):
         DailyCheckin.objects.create(
             user=self.user, date=self.week_start - timedelta(days=1)
         )
+        self.drink_water, _ = DailyTask.objects.get_or_create(
+            code="drink_water",
+            defaults={"title": "Drink water", "sort_order": 10},
+        )
+        self.cooking_smoke, _ = DailyTask.objects.get_or_create(
+            code="cooking_smoke",
+            defaults={"title": "Cooking Smoke", "sort_order": 20},
+        )
+        UserDailyTaskCompletion.objects.create(
+            user=self.user,
+            date=self.checkin_dates[-1],
+            task=self.drink_water,
+            completed=True,
+        )
+        UserDailyTaskCompletion.objects.create(
+            user=self.user,
+            date=self.checkin_dates[-1],
+            task=self.cooking_smoke,
+            completed=True,
+        )
+        UserDailyTaskCompletion.objects.create(
+            user=self.user,
+            date=self.week_start - timedelta(days=1),
+            task=self.drink_water,
+            completed=True,
+        )
 
     def _mock_recommendations(self):
         snapshot = Mock()
@@ -161,12 +194,19 @@ class SummaryViewTests(APITestCase):
             "today_journey",
             "daily_exposure_level",
             "daily_checkins",
+            "task_completions",
             "pollutant_compliance",
         ]:
             assert key in resp.data, f"Missing key: {key}"
         assert resp.data["daily_exposure_level"] == "Moderate"
         assert resp.data["daily_checkins"] == [
             d.isoformat() for d in self.checkin_dates
+        ]
+        assert resp.data["task_completions"] == [
+            {
+                "date": self.checkin_dates[-1].isoformat(),
+                "tasks": ["drink_water", "cooking_smoke"],
+            }
         ]
 
         # aq_weather_uv — результаты AirExposureLogSerializer
@@ -321,6 +361,7 @@ class SummaryViewTests(APITestCase):
         assert "week_info" in resp.data  # ← добавлено
         assert "daily_exposure_level" in resp.data
         assert "daily_checkins" in resp.data
+        assert "task_completions" in resp.data
         assert "exposure_history" in resp.data  # ← добавлено
 
         # exposure_history — корректная структура
@@ -336,6 +377,12 @@ class SummaryViewTests(APITestCase):
         assert resp.data["daily_exposure_level"] == "Moderate"
         assert resp.data["daily_checkins"] == [
             d.isoformat() for d in self.checkin_dates
+        ]
+        assert resp.data["task_completions"] == [
+            {
+                "date": self.checkin_dates[-1].isoformat(),
+                "tasks": ["drink_water", "cooking_smoke"],
+            }
         ]
         assert resp.data["risks_delta"]["mom"] is None
         assert resp.data["risks_delta"]["baby"] is None

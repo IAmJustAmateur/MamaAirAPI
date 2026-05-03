@@ -14,12 +14,15 @@ from .models import (
     RecommendationCompletion,
     Wellbeing,
     DailyCheckin,
+    DailyTask,
+    UserDailyTaskCompletion,
     UserWellbeingLog,
 )
 
 
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.db import transaction
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -327,6 +330,11 @@ class RecommendationSerializer(serializers.Serializer):
         return data
 
 
+class TaskCompletionDaySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    tasks = serializers.ListField(child=serializers.SlugField())
+
+
 class SummaryResponseSerializer(serializers.Serializer):
     """
     Гибкий ответ для /summary:
@@ -348,6 +356,7 @@ class SummaryResponseSerializer(serializers.Serializer):
     week_info = serializers.JSONField()
     daily_exposure_level = serializers.CharField(allow_null=True)
     daily_checkins = serializers.ListField(child=serializers.DateField())
+    task_completions = TaskCompletionDaySerializer(many=True)
     exposure_history = ExposureHistoryResponseSerializer()
     pollutant_compliance = PollutantComplianceSerializer()
 
@@ -530,3 +539,51 @@ class DailyCheckinCreateSerializer(serializers.Serializer):
     def create(self, validated_data):
         user = self.context["request"].user
         return DailyCheckin.objects.create(user=user, **validated_data)
+
+
+class DailyTaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DailyTask
+        fields = ("code", "title", "sort_order")
+
+
+class TaskCompletionUpsertSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    tasks = serializers.ListField(
+        child=serializers.SlugField(max_length=64),
+        allow_empty=True,
+    )
+
+    def validate_tasks(self, value):
+        codes = list(dict.fromkeys(value))
+        found = set(
+            DailyTask.objects.filter(code__in=codes, is_active=True).values_list(
+                "code", flat=True
+            )
+        )
+        missing = [code for code in codes if code not in found]
+        if missing:
+            raise serializers.ValidationError(
+                f"Unknown or inactive task code(s): {', '.join(missing)}"
+            )
+        return codes
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        date = self.validated_data["date"]
+        task_codes = self.validated_data["tasks"]
+        tasks_by_code = DailyTask.objects.in_bulk(task_codes, field_name="code")
+
+        with transaction.atomic():
+            UserDailyTaskCompletion.objects.filter(user=user, date=date).update(
+                completed=False
+            )
+            for code in task_codes:
+                UserDailyTaskCompletion.objects.update_or_create(
+                    user=user,
+                    task=tasks_by_code[code],
+                    date=date,
+                    defaults={"completed": True},
+                )
+
+        return {"date": date, "tasks": task_codes}
