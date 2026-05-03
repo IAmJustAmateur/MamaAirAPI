@@ -356,6 +356,7 @@ class SummaryResponseSerializer(serializers.Serializer):
     week_info = serializers.JSONField()
     daily_exposure_level = serializers.CharField(allow_null=True)
     daily_checkins = serializers.ListField(child=serializers.DateField())
+    water = serializers.JSONField()
     task_completions = TaskCompletionDaySerializer(many=True)
     exposure_history = ExposureHistoryResponseSerializer()
     pollutant_compliance = PollutantComplianceSerializer()
@@ -471,13 +472,13 @@ class UserWellbeingLogSerializer(serializers.ModelSerializer):
 
 class UserWellbeingLogUpsertSerializer(serializers.Serializer):
     date = serializers.DateField()
-    water_amount = serializers.FloatField(required=False, default=0)
-    water_unit = serializers.CharField(required=False, default="fl_oz")
+    water_amount = serializers.FloatField(required=False, min_value=0)
+    water_unit = serializers.CharField(required=False, default="ml")
     mood_ids = serializers.ListField(
-        child=serializers.IntegerField(min_value=1), required=False, default=list
+        child=serializers.IntegerField(min_value=1), required=False
     )
     feeling_ids = serializers.ListField(
-        child=serializers.IntegerField(min_value=1), required=False, default=list
+        child=serializers.IntegerField(min_value=1), required=False
     )
 
     def validate(self, attrs):
@@ -509,12 +510,15 @@ class UserWellbeingLogUpsertSerializer(serializers.Serializer):
         date = self.validated_data["date"]
 
         log, _ = UserWellbeingLog.objects.get_or_create(user=user, date=date)
-        log.water_amount = self.validated_data.get("water_amount", log.water_amount)
+        if "water_amount" in self.validated_data:
+            log.water_amount += self.validated_data["water_amount"]
         log.water_unit = self.validated_data.get("water_unit", log.water_unit)
         log.save()
 
-        log.moods.set(self.validated_data.get("mood_ids", []))
-        log.feelings.set(self.validated_data.get("feeling_ids", []))
+        if "mood_ids" in self.validated_data:
+            log.moods.set(self.validated_data["mood_ids"])
+        if "feeling_ids" in self.validated_data:
+            log.feelings.set(self.validated_data["feeling_ids"])
         return log
 
 
