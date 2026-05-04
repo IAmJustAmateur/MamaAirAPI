@@ -292,6 +292,35 @@ def _assert_task_completion_schema(
         )
 
 
+def _assert_task_completion_period_schema(body: dict):
+    if not isinstance(body, dict):
+        raise AssertionError(f"task completion period must be object, got {type(body)}")
+    for k in ("start_date", "end_date", "days_requested", "items"):
+        if k not in body:
+            raise AssertionError(f"task completion period missing '{k}'")
+
+    start_date = _parse_iso_date(body["start_date"])
+    end_date = _parse_iso_date(body["end_date"])
+    if start_date > end_date:
+        raise AssertionError("task completion period start_date must be <= end_date")
+    expected_days = (end_date - start_date).days + 1
+    if body["days_requested"] != expected_days:
+        raise AssertionError(
+            "task completion period days_requested mismatch: "
+            f"{body['days_requested']} vs {expected_days}"
+        )
+    if not isinstance(body["items"], list):
+        raise AssertionError("task completion period items must be list")
+    for item in body["items"]:
+        _assert_task_completion_schema(item, item.get("date"))
+        item_date = _parse_iso_date(item["date"])
+        if item_date < start_date or item_date > end_date:
+            raise AssertionError(
+                f"Task completion item date {item_date} out of period "
+                f"[{start_date}..{end_date}]"
+            )
+
+
 def log(msg):
     print(f"[✓] {msg}")
 
@@ -1631,6 +1660,31 @@ def step_task_completion_get(access_token: str, target_date: str) -> dict:
     return body
 
 
+def step_task_completion_period_get(
+    access_token: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    title: str = "Task completion period GET",
+) -> dict:
+    params = {}
+    if start_date is not None:
+        params["start_date"] = start_date
+    if end_date is not None:
+        params["end_date"] = end_date
+    r = requests.get(
+        TASK_COMPLETION_URL,
+        params=params,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, f"{title} failed")
+    body = safe_json(r)
+    pp(title, body)
+    _assert_task_completion_period_schema(body)
+    return body
+
+
 def step_task_completion_post_replace(
     access_token: str, target_date: str, tasks: list[str]
 ) -> dict:
@@ -1655,6 +1709,26 @@ def step_task_completion_replace_and_verify(
     _ = step_task_completion_post_replace(access_token, target_date, tasks)
     after = step_task_completion_get(access_token, target_date)
     _assert_task_completion_schema(after, target_date, expected_tasks=tasks)
+    default_period = step_task_completion_period_get(
+        access_token, title="Task completion period GET (default week)"
+    )
+    default_period_dates = {item["date"] for item in default_period["items"]}
+    if target_date not in default_period_dates:
+        raise AssertionError("Default task completion period must include target date")
+
+    explicit_period = step_task_completion_period_get(
+        access_token,
+        start_date=target_date,
+        end_date=target_date,
+        title="Task completion period GET (target range)",
+    )
+    if explicit_period["days_requested"] != 1:
+        raise AssertionError("Target task completion period must request exactly 1 day")
+    if not explicit_period["items"]:
+        raise AssertionError("Target task completion period must include one item")
+    _assert_task_completion_schema(
+        explicit_period["items"][0], target_date, expected_tasks=tasks
+    )
 
 
 # ---------- main --------------------------------------------------------------

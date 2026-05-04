@@ -336,6 +336,13 @@ class TaskCompletionDaySerializer(serializers.Serializer):
     tasks = serializers.ListField(child=serializers.SlugField())
 
 
+class TaskCompletionPeriodResponseSerializer(serializers.Serializer):
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    days_requested = serializers.IntegerField()
+    items = TaskCompletionDaySerializer(many=True)
+
+
 class SummaryResponseSerializer(serializers.Serializer):
     """
     Гибкий ответ для /summary:
