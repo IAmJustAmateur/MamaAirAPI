@@ -173,6 +173,33 @@ def _assert_wellbeing_log_schema(body: dict, expected_date: str):
         raise AssertionError("moods/feelings must be lists")
 
 
+def _assert_wellbeing_period_schema(body: dict):
+    if not isinstance(body, dict):
+        raise AssertionError(f"period log must be object, got {type(body)}")
+    for k in ("start_date", "end_date", "days_requested", "items"):
+        if k not in body:
+            raise AssertionError(f"period log missing '{k}'")
+
+    start_date = _parse_iso_date(body["start_date"])
+    end_date = _parse_iso_date(body["end_date"])
+    if start_date > end_date:
+        raise AssertionError("period start_date must be <= end_date")
+    expected_days = (end_date - start_date).days + 1
+    if body["days_requested"] != expected_days:
+        raise AssertionError(
+            f"period days_requested mismatch: {body['days_requested']} vs {expected_days}"
+        )
+    if not isinstance(body["items"], list):
+        raise AssertionError("period items must be list")
+    for item in body["items"]:
+        _assert_wellbeing_log_schema(item, item.get("date"))
+        item_date = _parse_iso_date(item["date"])
+        if item_date < start_date or item_date > end_date:
+            raise AssertionError(
+                f"Wellbeing item date {item_date} out of period [{start_date}..{end_date}]"
+            )
+
+
 def _ids_from_items(items: list[dict]) -> list[int]:
     return sorted(x.get("id") for x in items if isinstance(x, dict))
 
@@ -1463,6 +1490,31 @@ def step_wellbeing_log_get(access_token: str, target_date: str) -> dict:
     return body
 
 
+def step_wellbeing_log_period_get(
+    access_token: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    title: str = "Wellbeing log period GET",
+) -> dict:
+    params = {}
+    if start_date is not None:
+        params["start_date"] = start_date
+    if end_date is not None:
+        params["end_date"] = end_date
+    r = requests.get(
+        WELLBEING_LOG_URL,
+        params=params,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, f"{title} failed")
+    body = safe_json(r)
+    pp(title, body)
+    _assert_wellbeing_period_schema(body)
+    return body
+
+
 def step_wellbeing_log_post_upsert(
     access_token: str,
     target_date: str,
@@ -1951,6 +2003,24 @@ def main():
         )
     _assert_wellbeing_item_ids(
         final_wellbeing_log, mood_ids=moods_ids, feeling_ids=feelings_ids
+    )
+    default_period = step_wellbeing_log_period_get(
+        token, title="Wellbeing log period GET (default week)"
+    )
+    default_period_dates = {item["date"] for item in default_period["items"]}
+    if today not in default_period_dates:
+        raise AssertionError("Default wellbeing period must include today's log")
+
+    explicit_period = step_wellbeing_log_period_get(
+        token,
+        start_date=today,
+        end_date=today,
+        title="Wellbeing log period GET (today range)",
+    )
+    if explicit_period["days_requested"] != 1:
+        raise AssertionError("Today wellbeing period must request exactly 1 day")
+    _assert_wellbeing_item_ids(
+        explicit_period["items"][0], mood_ids=moods_ids, feeling_ids=feelings_ids
     )
     step_daily_checkin_ensure_exists(token, today)
     task_completion_tasks = ["drink_water", "cooking_smoke"]

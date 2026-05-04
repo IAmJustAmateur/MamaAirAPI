@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -16,6 +17,16 @@ class WellbeingApiTests(APITestCase):
             email="u@example.com",
             password="pass12345",
             name="Test User",
+            week_of_pregnancy=12,
+        )
+        cls.user.pregnancy_start_date = timezone.localdate() - timedelta(days=70)
+        cls.user.save(update_fields=["pregnancy_start_date"])
+        cls.other = User.objects.create_user(
+            email="other@example.com",
+            password="pass12345",
+            name="Other User",
+            week_of_pregnancy=12,
+            pregnancy_start_date=cls.user.pregnancy_start_date,
         )
 
         # ---- Fetch seeded catalog items (created by seed migration) ----
@@ -89,12 +100,18 @@ class WellbeingApiTests(APITestCase):
 
     # ---------- Log GET ----------
 
-    def test_log_get_requires_date_param(self):
+    def test_log_get_without_params_returns_current_week_period(self):
         url = reverse("wellbeing-log")
         resp = self.client.get(url)
 
-        assert resp.status_code == status.HTTP_400_BAD_REQUEST
-        assert "date" in resp.data.get("detail", "").lower()
+        assert resp.status_code == status.HTTP_200_OK
+        today = timezone.localdate()
+        week_start = today - timedelta(days=today.weekday())
+        expected_start = max(week_start, self.user.pregnancy_start_date)
+        assert resp.data["start_date"] == expected_start.isoformat()
+        assert resp.data["end_date"] == today.isoformat()
+        assert resp.data["days_requested"] == (today - expected_start).days + 1
+        assert resp.data["items"] == []
 
     def test_log_get_returns_empty_when_no_log(self):
         url = reverse("wellbeing-log")
@@ -107,6 +124,13 @@ class WellbeingApiTests(APITestCase):
         assert resp.data["water_unit"] == "ml"
         assert resp.data["moods"] == []
         assert resp.data["feelings"] == []
+
+    def test_log_get_rejects_invalid_date_format(self):
+        url = reverse("wellbeing-log")
+        resp = self.client.get(url, {"date": "not-a-date"})
+
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert "date" in resp.data["detail"]
 
     def test_log_get_returns_existing_log(self):
         log = UserWellbeingLog.objects.create(
@@ -123,6 +147,124 @@ class WellbeingApiTests(APITestCase):
         assert resp.data["water_unit"] == "ml"
         assert [x["id"] for x in resp.data["moods"]] == [self.mood_1.id]
         assert [x["id"] for x in resp.data["feelings"]] == [self.feel_1.id]
+
+    def test_log_get_period_returns_existing_logs_in_range(self):
+        today = timezone.localdate()
+        start = today - timedelta(days=6)
+        in_range_old = today - timedelta(days=4)
+        in_range_new = today - timedelta(days=1)
+        outside = today - timedelta(days=8)
+        UserWellbeingLog.objects.create(
+            user=self.user, date=outside, water_amount=999, water_unit="ml"
+        )
+        old_log = UserWellbeingLog.objects.create(
+            user=self.user, date=in_range_old, water_amount=250, water_unit="ml"
+        )
+        old_log.moods.set([self.mood_1.id])
+        UserWellbeingLog.objects.create(
+            user=self.user, date=in_range_new, water_amount=500, water_unit="ml"
+        )
+        UserWellbeingLog.objects.create(
+            user=self.other, date=in_range_new, water_amount=777, water_unit="ml"
+        )
+
+        url = reverse("wellbeing-log")
+        resp = self.client.get(
+            url,
+            {
+                "start_date": start.isoformat(),
+                "end_date": today.isoformat(),
+            },
+        )
+
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp.data["start_date"] == start.isoformat()
+        assert resp.data["end_date"] == today.isoformat()
+        assert resp.data["days_requested"] == 7
+        assert [item["date"] for item in resp.data["items"]] == [
+            in_range_old.isoformat(),
+            in_range_new.isoformat(),
+        ]
+        assert resp.data["items"][0]["moods"][0]["id"] == self.mood_1.id
+
+    def test_log_get_rejects_mixed_single_day_and_period_params(self):
+        url = reverse("wellbeing-log")
+        resp = self.client.get(
+            url,
+            {
+                "date": timezone.localdate().isoformat(),
+                "start_date": timezone.localdate().isoformat(),
+                "end_date": timezone.localdate().isoformat(),
+            },
+        )
+
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert "cannot be combined" in resp.data["detail"]
+
+    def test_log_get_period_requires_start_and_end_together(self):
+        url = reverse("wellbeing-log")
+        resp = self.client.get(url, {"start_date": timezone.localdate().isoformat()})
+
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert "together" in resp.data["detail"]
+
+    def test_log_get_period_requires_known_pregnancy_start_date(self):
+        User = get_user_model()
+        user = User.objects.create_user(
+            email="no-pregnancy@example.com",
+            password="pass12345",
+            name="No Pregnancy Start",
+        )
+        self.client.force_authenticate(user)
+
+        url = reverse("wellbeing-log")
+        resp = self.client.get(url)
+
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert "pregnancy_start_date" in resp.data["detail"]
+
+    def test_log_get_period_rejects_dates_outside_allowed_bounds(self):
+        url = reverse("wellbeing-log")
+        today = timezone.localdate()
+
+        before_pregnancy = self.user.pregnancy_start_date - timedelta(days=1)
+        resp = self.client.get(
+            url,
+            {
+                "start_date": before_pregnancy.isoformat(),
+                "end_date": today.isoformat(),
+            },
+        )
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert "pregnancy_start_date" in resp.data["detail"]
+
+        future = today + timedelta(days=1)
+        resp = self.client.get(
+            url,
+            {
+                "start_date": today.isoformat(),
+                "end_date": future.isoformat(),
+            },
+        )
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert "later than today" in resp.data["detail"]
+
+    def test_log_get_period_rejects_more_than_90_days(self):
+        url = reverse("wellbeing-log")
+        today = timezone.localdate()
+        self.user.pregnancy_start_date = today - timedelta(days=120)
+        self.user.save(update_fields=["pregnancy_start_date"])
+
+        resp = self.client.get(
+            url,
+            {
+                "start_date": (today - timedelta(days=100)).isoformat(),
+                "end_date": today.isoformat(),
+            },
+        )
+
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert "90 days" in resp.data["detail"]
 
     # ---------- Log POST (upsert) ----------
 

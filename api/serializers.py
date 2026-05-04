@@ -470,6 +470,13 @@ class UserWellbeingLogSerializer(serializers.ModelSerializer):
         fields = ["date", "water_amount", "water_unit", "moods", "feelings"]
 
 
+class UserWellbeingLogPeriodResponseSerializer(serializers.Serializer):
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    days_requested = serializers.IntegerField()
+    items = UserWellbeingLogSerializer(many=True)
+
+
 class UserWellbeingLogUpsertSerializer(serializers.Serializer):
     date = serializers.DateField()
     water_amount = serializers.FloatField(required=False, min_value=0)

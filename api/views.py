@@ -94,6 +94,7 @@ from .serializers import (
     TaskCompletionDaySerializer,
     TaskCompletionUpsertSerializer,
     UserWellbeingLogSerializer,
+    UserWellbeingLogPeriodResponseSerializer,
     UserWellbeingLogUpsertSerializer,
 )
 
@@ -115,7 +116,7 @@ from api.models import (
 
 
 from datetime import date as date_cls
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_date, parse_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -1608,29 +1609,123 @@ class WellbeingCatalogView(APIView):
 
 class UserWellbeingLogView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    max_period_days = 90
+
+    def _pregnancy_start_date(self, user):
+        if not user.pregnancy_start_date and user.week_of_pregnancy:
+            user.set_pregnancy_start_date()
+        return user.pregnancy_start_date
+
+    def _parse_query_date(self, value, param_name):
+        parsed = parse_date(value) if value else None
+        if not parsed:
+            raise ValidationError(
+                {"detail": f"{param_name} must be a valid date in YYYY-MM-DD format"}
+            )
+        return parsed
+
+    def _period_bounds_from_request(self, request):
+        today = timezone.localdate()
+        pregnancy_start = self._pregnancy_start_date(request.user)
+        if not pregnancy_start:
+            raise ValidationError(
+                {
+                    "detail": "pregnancy_start_date is required for wellbeing period queries"
+                }
+            )
+        if pregnancy_start > today:
+            raise ValidationError(
+                {"detail": "pregnancy_start_date cannot be later than today"}
+            )
+
+        start_param = request.query_params.get("start_date")
+        end_param = request.query_params.get("end_date")
+        if bool(start_param) != bool(end_param):
+            raise ValidationError(
+                {
+                    "detail": "start_date and end_date query params must be provided together"
+                }
+            )
+
+        if start_param and end_param:
+            start_date = self._parse_query_date(start_param, "start_date")
+            end_date = self._parse_query_date(end_param, "end_date")
+        else:
+            end_date = today
+            week_start = today - dt.timedelta(days=today.weekday())
+            start_date = max(week_start, pregnancy_start)
+
+        if start_date > end_date:
+            raise ValidationError(
+                {"detail": "start_date must be less than or equal to end_date"}
+            )
+        if start_date < pregnancy_start:
+            raise ValidationError(
+                {"detail": "start_date cannot be earlier than pregnancy_start_date"}
+            )
+        if end_date > today:
+            raise ValidationError({"detail": "end_date cannot be later than today"})
+
+        days_requested = (end_date - start_date).days + 1
+        if days_requested > self.max_period_days:
+            raise ValidationError(
+                {"detail": f"Period cannot exceed {self.max_period_days} days"}
+            )
+
+        return start_date, end_date, days_requested
 
     @extend_schema(
         tags=["Wellbeing"],
-        summary="Get wellbeing log for date",
+        summary="Get wellbeing log for date or period",
+        description=(
+            "When `date` is provided, returns a single-day wellbeing log. "
+            "When `start_date` and `end_date` are provided, returns existing logs for that period. "
+            "When no date params are provided, returns the current week from Monday to today, "
+            "clamped to the user's pregnancy_start_date."
+        ),
         parameters=[
             OpenApiParameter(
                 name="date",
                 type=str,
                 location=OpenApiParameter.QUERY,
-                required=True,
-                description="Date in YYYY-MM-DD",
-            )
+                required=False,
+                description="Single date in YYYY-MM-DD. Cannot be combined with start_date/end_date.",
+            ),
+            OpenApiParameter(
+                name="start_date",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Period start date in YYYY-MM-DD. Must be >= pregnancy_start_date.",
+            ),
+            OpenApiParameter(
+                name="end_date",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Period end date in YYYY-MM-DD. Must be <= today.",
+            ),
         ],
         responses={
-            200: inline_serializer(
-                name="UserWellbeingLogResponse",
-                fields={
-                    "date": serializers.DateField(),
-                    "water_amount": serializers.FloatField(),
-                    "water_unit": serializers.CharField(),
-                    "moods": WellbeingItemSerializer(many=True),
-                    "feelings": WellbeingItemSerializer(many=True),
-                },
+            200: OpenApiResponse(
+                response=inline_serializer(
+                    name="UserWellbeingLogGetResponse",
+                    fields={
+                        "date": serializers.DateField(required=False),
+                        "water_amount": serializers.FloatField(required=False),
+                        "water_unit": serializers.CharField(required=False),
+                        "moods": WellbeingItemSerializer(many=True, required=False),
+                        "feelings": WellbeingItemSerializer(many=True, required=False),
+                        "start_date": serializers.DateField(required=False),
+                        "end_date": serializers.DateField(required=False),
+                        "days_requested": serializers.IntegerField(required=False),
+                        "items": UserWellbeingLogSerializer(many=True, required=False),
+                    },
+                ),
+                description=(
+                    "Single-day object when `date` is provided; period wrapper with `items` "
+                    "when `start_date`/`end_date` are provided or date params are omitted."
+                ),
             ),
             400: inline_serializer(
                 name="UserWellbeingLogBadRequest",
@@ -1648,25 +1743,79 @@ class UserWellbeingLogView(APIView):
                     "feelings": [],
                 },
                 response_only=True,
-            )
+            ),
+            OpenApiExample(
+                "Period log example",
+                value={
+                    "start_date": "2026-02-23",
+                    "end_date": "2026-02-28",
+                    "days_requested": 6,
+                    "items": [
+                        {
+                            "date": "2026-02-28",
+                            "water_amount": 250,
+                            "water_unit": "ml",
+                            "moods": [],
+                            "feelings": [],
+                        }
+                    ],
+                },
+                response_only=True,
+            ),
         ],
     )
     def get(self, request):
         logger.info(
-            "UserWellbeingLogView GET, user=%s, date=%s",
+            "UserWellbeingLogView GET, user=%s, date=%s, start_date=%s, end_date=%s",
             request.user,
             request.query_params.get("date"),
+            request.query_params.get("start_date"),
+            request.query_params.get("end_date"),
         )
-        date = request.query_params.get("date")
-        if not date:
-            logger.warning(
-                "UserWellbeingLogView missing date param, user=%s", request.user
-            )
+        date_param = request.query_params.get("date")
+        has_period_params = any(
+            request.query_params.get(param) for param in ("start_date", "end_date")
+        )
+        if date_param and has_period_params:
             return Response(
-                {"detail": "date query param is required (YYYY-MM-DD)"}, status=400
-            )
+                {"detail": "date cannot be combined with start_date/end_date"},
+                status=status.HTTP_400_BAD_REQUEST,
+        )
 
-        log = UserWellbeingLog.objects.filter(user=request.user, date=date).first()
+        if not date_param:
+            start_date, end_date, days_requested = self._period_bounds_from_request(
+                request
+            )
+            logs = (
+                UserWellbeingLog.objects.filter(
+                    user=request.user,
+                    date__gte=start_date,
+                    date__lte=end_date,
+                )
+                .prefetch_related("moods", "feelings")
+                .order_by("date")
+            )
+            payload = {
+                "start_date": start_date,
+                "end_date": end_date,
+                "days_requested": days_requested,
+                "items": UserWellbeingLogSerializer(logs, many=True).data,
+            }
+            logger.info(
+                "UserWellbeingLogView returning period items=%s, user=%s, start_date=%s, end_date=%s",
+                len(payload["items"]),
+                request.user,
+                start_date,
+                end_date,
+            )
+            return Response(UserWellbeingLogPeriodResponseSerializer(payload).data)
+
+        date = self._parse_query_date(date_param, "date")
+        log = (
+            UserWellbeingLog.objects.filter(user=request.user, date=date)
+            .prefetch_related("moods", "feelings")
+            .first()
+        )
         if not log:
             logger.info(
                 "UserWellbeingLogView returning empty state, user=%s, date=%s",
@@ -1675,7 +1824,7 @@ class UserWellbeingLogView(APIView):
             )
             return Response(
                 {
-                    "date": date,
+                    "date": date.isoformat(),
                     "water_amount": 0,
                     "water_unit": "ml",
                     "moods": [],
