@@ -1,5 +1,7 @@
 # api/tests/test_auth.py
 
+from datetime import date, timedelta
+
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -57,6 +59,37 @@ class AuthTests(APITestCase):
         response = self.client.get(self.profile_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["email"], "test@example.com")
+
+    def test_profile_get_includes_pregnancy_start_date(self):
+        self.user.week_of_pregnancy = 10
+        self.user.set_pregnancy_start_date()
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(self.profile_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("pregnancy_start_date", response.data)
+        self.assertEqual(
+            response.data["pregnancy_start_date"],
+            (date.today() - timedelta(weeks=10)).isoformat(),
+        )
+
+    def test_profile_ignores_direct_pregnancy_start_date_update(self):
+        self.client.force_authenticate(self.user)
+        requested = "2026-01-01"
+
+        response = self.client.patch(
+            self.profile_url,
+            {"week_of_pregnancy": 8, "pregnancy_start_date": requested},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(response.data["pregnancy_start_date"], requested)
+        self.assertEqual(
+            response.data["pregnancy_start_date"],
+            (date.today() - timedelta(weeks=8)).isoformat(),
+        )
 
     def test_password_change_success(self):
         token = self.client.post(

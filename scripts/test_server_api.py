@@ -787,8 +787,18 @@ def step_3_fill_profile(access_token: str):
     data = r.json()
 
     # базовые поля + новые
-    for key in ("email", "language", "week_of_pregnancy", "consent"):
+    for key in (
+        "email",
+        "language",
+        "week_of_pregnancy",
+        "pregnancy_start_date",
+        "consent",
+    ):
         assert key in data, f"Profile missing '{key}'"
+    if data["pregnancy_start_date"] is None:
+        raise AssertionError("Profile pregnancy_start_date must not be null after PATCH")
+    if _parse_iso_date(data["pregnancy_start_date"]) > datetime.now().date():
+        raise AssertionError("Profile pregnancy_start_date cannot be in the future")
 
     # preferred_share_channel может не вернуться, если сериалайзер ещё не задеплоен
     if "preferred_share_channel" in data:
@@ -831,6 +841,12 @@ def step_3_1_put_profile_update_pregnancy_week(access_token: str):
     assert_status(r, 200, "Profile GET failed")
     data = r.json()
     assert data["week_of_pregnancy"] == 10
+    if "pregnancy_start_date" not in data:
+        raise AssertionError("Profile missing 'pregnancy_start_date' after PUT")
+    if data["pregnancy_start_date"] is None:
+        raise AssertionError("Profile pregnancy_start_date must not be null after PUT")
+    if _parse_iso_date(data["pregnancy_start_date"]) > datetime.now().date():
+        raise AssertionError("Profile pregnancy_start_date cannot be in the future")
 
 
 def step_4_lifestyle(access_token: str):

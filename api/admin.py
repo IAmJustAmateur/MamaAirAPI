@@ -63,10 +63,17 @@ class UserAdmin(BaseUserAdmin):
         "country",
         "race",
         "week_of_pregnancy",
+        "pregnancy_start_date",
         "current_week_of_pregnancy",
         "registered_at",
     )
-    list_filter = ("country", "race", "week_of_pregnancy", "tracking_enabled")
+    list_filter = (
+        "country",
+        "race",
+        "week_of_pregnancy",
+        "pregnancy_start_date",
+        "tracking_enabled",
+    )
     search_fields = ("email", "name")
     ordering = ("-registered_at",)
 
@@ -78,7 +85,15 @@ class UserAdmin(BaseUserAdmin):
         ),
         (
             "Pregnancy",
-            {"fields": ("race", "country", "is_first_pregnancy", "week_of_pregnancy")},
+            {
+                "fields": (
+                    "race",
+                    "country",
+                    "is_first_pregnancy",
+                    "week_of_pregnancy",
+                    "pregnancy_start_date",
+                )
+            },
         ),
         (
             "Settings",

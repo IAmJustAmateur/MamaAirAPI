@@ -43,6 +43,7 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     week_of_pregnancy = serializers.IntegerField()
+    pregnancy_start_date = serializers.DateField(read_only=True, allow_null=True)
 
     bmi = serializers.FloatField(read_only=True)
 
@@ -58,7 +59,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "registered_at",
             # "current_pregnancy_week",
-            # "pregnancy_start_date",
+            "pregnancy_start_date",
             "bmi",
         )
 
