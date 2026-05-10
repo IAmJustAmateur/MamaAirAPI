@@ -306,6 +306,7 @@ class WellbeingAdmin(admin.ModelAdmin):
         "id",
         "kind",
         "title",
+        "emoji",
         "code",
         "number_value",
         "unit",
@@ -313,12 +314,12 @@ class WellbeingAdmin(admin.ModelAdmin):
         "is_active",
     )
     list_filter = ("kind", "is_active", "unit")
-    search_fields = ("title", "code")
+    search_fields = ("title", "emoji", "code")
     ordering = ("kind", "sort_order", "title")
-    list_editable = ("sort_order", "is_active")
+    list_editable = ("emoji", "sort_order", "is_active")
     fieldsets = (
         ("Common", {"fields": ("kind", "is_active", "sort_order")}),
-        ("Mood/Feeling fields", {"fields": ("title", "code")}),
+        ("Mood/Feeling fields", {"fields": ("title", "emoji", "code")}),
         ("Water goal fields", {"fields": ("number_value", "unit")}),
     )
 
