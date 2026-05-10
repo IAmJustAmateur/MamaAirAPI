@@ -1142,6 +1142,7 @@ class Wellbeing(models.Model):
         max_length=64, unique=True, null=True, blank=True
     )  # optional stable key
     title = models.CharField(max_length=255, blank=True, default="")
+    emoji = models.CharField(max_length=16, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)
 
     # for water_goal

@@ -84,6 +84,13 @@ class WellbeingApiTests(APITestCase):
         assert "Headache" in feel_titles
         assert "Poor Sleep" in feel_titles
 
+        moods_by_code = {x["code"]: x for x in resp.data["moods"]}
+        feelings_by_code = {x["code"]: x for x in resp.data["feelings"]}
+        assert moods_by_code["feel_sick"]["emoji"] == "🤒"
+        assert moods_by_code["nervous"]["emoji"] == "😟"
+        assert feelings_by_code["headache"]["emoji"] == "🤕"
+        assert feelings_by_code["poor_sleep"]["emoji"] == "😴"
+
         # inactive should not be returned
         assert "Inactive X" not in feel_titles
 
@@ -123,6 +130,8 @@ class WellbeingApiTests(APITestCase):
         assert resp.data["water_unit"] == "ml"
         assert [x["id"] for x in resp.data["moods"]] == [self.mood_1.id]
         assert [x["id"] for x in resp.data["feelings"]] == [self.feel_1.id]
+        assert resp.data["moods"][0]["emoji"] == "🤒"
+        assert resp.data["feelings"][0]["emoji"] == "🤕"
 
     # ---------- Log POST (upsert) ----------
 
@@ -138,6 +147,8 @@ class WellbeingApiTests(APITestCase):
         resp = self.client.post(url, payload, format="json")
 
         assert resp.status_code == status.HTTP_201_CREATED
+        assert {x["emoji"] for x in resp.data["moods"]} == {"🤒", "😟"}
+        assert [x["emoji"] for x in resp.data["feelings"]] == ["🤕"]
 
         log = UserWellbeingLog.objects.get(user=self.user, date=date(2026, 2, 28))
         assert log.water_amount == 250

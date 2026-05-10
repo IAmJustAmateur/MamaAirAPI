@@ -191,13 +191,15 @@ def _assert_wellbeing_catalog_schema(data: dict):
         for it in arr[:20]:
             if not isinstance(it, dict):
                 raise AssertionError(f"{list_name} item must be dict")
-            for k in ("id", "kind", "title", "is_active"):
+            for k in ("id", "kind", "title", "emoji", "is_active"):
                 if k not in it:
                     raise AssertionError(f"{list_name} item missing '{k}': {it}")
             if not isinstance(it["id"], int):
                 raise AssertionError(f"{list_name}.id must be int")
             if not isinstance(it["title"], str):
                 raise AssertionError(f"{list_name}.title must be str")
+            if not isinstance(it["emoji"], str):
+                raise AssertionError(f"{list_name}.emoji must be str")
             if it["kind"] not in ("mood", "feeling"):
                 raise AssertionError(f"{list_name}.kind invalid: {it['kind']}")
 
@@ -231,6 +233,14 @@ def _assert_wellbeing_log_schema(body: dict, expected_date: str):
         raise AssertionError("water_unit must be non-empty string")
     if not isinstance(body["moods"], list) or not isinstance(body["feelings"], list):
         raise AssertionError("moods/feelings must be lists")
+    for list_name in ("moods", "feelings"):
+        for it in body[list_name][:20]:
+            if not isinstance(it, dict):
+                raise AssertionError(f"log {list_name} item must be dict")
+            if "emoji" not in it:
+                raise AssertionError(f"log {list_name} item missing 'emoji': {it}")
+            if not isinstance(it["emoji"], str):
+                raise AssertionError(f"log {list_name}.emoji must be str")
 
 
 def _ids_from_items(items: list[dict]) -> list[int]:
