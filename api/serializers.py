@@ -454,6 +454,7 @@ class WellbeingItemSerializer(serializers.ModelSerializer):
             "kind",
             "code",
             "title",
+            "emoji",
             "sort_order",
             "number_value",
             "unit",
