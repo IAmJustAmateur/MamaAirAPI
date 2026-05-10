@@ -1146,9 +1146,7 @@ class Wellbeing(models.Model):
 
     # for water_goal
     number_value = models.FloatField(null=True, blank=True)  # e.g. 72
-    unit = models.CharField(
-        max_length=16, blank=True, default="fl_oz"
-    )  # fl_oz / ml / l
+    unit = models.CharField(max_length=16, blank=True, default="ml")  # ml / l
 
     is_active = models.BooleanField(default=True)
 
@@ -1170,7 +1168,7 @@ class UserWellbeingLog(models.Model):
     date = models.DateField()
 
     water_amount = models.FloatField(default=0)  # e.g. 32
-    water_unit = models.CharField(max_length=16, default="fl_oz")
+    water_unit = models.CharField(max_length=16, default="ml")
 
     moods = models.ManyToManyField(Wellbeing, blank=True, related_name="mood_logs")
     feelings = models.ManyToManyField(
@@ -1237,8 +1235,14 @@ class UserDailyTaskCompletion(models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=["user", "date"]),
-            models.Index(fields=["user", "task", "date"]),
+            models.Index(
+                fields=["user", "date"],
+                name="api_userdai_user_id_52c953_idx",
+            ),
+            models.Index(
+                fields=["user", "task", "date"],
+                name="api_userdai_user_id_9df84f_idx",
+            ),
         ]
         ordering = ["-date", "task__sort_order", "task__title"]
 

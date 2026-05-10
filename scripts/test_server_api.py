@@ -2,6 +2,7 @@
 
 import os
 import sys
+import argparse
 from datetime import datetime, timezone as dt_timezone
 import json
 import requests
@@ -13,13 +14,68 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# BASE_URL = "http://52.4.150.16/"
-# BASE_URL = "http://127.0.0.1:8000/"
-BASE_URL = "https://api.mamaair.app/"
-API_KEY = "super-secret-mobile-key"  # from your .env
-REG_API_KEY = "super-secret-mobile-key"  # from your .env
-EMAIL = "testuser003@example.com"
-PASSWORD = "testpass123"
+ENVIRONMENTS = {
+    "local": "http://127.0.0.1:8000/",
+    "production": "https://api.mamaair.app/",
+}
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run API E2E checks. Local example: "
+            "python scripts/test_server_api.py --env local"
+        )
+    )
+    parser.add_argument(
+        "--env",
+        choices=sorted(ENVIRONMENTS),
+        default=os.getenv("E2E_ENV", "production"),
+        help="Target environment. Can also be set with E2E_ENV.",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=os.getenv("E2E_BASE_URL"),
+        help="Override target base URL, for example http://127.0.0.1:8000/.",
+    )
+    parser.add_argument(
+        "--email",
+        default=os.getenv("E2E_EMAIL", "testuser003@example.com"),
+        help="E2E user email. Can also be set with E2E_EMAIL.",
+    )
+    parser.add_argument(
+        "--password",
+        default=os.getenv("E2E_PASSWORD", "testpass123"),
+        help="E2E user password. Can also be set with E2E_PASSWORD.",
+    )
+    parser.add_argument(
+        "--reg-api-key",
+        default=os.getenv("REG_API_KEY", "super-secret-mobile-key"),
+        help="Registration API key. Can also be set with REG_API_KEY.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=int(os.getenv("E2E_TIMEOUT", "200")),
+        help="Request timeout in seconds. Can also be set with E2E_TIMEOUT.",
+    )
+    parser.add_argument(
+        "--verify-ssl",
+        choices=("true", "false"),
+        default=os.getenv("E2E_VERIFY_SSL"),
+        help="Verify SSL certificates. Defaults to false for local, true otherwise.",
+    )
+    return parser.parse_args()
+
+
+ARGS = parse_args()
+BASE_URL = ARGS.base_url or ENVIRONMENTS[ARGS.env]
+if not BASE_URL.endswith("/"):
+    BASE_URL = f"{BASE_URL}/"
+API_KEY = ARGS.reg_api_key
+REG_API_KEY = ARGS.reg_api_key
+EMAIL = ARGS.email
+PASSWORD = ARGS.password
 
 REGISTER_URL = urljoin(BASE_URL, "api/auth/register/")
 
@@ -51,11 +107,15 @@ RECOMMENDATION_COMPLETION_URL = urljoin(BASE_URL, "api/recommendation-completion
 WELLBEING_CATALOG_URL = urljoin(BASE_URL, "api/wellbeing/")
 WELLBEING_LOG_URL = urljoin(BASE_URL, "api/wellbeing/log/")
 DAILY_CHECKIN_URL = urljoin(BASE_URL, "api/daily-checkin/")
+DAILY_TASKS_URL = urljoin(BASE_URL, "api/daily-tasks/")
 TASK_COMPLETION_URL = urljoin(BASE_URL, "api/task-completion/")
 
 
-TIMEOUT = 200
-VERIFY_SSL = True  # http у тебя сейчас — флаг игнорируется
+TIMEOUT = ARGS.timeout
+if ARGS.verify_ssl is None:
+    VERIFY_SSL = ARGS.env != "local"
+else:
+    VERIFY_SSL = ARGS.verify_ssl == "true"
 
 
 def pp(title, obj):
@@ -120,6 +180,8 @@ def _assert_wellbeing_catalog_schema(data: dict):
         raise AssertionError("water_goal.value must be number or null")
     if not isinstance(wg["unit"], str) or not wg["unit"]:
         raise AssertionError("water_goal.unit must be non-empty string")
+    if wg["unit"] != "ml":
+        raise AssertionError(f"water_goal.unit must be 'ml', got {wg['unit']}")
 
     for list_name in ("moods", "feelings"):
         arr = data[list_name]
@@ -169,6 +231,43 @@ def _assert_wellbeing_log_schema(body: dict, expected_date: str):
         raise AssertionError("water_unit must be non-empty string")
     if not isinstance(body["moods"], list) or not isinstance(body["feelings"], list):
         raise AssertionError("moods/feelings must be lists")
+
+
+def _ids_from_items(items: list[dict]) -> list[int]:
+    return sorted(x.get("id") for x in items if isinstance(x, dict))
+
+
+def _assert_wellbeing_item_ids(body: dict, mood_ids=None, feeling_ids=None):
+    got_mood_ids = _ids_from_items(body.get("moods", []))
+    got_feel_ids = _ids_from_items(body.get("feelings", []))
+    if mood_ids is not None and sorted(mood_ids) != got_mood_ids:
+        raise AssertionError(f"mood ids mismatch: {got_mood_ids} vs {mood_ids}")
+    if feeling_ids is not None and sorted(feeling_ids) != got_feel_ids:
+        raise AssertionError(f"feeling ids mismatch: {got_feel_ids} vs {feeling_ids}")
+
+
+def _assert_summary_water_schema(
+    body: dict,
+    expected_date: str | None = None,
+    expected_amount: float | None = None,
+    expected_unit: str = "ml",
+):
+    water = body.get("water")
+    if not isinstance(water, dict):
+        raise AssertionError(f"summary.water must be object, got {type(water)}")
+    for key in ("date", "amount", "unit"):
+        if key not in water:
+            raise AssertionError(f"summary.water missing '{key}'")
+    if expected_date is not None and water["date"] != expected_date:
+        raise AssertionError(f"summary.water.date mismatch: {water['date']} vs {expected_date}")
+    if not isinstance(water["amount"], (int, float)):
+        raise AssertionError("summary.water.amount must be number")
+    if expected_amount is not None and water["amount"] != expected_amount:
+        raise AssertionError(
+            f"summary.water.amount mismatch: {water['amount']} vs {expected_amount}"
+        )
+    if water["unit"] != expected_unit:
+        raise AssertionError(f"summary.water.unit mismatch: {water['unit']} vs {expected_unit}")
 
 
 def _assert_daily_checkin_exists_schema(body: dict, expected_date: str):
@@ -224,6 +323,30 @@ def _assert_task_completion_schema(
         raise AssertionError(
             f"task completion tasks mismatch: {body['tasks']} vs {expected_tasks}"
         )
+
+
+def _assert_daily_tasks_schema(body: list[dict]) -> None:
+    if not isinstance(body, list):
+        raise AssertionError(f"daily tasks response must be list, got {type(body)}")
+    if not body:
+        raise AssertionError("daily tasks response must not be empty")
+
+    previous_sort_order = None
+    for i, task in enumerate(body):
+        if not isinstance(task, dict):
+            raise AssertionError(f"daily tasks[{i}] must be object")
+        for key in ("code", "title", "sort_order"):
+            if key not in task:
+                raise AssertionError(f"daily tasks[{i}] missing '{key}'")
+        if not isinstance(task["code"], str) or not task["code"]:
+            raise AssertionError(f"daily tasks[{i}].code must be non-empty string")
+        if not isinstance(task["title"], str) or not task["title"]:
+            raise AssertionError(f"daily tasks[{i}].title must be non-empty string")
+        if not isinstance(task["sort_order"], int):
+            raise AssertionError(f"daily tasks[{i}].sort_order must be int")
+        if previous_sort_order is not None and task["sort_order"] < previous_sort_order:
+            raise AssertionError("daily tasks must be ordered by sort_order")
+        previous_sort_order = task["sort_order"]
 
 
 def log(msg):
@@ -385,9 +508,9 @@ def step_meta_choices_public():
 
 def login_as_superuser():
     """Login as superuser from .env, return access token."""
-    if BASE_URL == "http://127.0.0.1:8000/":
-        email = "admin@example.com"
-        password = "admin"
+    if ARGS.env == "local":
+        email = os.getenv("LOCAL_SUPERUSER_EMAIL", "admin@example.com")
+        password = os.getenv("LOCAL_SUPERUSER_PASSWORD", "admin")
     else:
         email = os.getenv("SUPERUSER_EMAIL", "admin@example.com")
         password = os.getenv("SUPERUSER_PASSWORD", "admin")
@@ -461,6 +584,9 @@ def step_summary_get(
     expected_checkin_date: str | None = None,
     expected_task_date: str | None = None,
     expected_tasks: list[str] | None = None,
+    expected_water_date: str | None = None,
+    expected_water_amount: float | None = None,
+    expected_water_unit: str = "ml",
 ):
     """
     GET /api/summary/ — проверка схемы ответа согласно SummaryResponseSerializer.
@@ -488,6 +614,7 @@ def step_summary_get(
         "week_info",
         "daily_exposure_level",
         "daily_checkins",
+        "water",
         "task_completions",
         "exposure_history",
         "pollutant_compliance",
@@ -567,6 +694,13 @@ def step_summary_get(
         raise AssertionError(
             f"daily_checkins must contain {expected_checkin_date}, got {daily_checkins}"
         )
+
+    _assert_summary_water_schema(
+        body,
+        expected_date=expected_water_date,
+        expected_amount=expected_water_amount,
+        expected_unit=expected_water_unit,
+    )
 
     # exposure_history — структура
     task_completions = body["task_completions"]
@@ -1418,16 +1552,19 @@ def step_wellbeing_log_post_upsert(
     target_date: str,
     water_amount: float,
     water_unit: str,
-    mood_ids: list[int],
-    feeling_ids: list[int],
+    mood_ids: list[int] | None = None,
+    feeling_ids: list[int] | None = None,
+    expected_water_amount: float | None = None,
 ) -> dict:
     payload = {
         "date": target_date,
         "water_amount": water_amount,
         "water_unit": water_unit,
-        "mood_ids": mood_ids,
-        "feeling_ids": feeling_ids,
     }
+    if mood_ids is not None:
+        payload["mood_ids"] = mood_ids
+    if feeling_ids is not None:
+        payload["feeling_ids"] = feeling_ids
     r = requests.post(
         WELLBEING_LOG_URL,
         json=payload,
@@ -1440,22 +1577,15 @@ def step_wellbeing_log_post_upsert(
     pp("Wellbeing log POST (upsert)", body)
 
     _assert_wellbeing_log_schema(body, target_date)
+    if body["water_unit"] != water_unit:
+        raise AssertionError(f"water_unit mismatch: {body['water_unit']} vs {water_unit}")
+    if expected_water_amount is not None and body["water_amount"] != expected_water_amount:
+        raise AssertionError(
+            f"water_amount mismatch: {body['water_amount']} vs {expected_water_amount}"
+        )
 
     # мягкая проверка, что ids применились (если сервер возвращает объекты)
-    got_mood_ids = sorted(
-        [x.get("id") for x in body.get("moods", []) if isinstance(x, dict)]
-    )
-    got_feel_ids = sorted(
-        [x.get("id") for x in body.get("feelings", []) if isinstance(x, dict)]
-    )
-    if mood_ids:
-        assert (
-            sorted(mood_ids) == got_mood_ids
-        ), f"mood ids mismatch: {got_mood_ids} vs {mood_ids}"
-    if feeling_ids:
-        assert (
-            sorted(feeling_ids) == got_feel_ids
-        ), f"feeling ids mismatch: {got_feel_ids} vs {feeling_ids}"
+    _assert_wellbeing_item_ids(body, mood_ids=mood_ids, feeling_ids=feeling_ids)
 
     return body
 
@@ -1500,6 +1630,20 @@ def step_daily_checkin_ensure_exists(access_token: str, target_date: str) -> Non
     after = step_daily_checkin_get(access_token, target_date)
     if after["exists"] is not True:
         raise AssertionError("Daily checkin should exist after create")
+
+
+def step_daily_tasks_get(access_token: str) -> list[dict]:
+    r = requests.get(
+        DAILY_TASKS_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Daily tasks GET failed")
+    body = safe_json(r)
+    pp("Daily tasks GET", body)
+    _assert_daily_tasks_schema(body)
+    return body
 
 
 def step_task_completion_get(access_token: str, target_date: str) -> dict:
@@ -1840,12 +1984,15 @@ def main():
             "   If user already exists, registration may still pass with 400/409 and the flow will continue.\n"
         )
 
+    print(f"E2E_ENV: {ARGS.env}")
     print(f"BASE_URL: {BASE_URL}")
+    print(f"VERIFY_SSL: {VERIFY_SSL}")
     print(f"REGISTER_URL: {REGISTER_URL}")
     print(f"TOKEN_URL: {TOKEN_URL}")
     print(f"PROFILE_URL: {PROFILE_URL}")
     print(f"LIFESTYLE_URL: {LIFESTYLE_URL}")
     print(f"CHECKLIST_URL: {CHECKLIST_URL}")
+    print(f"DAILY_TASKS_URL: {DAILY_TASKS_URL}")
 
     # 0) Публичный эндпойнт
     step_meta_choices_public()
@@ -1863,25 +2010,54 @@ def main():
 
     today = datetime.now().date().isoformat()
 
-    # 1) GET empty/default
-    _ = step_wellbeing_log_get(token, today)
+    # 1) GET current/default state
+    initial_wellbeing_log = step_wellbeing_log_get(token, today)
+    initial_water_amount = initial_wellbeing_log["water_amount"]
 
-    # 2) POST upsert
+    # 2) POST adds water and replaces mood/feeling selections
     water_goal = catalog.get("water_goal") or {}
-    unit = water_goal.get("unit") or "fl_oz"
-    _ = step_wellbeing_log_post_upsert(
+    unit = water_goal.get("unit") or "ml"
+    if unit != "ml":
+        raise AssertionError(f"Expected wellbeing water unit 'ml', got {unit}")
+    first_water_add = 250
+    first_wellbeing_log = step_wellbeing_log_post_upsert(
         token,
         target_date=today,
-        water_amount=32,
+        water_amount=first_water_add,
         water_unit=unit,
         mood_ids=moods_ids,
         feeling_ids=feelings_ids,
+        expected_water_amount=initial_water_amount + first_water_add,
     )
 
-    # 3) Verify by GET
-    _ = step_wellbeing_log_get(token, today)
+    # 3) Water-only POST must add water without clearing mood/feeling selections
+    second_water_add = 125
+    water_only_log = step_wellbeing_log_post_upsert(
+        token,
+        target_date=today,
+        water_amount=second_water_add,
+        water_unit=unit,
+        expected_water_amount=first_wellbeing_log["water_amount"] + second_water_add,
+    )
+    _assert_wellbeing_item_ids(
+        water_only_log, mood_ids=moods_ids, feeling_ids=feelings_ids
+    )
+
+    # 4) Verify by GET
+    final_wellbeing_log = step_wellbeing_log_get(token, today)
+    if final_wellbeing_log["water_amount"] != water_only_log["water_amount"]:
+        raise AssertionError(
+            f"Final water amount mismatch: {final_wellbeing_log['water_amount']} "
+            f"vs {water_only_log['water_amount']}"
+        )
+    _assert_wellbeing_item_ids(
+        final_wellbeing_log, mood_ids=moods_ids, feeling_ids=feelings_ids
+    )
     step_daily_checkin_ensure_exists(token, today)
-    task_completion_tasks = ["drink_water", "cooking_smoke"]
+    daily_tasks = step_daily_tasks_get(token)
+    if len(daily_tasks) < 2:
+        raise AssertionError("Daily tasks catalog must have at least 2 active tasks")
+    task_completion_tasks = [task["code"] for task in daily_tasks[:2]]
     step_task_completion_replace_and_verify(token, today, task_completion_tasks)
     checklist = step_5_check_mommy_checklist(token)
 
@@ -1970,6 +2146,9 @@ def main():
         expected_checkin_date=today,
         expected_task_date=today,
         expected_tasks=task_completion_tasks,
+        expected_water_date=today,
+        expected_water_amount=final_wellbeing_log["water_amount"],
+        expected_water_unit=unit,
     )
 
     summary_r = requests.get(

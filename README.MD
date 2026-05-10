@@ -113,6 +113,28 @@ The API will be available at:
 http://127.0.0.1:8000/
 ```
 
+### E2E API checks
+
+Run the Django server locally first:
+
+```bash
+python manage.py runserver
+```
+
+Then run the E2E script against the local server:
+
+```bash
+python scripts/test_server_api.py --env local
+```
+
+Useful overrides:
+
+```bash
+python scripts/test_server_api.py --env local --email testuser003@example.com --password testpass123 --reg-api-key super-secret-mobile-key
+python scripts/test_server_api.py --env production
+python scripts/test_server_api.py --base-url https://api.mamaair.app/
+```
+
 ### 🔗 Endpoints
 
 All endpoints are prefixed with `/api/`.

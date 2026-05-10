@@ -28,7 +28,7 @@ class WellbeingApiTests(APITestCase):
         if not cls.water_goal:
             # fallback (на случай если миграцию отключили)
             cls.water_goal = Wellbeing.objects.create(
-                kind="water_goal", number_value=72, unit="fl_oz", is_active=True
+                kind="water_goal", number_value=2130, unit="ml", is_active=True
             )
 
         # Moods
@@ -73,8 +73,8 @@ class WellbeingApiTests(APITestCase):
 
         assert resp.status_code == status.HTTP_200_OK
         assert "water_goal" in resp.data
-        assert resp.data["water_goal"]["value"] == 72
-        assert resp.data["water_goal"]["unit"] == "fl_oz"
+        assert resp.data["water_goal"]["value"] == 2130
+        assert resp.data["water_goal"]["unit"] == "ml"
 
         mood_titles = [x["title"] for x in resp.data["moods"]]
         feel_titles = [x["title"] for x in resp.data["feelings"]]
@@ -104,13 +104,13 @@ class WellbeingApiTests(APITestCase):
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["date"] == d
         assert resp.data["water_amount"] == 0
-        assert resp.data["water_unit"] == "fl_oz"
+        assert resp.data["water_unit"] == "ml"
         assert resp.data["moods"] == []
         assert resp.data["feelings"] == []
 
     def test_log_get_returns_existing_log(self):
         log = UserWellbeingLog.objects.create(
-            user=self.user, date=date(2026, 2, 28), water_amount=32, water_unit="fl_oz"
+            user=self.user, date=date(2026, 2, 28), water_amount=250, water_unit="ml"
         )
         log.moods.set([self.mood_1.id])
         log.feelings.set([self.feel_1.id])
@@ -119,8 +119,8 @@ class WellbeingApiTests(APITestCase):
         resp = self.client.get(url, {"date": "2026-02-28"})
 
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data["water_amount"] == 32
-        assert resp.data["water_unit"] == "fl_oz"
+        assert resp.data["water_amount"] == 250
+        assert resp.data["water_unit"] == "ml"
         assert [x["id"] for x in resp.data["moods"]] == [self.mood_1.id]
         assert [x["id"] for x in resp.data["feelings"]] == [self.feel_1.id]
 
@@ -130,8 +130,8 @@ class WellbeingApiTests(APITestCase):
         url = reverse("wellbeing-log")
         payload = {
             "date": "2026-02-28",
-            "water_amount": 32,
-            "water_unit": "fl_oz",
+            "water_amount": 250,
+            "water_unit": "ml",
             "mood_ids": [self.mood_1.id, self.mood_2.id],
             "feeling_ids": [self.feel_1.id],
         }
@@ -140,17 +140,17 @@ class WellbeingApiTests(APITestCase):
         assert resp.status_code == status.HTTP_201_CREATED
 
         log = UserWellbeingLog.objects.get(user=self.user, date=date(2026, 2, 28))
-        assert log.water_amount == 32
-        assert log.water_unit == "fl_oz"
+        assert log.water_amount == 250
+        assert log.water_unit == "ml"
         assert set(log.moods.values_list("id", flat=True)) == {
             self.mood_1.id,
             self.mood_2.id,
         }
         assert set(log.feelings.values_list("id", flat=True)) == {self.feel_1.id}
 
-    def test_log_post_updates_existing_log(self):
+    def test_log_post_adds_water_to_existing_log(self):
         log = UserWellbeingLog.objects.create(
-            user=self.user, date=date(2026, 2, 28), water_amount=10, water_unit="fl_oz"
+            user=self.user, date=date(2026, 2, 28), water_amount=250, water_unit="ml"
         )
         log.moods.set([self.mood_1.id])
         log.feelings.set([self.feel_1.id])
@@ -158,8 +158,8 @@ class WellbeingApiTests(APITestCase):
         url = reverse("wellbeing-log")
         payload = {
             "date": "2026-02-28",
-            "water_amount": 40,
-            "water_unit": "fl_oz",
+            "water_amount": 500,
+            "water_unit": "ml",
             "mood_ids": [self.mood_2.id],
             "feeling_ids": [self.feel_2.id],
         }
@@ -168,9 +168,31 @@ class WellbeingApiTests(APITestCase):
         assert resp.status_code == status.HTTP_201_CREATED
 
         log.refresh_from_db()
-        assert log.water_amount == 40
+        assert log.water_amount == 750
         assert set(log.moods.values_list("id", flat=True)) == {self.mood_2.id}
         assert set(log.feelings.values_list("id", flat=True)) == {self.feel_2.id}
+
+    def test_log_post_water_only_preserves_existing_moods_and_feelings(self):
+        log = UserWellbeingLog.objects.create(
+            user=self.user, date=date(2026, 2, 28), water_amount=250, water_unit="ml"
+        )
+        log.moods.set([self.mood_1.id])
+        log.feelings.set([self.feel_1.id])
+
+        url = reverse("wellbeing-log")
+        payload = {
+            "date": "2026-02-28",
+            "water_amount": 500,
+            "water_unit": "ml",
+        }
+        resp = self.client.post(url, payload, format="json")
+
+        assert resp.status_code == status.HTTP_201_CREATED
+
+        log.refresh_from_db()
+        assert log.water_amount == 750
+        assert set(log.moods.values_list("id", flat=True)) == {self.mood_1.id}
+        assert set(log.feelings.values_list("id", flat=True)) == {self.feel_1.id}
 
     def test_log_post_rejects_wrong_kind_in_mood_ids(self):
         # Passing a FEELING id in mood_ids should be rejected

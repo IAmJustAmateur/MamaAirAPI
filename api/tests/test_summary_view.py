@@ -15,6 +15,7 @@ from api.models import (
     DailyCheckin,
     DailyTask,
     UserDailyTaskCompletion,
+    UserWellbeingLog,
 )
 
 User = get_user_model()
@@ -122,6 +123,12 @@ class SummaryViewTests(APITestCase):
             task=self.drink_water,
             completed=True,
         )
+        UserWellbeingLog.objects.create(
+            user=self.user,
+            date=self.today,
+            water_amount=750,
+            water_unit="ml",
+        )
 
     def _mock_recommendations(self):
         snapshot = Mock()
@@ -194,6 +201,7 @@ class SummaryViewTests(APITestCase):
             "today_journey",
             "daily_exposure_level",
             "daily_checkins",
+            "water",
             "task_completions",
             "pollutant_compliance",
         ]:
@@ -202,6 +210,11 @@ class SummaryViewTests(APITestCase):
         assert resp.data["daily_checkins"] == [
             d.isoformat() for d in self.checkin_dates
         ]
+        assert resp.data["water"] == {
+            "date": self.today.isoformat(),
+            "amount": 750,
+            "unit": "ml",
+        }
         assert resp.data["task_completions"] == [
             {
                 "date": self.checkin_dates[-1].isoformat(),
@@ -361,6 +374,7 @@ class SummaryViewTests(APITestCase):
         assert "week_info" in resp.data  # ← добавлено
         assert "daily_exposure_level" in resp.data
         assert "daily_checkins" in resp.data
+        assert "water" in resp.data
         assert "task_completions" in resp.data
         assert "exposure_history" in resp.data  # ← добавлено
 
@@ -378,6 +392,11 @@ class SummaryViewTests(APITestCase):
         assert resp.data["daily_checkins"] == [
             d.isoformat() for d in self.checkin_dates
         ]
+        assert resp.data["water"] == {
+            "date": self.today.isoformat(),
+            "amount": 750,
+            "unit": "ml",
+        }
         assert resp.data["task_completions"] == [
             {
                 "date": self.checkin_dates[-1].isoformat(),

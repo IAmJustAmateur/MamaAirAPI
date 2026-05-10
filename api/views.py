@@ -63,6 +63,7 @@ from .models import (
     RecommendationCompletion,
     Wellbeing,
     DailyCheckin,
+    DailyTask,
     UserDailyTaskCompletion,
     UserWellbeingLog,
 )
@@ -91,6 +92,7 @@ from .serializers import (
     WellbeingItemSerializer,
     DailyCheckinSerializer,
     DailyCheckinCreateSerializer,
+    DailyTaskSerializer,
     TaskCompletionDaySerializer,
     TaskCompletionUpsertSerializer,
     UserWellbeingLogSerializer,
@@ -1215,6 +1217,14 @@ class SummaryView(APIView):
             .values_list("date", flat=True)
         )
         task_completions = _task_completion_history(request.user, week_start, today)
+        wellbeing_log = UserWellbeingLog.objects.filter(
+            user=request.user, date=today
+        ).first()
+        water = {
+            "date": today.isoformat(),
+            "amount": wellbeing_log.water_amount if wellbeing_log else 0,
+            "unit": wellbeing_log.water_unit if wellbeing_log else "ml",
+        }
 
         user: User = request.user
         data = {
@@ -1232,6 +1242,7 @@ class SummaryView(APIView):
                 daily_exposure.exposure_level if daily_exposure else None
             ),
             "daily_checkins": daily_checkins,
+            "water": water,
             "task_completions": task_completions,
             "exposure_history": exposure_history_payload,
             "pollutant_compliance": pollutant_compliance,
@@ -1540,7 +1551,7 @@ class WellbeingCatalogView(APIView):
             OpenApiExample(
                 "Catalog example",
                 value={
-                    "water_goal": {"value": 72, "unit": "fl_oz"},
+                    "water_goal": {"value": 2130, "unit": "ml"},
                     "moods": [
                         {
                             "id": 1,
@@ -1583,7 +1594,7 @@ class WellbeingCatalogView(APIView):
         data = {
             "water_goal": {
                 "value": water.number_value if water else None,
-                "unit": water.unit if water else "fl_oz",
+                "unit": water.unit if water else "ml",
             },
             "moods": WellbeingItemSerializer(moods, many=True).data,
             "feelings": WellbeingItemSerializer(feelings, many=True).data,
@@ -1634,7 +1645,7 @@ class UserWellbeingLogView(APIView):
                 value={
                     "date": "2026-02-28",
                     "water_amount": 0,
-                    "water_unit": "fl_oz",
+                    "water_unit": "ml",
                     "moods": [],
                     "feelings": [],
                 },
@@ -1668,7 +1679,7 @@ class UserWellbeingLogView(APIView):
                 {
                     "date": date,
                     "water_amount": 0,
-                    "water_unit": "fl_oz",
+                    "water_unit": "ml",
                     "moods": [],
                     "feelings": [],
                 }
@@ -1689,8 +1700,8 @@ class UserWellbeingLogView(APIView):
             name="UserWellbeingLogUpsertRequest",
             fields={
                 "date": serializers.DateField(),
-                "water_amount": serializers.FloatField(required=False, default=0),
-                "water_unit": serializers.CharField(required=False, default="fl_oz"),
+                "water_amount": serializers.FloatField(required=False, min_value=0),
+                "water_unit": serializers.CharField(required=False, default="ml"),
                 "mood_ids": serializers.ListField(
                     child=serializers.IntegerField(), required=False
                 ),
@@ -1720,8 +1731,8 @@ class UserWellbeingLogView(APIView):
                 "Upsert request example",
                 value={
                     "date": "2026-02-28",
-                    "water_amount": 32,
-                    "water_unit": "fl_oz",
+                    "water_amount": 250,
+                    "water_unit": "ml",
                     "mood_ids": [1, 2],
                     "feeling_ids": [10],
                 },
@@ -1834,6 +1845,20 @@ class DailyCheckinView(APIView):
             daily_checkin.date,
         )
         return Response(DailyCheckinSerializer(daily_checkin).data, status=201)
+
+
+class DailyTaskListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Wellbeing"],
+        summary="Get active daily tasks",
+        responses={200: DailyTaskSerializer(many=True)},
+    )
+    def get(self, request):
+        logger.info("DailyTaskListView GET, user=%s", request.user)
+        tasks = DailyTask.objects.filter(is_active=True).order_by("sort_order", "title")
+        return Response(DailyTaskSerializer(tasks, many=True).data)
 
 
 class TaskCompletionView(APIView):
