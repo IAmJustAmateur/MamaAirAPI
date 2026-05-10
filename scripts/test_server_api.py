@@ -2,6 +2,7 @@
 
 import os
 import sys
+import argparse
 from datetime import datetime, timezone as dt_timezone
 import json
 import requests
@@ -13,13 +14,68 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# BASE_URL = "http://52.4.150.16/"
-# BASE_URL = "http://127.0.0.1:8000/"
-BASE_URL = "https://api.mamaair.app/"
-API_KEY = "super-secret-mobile-key"  # from your .env
-REG_API_KEY = "super-secret-mobile-key"  # from your .env
-EMAIL = "testuser003@example.com"
-PASSWORD = "testpass123"
+ENVIRONMENTS = {
+    "local": "http://127.0.0.1:8000/",
+    "production": "https://api.mamaair.app/",
+}
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run API E2E checks. Local example: "
+            "python scripts/test_server_api.py --env local"
+        )
+    )
+    parser.add_argument(
+        "--env",
+        choices=sorted(ENVIRONMENTS),
+        default=os.getenv("E2E_ENV", "production"),
+        help="Target environment. Can also be set with E2E_ENV.",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=os.getenv("E2E_BASE_URL"),
+        help="Override target base URL, for example http://127.0.0.1:8000/.",
+    )
+    parser.add_argument(
+        "--email",
+        default=os.getenv("E2E_EMAIL", "testuser003@example.com"),
+        help="E2E user email. Can also be set with E2E_EMAIL.",
+    )
+    parser.add_argument(
+        "--password",
+        default=os.getenv("E2E_PASSWORD", "testpass123"),
+        help="E2E user password. Can also be set with E2E_PASSWORD.",
+    )
+    parser.add_argument(
+        "--reg-api-key",
+        default=os.getenv("REG_API_KEY", "super-secret-mobile-key"),
+        help="Registration API key. Can also be set with REG_API_KEY.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=int(os.getenv("E2E_TIMEOUT", "200")),
+        help="Request timeout in seconds. Can also be set with E2E_TIMEOUT.",
+    )
+    parser.add_argument(
+        "--verify-ssl",
+        choices=("true", "false"),
+        default=os.getenv("E2E_VERIFY_SSL"),
+        help="Verify SSL certificates. Defaults to false for local, true otherwise.",
+    )
+    return parser.parse_args()
+
+
+ARGS = parse_args()
+BASE_URL = ARGS.base_url or ENVIRONMENTS[ARGS.env]
+if not BASE_URL.endswith("/"):
+    BASE_URL = f"{BASE_URL}/"
+API_KEY = ARGS.reg_api_key
+REG_API_KEY = ARGS.reg_api_key
+EMAIL = ARGS.email
+PASSWORD = ARGS.password
 
 REGISTER_URL = urljoin(BASE_URL, "api/auth/register/")
 
@@ -51,11 +107,15 @@ RECOMMENDATION_COMPLETION_URL = urljoin(BASE_URL, "api/recommendation-completion
 WELLBEING_CATALOG_URL = urljoin(BASE_URL, "api/wellbeing/")
 WELLBEING_LOG_URL = urljoin(BASE_URL, "api/wellbeing/log/")
 DAILY_CHECKIN_URL = urljoin(BASE_URL, "api/daily-checkin/")
+DAILY_TASKS_URL = urljoin(BASE_URL, "api/daily-tasks/")
 TASK_COMPLETION_URL = urljoin(BASE_URL, "api/task-completion/")
 
 
-TIMEOUT = 200
-VERIFY_SSL = True  # http у тебя сейчас — флаг игнорируется
+TIMEOUT = ARGS.timeout
+if ARGS.verify_ssl is None:
+    VERIFY_SSL = ARGS.env != "local"
+else:
+    VERIFY_SSL = ARGS.verify_ssl == "true"
 
 
 def pp(title, obj):
@@ -265,6 +325,30 @@ def _assert_task_completion_schema(
         )
 
 
+def _assert_daily_tasks_schema(body: list[dict]) -> None:
+    if not isinstance(body, list):
+        raise AssertionError(f"daily tasks response must be list, got {type(body)}")
+    if not body:
+        raise AssertionError("daily tasks response must not be empty")
+
+    previous_sort_order = None
+    for i, task in enumerate(body):
+        if not isinstance(task, dict):
+            raise AssertionError(f"daily tasks[{i}] must be object")
+        for key in ("code", "title", "sort_order"):
+            if key not in task:
+                raise AssertionError(f"daily tasks[{i}] missing '{key}'")
+        if not isinstance(task["code"], str) or not task["code"]:
+            raise AssertionError(f"daily tasks[{i}].code must be non-empty string")
+        if not isinstance(task["title"], str) or not task["title"]:
+            raise AssertionError(f"daily tasks[{i}].title must be non-empty string")
+        if not isinstance(task["sort_order"], int):
+            raise AssertionError(f"daily tasks[{i}].sort_order must be int")
+        if previous_sort_order is not None and task["sort_order"] < previous_sort_order:
+            raise AssertionError("daily tasks must be ordered by sort_order")
+        previous_sort_order = task["sort_order"]
+
+
 def log(msg):
     print(f"[✓] {msg}")
 
@@ -424,9 +508,9 @@ def step_meta_choices_public():
 
 def login_as_superuser():
     """Login as superuser from .env, return access token."""
-    if BASE_URL == "http://127.0.0.1:8000/":
-        email = "admin@example.com"
-        password = "admin"
+    if ARGS.env == "local":
+        email = os.getenv("LOCAL_SUPERUSER_EMAIL", "admin@example.com")
+        password = os.getenv("LOCAL_SUPERUSER_PASSWORD", "admin")
     else:
         email = os.getenv("SUPERUSER_EMAIL", "admin@example.com")
         password = os.getenv("SUPERUSER_PASSWORD", "admin")
@@ -1548,6 +1632,20 @@ def step_daily_checkin_ensure_exists(access_token: str, target_date: str) -> Non
         raise AssertionError("Daily checkin should exist after create")
 
 
+def step_daily_tasks_get(access_token: str) -> list[dict]:
+    r = requests.get(
+        DAILY_TASKS_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Daily tasks GET failed")
+    body = safe_json(r)
+    pp("Daily tasks GET", body)
+    _assert_daily_tasks_schema(body)
+    return body
+
+
 def step_task_completion_get(access_token: str, target_date: str) -> dict:
     r = requests.get(
         TASK_COMPLETION_URL,
@@ -1886,12 +1984,15 @@ def main():
             "   If user already exists, registration may still pass with 400/409 and the flow will continue.\n"
         )
 
+    print(f"E2E_ENV: {ARGS.env}")
     print(f"BASE_URL: {BASE_URL}")
+    print(f"VERIFY_SSL: {VERIFY_SSL}")
     print(f"REGISTER_URL: {REGISTER_URL}")
     print(f"TOKEN_URL: {TOKEN_URL}")
     print(f"PROFILE_URL: {PROFILE_URL}")
     print(f"LIFESTYLE_URL: {LIFESTYLE_URL}")
     print(f"CHECKLIST_URL: {CHECKLIST_URL}")
+    print(f"DAILY_TASKS_URL: {DAILY_TASKS_URL}")
 
     # 0) Публичный эндпойнт
     step_meta_choices_public()
@@ -1953,7 +2054,10 @@ def main():
         final_wellbeing_log, mood_ids=moods_ids, feeling_ids=feelings_ids
     )
     step_daily_checkin_ensure_exists(token, today)
-    task_completion_tasks = ["drink_water", "cooking_smoke"]
+    daily_tasks = step_daily_tasks_get(token)
+    if len(daily_tasks) < 2:
+        raise AssertionError("Daily tasks catalog must have at least 2 active tasks")
+    task_completion_tasks = [task["code"] for task in daily_tasks[:2]]
     step_task_completion_replace_and_verify(token, today, task_completion_tasks)
     checklist = step_5_check_mommy_checklist(token)
 

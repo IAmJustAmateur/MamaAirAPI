@@ -34,6 +34,7 @@ from .views import (
     WellbeingCatalogView,
     UserWellbeingLogView,
     DailyCheckinView,
+    DailyTaskListView,
     TaskCompletionView,
 )
 from .auth_views import GoogleAuthView
@@ -116,6 +117,7 @@ urlpatterns = [
     path("wellbeing/", WellbeingCatalogView.as_view(), name="wellbeing-catalog"),
     path("wellbeing/log/", UserWellbeingLogView.as_view(), name="wellbeing-log"),
     path("daily-checkin/", DailyCheckinView.as_view(), name="daily-checkin"),
+    path("daily-tasks/", DailyTaskListView.as_view(), name="daily-tasks"),
     path("task-completion/", TaskCompletionView.as_view(), name="task-completion"),
 ]
 urlpatterns += [

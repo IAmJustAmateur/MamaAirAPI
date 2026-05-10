@@ -63,6 +63,7 @@ from .models import (
     RecommendationCompletion,
     Wellbeing,
     DailyCheckin,
+    DailyTask,
     UserDailyTaskCompletion,
     UserWellbeingLog,
 )
@@ -91,6 +92,7 @@ from .serializers import (
     WellbeingItemSerializer,
     DailyCheckinSerializer,
     DailyCheckinCreateSerializer,
+    DailyTaskSerializer,
     TaskCompletionDaySerializer,
     TaskCompletionUpsertSerializer,
     UserWellbeingLogSerializer,
@@ -1843,6 +1845,20 @@ class DailyCheckinView(APIView):
             daily_checkin.date,
         )
         return Response(DailyCheckinSerializer(daily_checkin).data, status=201)
+
+
+class DailyTaskListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Wellbeing"],
+        summary="Get active daily tasks",
+        responses={200: DailyTaskSerializer(many=True)},
+    )
+    def get(self, request):
+        logger.info("DailyTaskListView GET, user=%s", request.user)
+        tasks = DailyTask.objects.filter(is_active=True).order_by("sort_order", "title")
+        return Response(DailyTaskSerializer(tasks, many=True).data)
 
 
 class TaskCompletionView(APIView):
