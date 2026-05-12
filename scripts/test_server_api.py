@@ -11,6 +11,11 @@ from utils import build_csv_many_points, build_json_many_points
 import time
 from dotenv import load_dotenv
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 load_dotenv()
 
 
@@ -86,6 +91,7 @@ LIFESTYLE_URL = urljoin(BASE_URL, "api/lifestyle/")
 CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/mommy/checklist/")
 
 MOMMY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/mommy/selection/")
+MOMMY_STATISTICS_URL = urljoin(BASE_URL, "api/symptoms/mommy/statistics/")
 
 BABY_CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/baby/checklist/")
 BABY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/baby/selection/")
@@ -254,6 +260,28 @@ def _assert_wellbeing_item_ids(body: dict, mood_ids=None, feeling_ids=None):
         raise AssertionError(f"mood ids mismatch: {got_mood_ids} vs {mood_ids}")
     if feeling_ids is not None and sorted(feeling_ids) != got_feel_ids:
         raise AssertionError(f"feeling ids mismatch: {got_feel_ids} vs {feeling_ids}")
+
+
+def _assert_mommy_statistics_schema(body: list[dict]):
+    if not isinstance(body, list):
+        raise AssertionError(f"Mommy statistics must be list, got {type(body)}")
+
+    for item in body[:20]:
+        if not isinstance(item, dict):
+            raise AssertionError(f"Mommy statistics item must be dict: {item}")
+        for key in ("symptom_name", "symptom_id", "quantity", "risk_name", "risk_id"):
+            if key not in item:
+                raise AssertionError(f"Mommy statistics item missing '{key}': {item}")
+        if not isinstance(item["symptom_name"], str):
+            raise AssertionError(f"symptom_name must be str: {item}")
+        if not isinstance(item["risk_name"], str):
+            raise AssertionError(f"risk_name must be str: {item}")
+        if not isinstance(item["symptom_id"], int):
+            raise AssertionError(f"symptom_id must be int: {item}")
+        if not isinstance(item["risk_id"], int):
+            raise AssertionError(f"risk_id must be int: {item}")
+        if not isinstance(item["quantity"], int) or item["quantity"] < 1:
+            raise AssertionError(f"quantity must be positive int: {item}")
 
 
 def _assert_summary_water_schema(
@@ -1031,6 +1059,45 @@ def step_7_selection_post_replace(access_token: str, valid_ids: list[int]):
     pp("Selection GET (verify after replace)", get_body)
 
     return expected_date
+
+
+def step_7_1_mommy_statistics_get(access_token: str, target_date: str):
+    """GET mommy symptom statistics by date/range and validate response schema."""
+    headers = auth_headers(access_token)
+
+    r = requests.get(
+        MOMMY_STATISTICS_URL,
+        params={"date": target_date},
+        headers=headers,
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Mommy statistics GET by date failed")
+    by_date = r.json()
+    _assert_mommy_statistics_schema(by_date)
+    pp("Mommy statistics GET by date", by_date)
+
+    r = requests.get(
+        MOMMY_STATISTICS_URL,
+        params={"start_date": target_date, "end_date": target_date},
+        headers=headers,
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Mommy statistics GET by range failed")
+    by_range = r.json()
+    _assert_mommy_statistics_schema(by_range)
+    pp("Mommy statistics GET by range", by_range)
+
+    r = requests.get(
+        MOMMY_STATISTICS_URL,
+        params={"start_date": target_date},
+        headers=headers,
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 400, "Mommy statistics missing end_date should fail")
+    pp("Mommy statistics GET invalid range response", safe_json(r))
 
 
 def step_8_selection_post_clear(access_token: str, target_date: str):
@@ -2083,6 +2150,9 @@ def main():
 
     # 7) POST replace for a concrete recorded_at (now), then verify
     date_used = step_7_selection_post_replace(token, valid_ids)
+
+    # 7.1) GET symptom statistics before clearing the selection
+    step_7_1_mommy_statistics_get(token, date_used)
 
     # 8) clear for that date, verify empty
     step_8_selection_post_clear(token, date_used)

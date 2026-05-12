@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, datetime, timedelta
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -6,6 +7,8 @@ from django.urls import reverse
 from api.models import (
     MommySymptom,
     BabySymptom,
+    RiskDefinition,
+    RiskDefinitionMommySymptom,
     UserMommySymptoms,
     UserBabySymptoms,
 )
@@ -48,8 +51,15 @@ class UserMommyBabySymptomsAPITests(APITestCase):
         # URLs
         self.mommy_checklist_url = reverse("symptoms-mommy-checklist")
         self.mommy_selection_url = reverse("symptoms-mommy-selection")
+        self.mommy_statistics_url = reverse("symptoms-mommy-statistics")
         self.baby_checklist_url = reverse("symptoms-baby-checklist")
         self.baby_selection_url = reverse("symptoms-baby-selection")
+
+    def _aware_at(self, day, hour=9):
+        return timezone.make_aware(
+            datetime(day.year, day.month, day.day, hour, 0),
+            timezone.get_default_timezone(),
+        )
 
     # ---------------- MOMMY: Checklist ----------------
     def test_mommy_checklist_returns_id_and_name(self):
@@ -143,6 +153,178 @@ class UserMommyBabySymptomsAPITests(APITestCase):
             format="json",
         )
         self.assertIn(r.status_code, (400, 422))
+
+    # ---------------- MOMMY: Statistics ----------------
+    def test_mommy_statistics_returns_counts_for_period_and_multiple_risks(self):
+        risk_1 = RiskDefinition.objects.create(
+            name="Test mommy statistics risk A", is_enabled=True, priority=1
+        )
+        risk_2 = RiskDefinition.objects.create(
+            name="Test mommy statistics risk B", is_enabled=True, priority=2
+        )
+        RiskDefinitionMommySymptom.objects.create(
+            risk_definition=risk_1, symptom=self.ms1
+        )
+        RiskDefinitionMommySymptom.objects.create(
+            risk_definition=risk_2, symptom=self.ms1
+        )
+
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=self.ms1,
+            recorded_at=self._aware_at(date(2026, 3, 1)),
+        )
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=self.ms1,
+            recorded_at=self._aware_at(date(2026, 3, 3)),
+        )
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=self.ms1,
+            recorded_at=self._aware_at(date(2026, 3, 10)),
+        )
+
+        resp = self.client.get(
+            self.mommy_statistics_url,
+            {"start_date": "2026-03-01", "end_date": "2026-03-07"},
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        rows = [row for row in resp.data if row["symptom_id"] == self.ms1.id]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row["risk_id"] for row in rows}, {risk_1.id, risk_2.id})
+        self.assertEqual({row["quantity"] for row in rows}, {2})
+        self.assertEqual({row["symptom_name"] for row in rows}, {self.ms1.name})
+
+    def test_mommy_statistics_date_overrides_date_range(self):
+        risk = RiskDefinition.objects.create(
+            name="Test mommy statistics date override", is_enabled=True
+        )
+        RiskDefinitionMommySymptom.objects.create(
+            risk_definition=risk, symptom=self.ms2
+        )
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=self.ms2,
+            recorded_at=self._aware_at(date(2026, 3, 1)),
+        )
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=self.ms2,
+            recorded_at=self._aware_at(date(2026, 3, 2)),
+        )
+
+        resp = self.client.get(
+            self.mommy_statistics_url,
+            {
+                "date": "2026-03-02",
+                "start_date": "2026-03-01",
+                "end_date": "2026-03-01",
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data[0]["symptom_id"], self.ms2.id)
+        self.assertEqual(resp.data[0]["risk_id"], risk.id)
+        self.assertEqual(resp.data[0]["quantity"], 1)
+
+    def test_mommy_statistics_defaults_to_current_week(self):
+        risk = RiskDefinition.objects.create(
+            name="Test mommy statistics current week", is_enabled=True
+        )
+        RiskDefinitionMommySymptom.objects.create(
+            risk_definition=risk, symptom=self.ms3
+        )
+        today = timezone.localdate()
+        week_start = today - timedelta(days=today.weekday())
+        in_week = week_start
+        before_week = week_start - timedelta(days=1)
+
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=self.ms3,
+            recorded_at=self._aware_at(in_week),
+        )
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=self.ms3,
+            recorded_at=self._aware_at(before_week),
+        )
+
+        resp = self.client.get(self.mommy_statistics_url)
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        rows = [row for row in resp.data if row["risk_id"] == risk.id]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["quantity"], 1)
+
+    def test_mommy_statistics_is_scoped_to_authenticated_user(self):
+        risk = RiskDefinition.objects.create(
+            name="Test mommy statistics auth user scope", is_enabled=True
+        )
+        RiskDefinitionMommySymptom.objects.create(
+            risk_definition=risk, symptom=self.ms1
+        )
+        other_user = User.objects.create_user(
+            email="other-mommy-stat@example.com", password="pass12345"
+        )
+        UserMommySymptoms.objects.create(
+            user=other_user,
+            symptom=self.ms1,
+            recorded_at=self._aware_at(date(2026, 4, 1)),
+        )
+
+        resp = self.client.get(
+            self.mommy_statistics_url,
+            {"start_date": "2026-04-01", "end_date": "2026-04-02"},
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data, [])
+
+    def test_mommy_statistics_excludes_unclassified_and_disabled_risks(self):
+        disabled_symptom = MommySymptom.objects.create(
+            name="Test mommy statistics disabled symptom"
+        )
+        unclassified_symptom = MommySymptom.objects.create(
+            name="Test mommy statistics unclassified symptom"
+        )
+        disabled_risk = RiskDefinition.objects.create(
+            name="Test mommy statistics disabled risk", is_enabled=False
+        )
+        RiskDefinitionMommySymptom.objects.create(
+            risk_definition=disabled_risk, symptom=disabled_symptom
+        )
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=disabled_symptom,
+            recorded_at=self._aware_at(date(2026, 5, 1)),
+        )
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=unclassified_symptom,
+            recorded_at=self._aware_at(date(2026, 5, 1)),
+        )
+
+        resp = self.client.get(self.mommy_statistics_url, {"date": "2026-05-01"})
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data, [])
+
+    def test_mommy_statistics_rejects_invalid_period_params(self):
+        missing_end = self.client.get(
+            self.mommy_statistics_url, {"start_date": "2026-03-01"}
+        )
+        reversed_range = self.client.get(
+            self.mommy_statistics_url,
+            {"start_date": "2026-03-07", "end_date": "2026-03-01"},
+        )
+        invalid_date = self.client.get(self.mommy_statistics_url, {"date": "bad"})
+
+        self.assertEqual(missing_end.status_code, 400)
+        self.assertEqual(reversed_range.status_code, 400)
+        self.assertEqual(invalid_date.status_code, 400)
 
     # ---------------- BABY: Checklist ----------------
     def test_baby_checklist_returns_id_and_name(self):

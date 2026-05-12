@@ -10,6 +10,7 @@ from .views import (
     UserLifestyleView,
     MommySymptomsChecklistView,
     UserMommySymptomsSelectionView,
+    UserMommySymptomsStatisticsView,
     BabySymptomsChecklistView,
     UserBabySymptomsSelectionView,
     HealthInsightView,
@@ -73,6 +74,11 @@ urlpatterns = [
         "symptoms/mommy/selection/",
         UserMommySymptomsSelectionView.as_view(),
         name="symptoms-mommy-selection",
+    ),
+    path(
+        "symptoms/mommy/statistics/",
+        UserMommySymptomsStatisticsView.as_view(),
+        name="symptoms-mommy-statistics",
     ),
     # Baby
     path(
