@@ -546,7 +546,7 @@ class UserMommySymptomsSelectionView(APIView):
 
 
 @extend_schema(
-    tags=["Symptoms вЂ“ Mommy"],
+    tags=["Symptoms Statistics Mommy"],
     summary="Get mommy symptoms statistics by risk for a period",
     parameters=[
         OpenApiParameter(
