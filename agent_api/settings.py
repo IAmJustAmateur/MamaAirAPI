@@ -13,10 +13,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 
 from datetime import timedelta
-from pathlib import Path
-from dotenv import load_dotenv
 
 from pathlib import Path
+from dotenv import load_dotenv
 
 import logging
 
@@ -95,6 +94,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     # our apps
     "api",
+    "ads",
     "demo_interface",
     "recommendations",
     # third-party apps
@@ -144,7 +144,7 @@ ASGI_APPLICATION = "agent_api.asgi.application"  # required for uvicorn
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if not DJANGO_ENV in {"production", "staging"}:
+if DJANGO_ENV not in {"production", "staging"}:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -204,8 +204,6 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-from datetime import timedelta
-
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     # "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
@@ -243,6 +241,8 @@ SIMPLE_JWT = {
 STATIC_URL = "/static/"
 # STATIC_ROOT = os.path.join(BASE_DIR, "static")
 STATIC_ROOT = "/app/static"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 
 # Time zone, language, etc. can stay default or be adjusted
