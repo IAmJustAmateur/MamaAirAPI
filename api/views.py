@@ -4,6 +4,14 @@ import logging
 
 from zoneinfo import ZoneInfo
 
+from django.contrib.auth import authenticate, login
+from django.http import HttpResponse
+
+from django.shortcuts import render
+from django.db import transaction
+
+from django.conf import settings
+
 # from io import TextIOWrapper
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework import status
@@ -40,14 +48,6 @@ from .serializers import (
 # from django.utils.translation import gettext as _
 
 
-from django.contrib.auth import authenticate, login
-
-from django.shortcuts import render
-from django.db import transaction
-from django.db.models import Count
-from django.conf import settings
-
-
 from django.utils import timezone
 from .models import (
     # Movement,
@@ -57,7 +57,6 @@ from .models import (
     User,
     UserMommySymptoms,
     MommySymptom,
-    RiskDefinitionMommySymptom,
     BabySymptom,
     UserBabySymptoms,
     Exposure,
@@ -112,7 +111,6 @@ from .permissions import HasValidRegistrationAPIKey
 from .services.aq_logs_services import update_air_exposure_log_with_weather
 
 from api.models import (
-    LANGUAGE_CHOICES,
     EXPOSURE_LEVEL_CHOICES,
     UserLifeStyle,
 )
@@ -543,100 +541,6 @@ class UserMommySymptomsSelectionView(APIView):
                 "symptom_ids": sorted(list(existing)),
             }
         )
-
-
-@extend_schema(
-    tags=["Symptoms Statistics Mommy"],
-    summary="Get mommy symptoms statistics by risk for a period",
-    parameters=[
-        OpenApiParameter(
-            name="date",
-            location=OpenApiParameter.QUERY,
-            required=False,
-            description="Calendar date (YYYY-MM-DD). Overrides start_date/end_date if both are provided.",
-            type=str,
-        ),
-        OpenApiParameter(
-            name="start_date",
-            location=OpenApiParameter.QUERY,
-            required=False,
-            description="Period start date (YYYY-MM-DD), inclusive.",
-            type=str,
-        ),
-        OpenApiParameter(
-            name="end_date",
-            location=OpenApiParameter.QUERY,
-            required=False,
-            description="Period end date (YYYY-MM-DD), inclusive.",
-            type=str,
-        ),
-    ],
-    responses={200: MommySymptomStatisticItemSchema(many=True)},
-    examples=[
-        OpenApiExample(
-            "Statistics",
-            value=[
-                {
-                    "symptom_name": "Headache",
-                    "symptom_id": 10,
-                    "quantity": 3,
-                    "risk_name": "Air pollution sensitivity",
-                    "risk_id": 5,
-                }
-            ],
-            response_only=True,
-        )
-    ],
-)
-class UserMommySymptomsStatisticsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        start_date, end_date = _date_period_from_request(request)
-        logger.info(
-            "UserMommySymptomsStatisticsView GET, user=%s, start_date=%s, end_date=%s",
-            request.user,
-            start_date,
-            end_date,
-        )
-
-        symptom_counts = list(
-            UserMommySymptoms.objects.filter(
-                user=request.user,
-                recorded_at__date__gte=start_date,
-                recorded_at__date__lte=end_date,
-            )
-            .values("symptom_id", "symptom__name")
-            .annotate(quantity=Count("id"))
-            .order_by("symptom__name", "symptom_id")
-        )
-        quantities_by_symptom_id = {
-            item["symptom_id"]: item["quantity"] for item in symptom_counts
-        }
-        names_by_symptom_id = {
-            item["symptom_id"]: item["symptom__name"] for item in symptom_counts
-        }
-
-        links = (
-            RiskDefinitionMommySymptom.objects.filter(
-                symptom_id__in=quantities_by_symptom_id.keys(),
-                risk_definition__is_enabled=True,
-            )
-            .select_related("risk_definition", "symptom")
-            .order_by("symptom__name", "risk_definition__priority", "risk_definition__name")
-        )
-
-        data = [
-            {
-                "symptom_name": names_by_symptom_id[link.symptom_id],
-                "symptom_id": link.symptom_id,
-                "quantity": quantities_by_symptom_id[link.symptom_id],
-                "risk_name": link.risk_definition.name,
-                "risk_id": link.risk_definition_id,
-            }
-            for link in links
-        ]
-        return Response(data)
 
 
 # ---------- BABY ----------
@@ -1463,10 +1367,6 @@ class SetLanguageView(APIView):
         )
 
         return Response({"message": "Language updated", "language": lang})
-
-
-from django.contrib.auth import authenticate, login
-from django.http import HttpResponse
 
 
 def test_login(request):
