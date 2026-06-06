@@ -1,0 +1,576 @@
+metadata:
+  source_document: "10 Risk Matrix model (2).odt"
+  migration: "api/migrations/0043_seed_risk_factor_matrix.py"
+  scope: "Profile and lifestyle risk factors supported by the current data model"
+  status_values:
+    implemented: "Directly represented by an existing app field and seeded in migration 0043."
+    mapped: "Represented by an existing app field after an explicit product mapping decision."
+    deferred: "Present in the source matrix, but not implemented in migration 0043."
+
+risk_priorities:
+  Preeclampsia: 1
+  Preterm birth: 2
+  GDM: 3
+  Low Birth Weight: 4
+  Placental abruption: 5
+  Anemia: 6
+  PROM: 7
+  Hyperemesis: 8
+  Cardiovascular Complications: 9
+  Fetal Hypoxia: 10
+
+implemented_factors:
+  - risk: Preeclampsia
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi>=25"
+    multiplier: 2.8
+    status: implemented
+
+  - risk: Preeclampsia
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year>=35"
+    multiplier: 1.8
+    status: implemented
+
+  - risk: Preeclampsia
+    model: UserRiskFactor
+    source_factor: Race
+    app_field: race
+    condition: "'race'=='african'"
+    multiplier: 1.6
+    status: implemented
+
+  - risk: Preeclampsia
+    model: LifestyleRiskFactor
+    source_factor: Sleep duration
+    app_field: average_sleep_hours
+    condition: "average_sleep_hours<=6"
+    multiplier: 1.4
+    status: implemented
+
+  - risk: Preeclampsia
+    model: LifestyleRiskFactor
+    source_factor: Exercise duration
+    app_field: activity_duration_minutes
+    condition: "activity_duration_minutes>=420"
+    multiplier: 0.76
+    status: implemented
+
+  - risk: Preeclampsia
+    model: LifestyleRiskFactor
+    source_factor: Shift work / night shifts
+    app_field: work_type
+    condition: "'work_type'=='Night Shift'"
+    multiplier: 1.75
+    status: mapped
+    notes: "Uses the existing Night Shift work_type choice."
+
+  - risk: Preeclampsia
+    model: LifestyleRiskFactor
+    source_factor: Wood/Coal household fuel
+    app_field: cooking_method
+    condition: "'cooking_method'=='wood' or 'cooking_method'=='charcoal'"
+    multiplier: 2.2
+    status: mapped
+    notes: "charcoal is treated as the app equivalent of coal."
+
+  - risk: Preterm birth
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year<=16"
+    multiplier: 1.5
+    status: implemented
+
+  - risk: Preterm birth
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year>35 and full_year<=40"
+    multiplier: 1.2
+    status: implemented
+
+  - risk: Preterm birth
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year>40"
+    multiplier: 1.4
+    status: implemented
+
+  - risk: Preterm birth
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi<18.5"
+    multiplier: 1.07
+    status: implemented
+
+  - risk: Preterm birth
+    model: LifestyleRiskFactor
+    source_factor: Sleep duration
+    app_field: average_sleep_hours
+    condition: "average_sleep_hours<6"
+    multiplier: 1.23
+    status: implemented
+
+  - risk: Preterm birth
+    model: LifestyleRiskFactor
+    source_factor: Shift work / night shifts
+    app_field: work_type
+    condition: "'work_type'=='Night Shift'"
+    multiplier: 1.21
+    status: mapped
+    notes: "Uses the existing Night Shift work_type choice."
+
+  - risk: Preterm birth
+    model: LifestyleRiskFactor
+    source_factor: Wood/Coal household fuel
+    app_field: cooking_method
+    condition: "'cooking_method'=='wood' or 'cooking_method'=='charcoal'"
+    multiplier: 1.3
+    status: mapped
+    notes: "charcoal is treated as the app equivalent of coal."
+
+  - risk: GDM
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi>=30"
+    multiplier: 4.0
+    status: implemented
+
+  - risk: GDM
+    model: UserRiskFactor
+    source_factor: Race
+    app_field: race
+    condition: "'race'=='african'"
+    multiplier: 1.11
+    status: implemented
+
+  - risk: GDM
+    model: LifestyleRiskFactor
+    source_factor: Sleep duration
+    app_field: average_sleep_hours
+    condition: "average_sleep_hours<7"
+    multiplier: 1.75
+    status: implemented
+
+  - risk: GDM
+    model: LifestyleRiskFactor
+    source_factor: Shift work / night shifts
+    app_field: work_type
+    condition: "'work_type'=='Night Shift'"
+    multiplier: 1.75
+    status: mapped
+    notes: "Uses the existing Night Shift work_type choice."
+
+  - risk: GDM
+    model: LifestyleRiskFactor
+    source_factor: Exercise duration
+    app_field: activity_duration_minutes
+    condition: "activity_duration_minutes>=150"
+    multiplier: 0.7
+    status: implemented
+
+  - risk: GDM
+    model: LifestyleRiskFactor
+    source_factor: Diet type
+    app_field: diet_type
+    condition: "'diet_type'=='vegetarian'"
+    multiplier: 1.09
+    status: implemented
+
+  - risk: Low Birth Weight
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year<20"
+    multiplier: 1.56
+    status: implemented
+
+  - risk: Low Birth Weight
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi<19"
+    multiplier: 1.7
+    status: implemented
+
+  - risk: Low Birth Weight
+    model: UserRiskFactor
+    source_factor: Race
+    app_field: race
+    condition: "'race'=='african'"
+    multiplier: 2.0
+    status: implemented
+
+  - risk: Low Birth Weight
+    model: LifestyleRiskFactor
+    source_factor: Shift work / night shifts
+    app_field: work_type
+    condition: "'work_type'=='Night Shift'"
+    multiplier: 1.18
+    status: mapped
+    notes: "Uses the existing Night Shift work_type choice."
+
+  - risk: Low Birth Weight
+    model: LifestyleRiskFactor
+    source_factor: Wood/Coal household fuel
+    app_field: cooking_method
+    condition: "'cooking_method'=='wood' or 'cooking_method'=='charcoal'"
+    multiplier: 1.74
+    status: mapped
+    notes: "charcoal is treated as the app equivalent of coal."
+
+  - risk: Placental abruption
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year>=35"
+    multiplier: 1.62
+    status: implemented
+
+  - risk: Placental abruption
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi<18.5"
+    multiplier: 1.38
+    status: implemented
+
+  - risk: Placental abruption
+    model: UserRiskFactor
+    source_factor: Race
+    app_field: race
+    condition: "'race'=='african'"
+    multiplier: 1.32
+    status: implemented
+
+  - risk: Placental abruption
+    model: LifestyleRiskFactor
+    source_factor: Sleep duration
+    app_field: average_sleep_hours
+    condition: "average_sleep_hours>9 or average_sleep_hours<6"
+    multiplier: 1.3
+    status: implemented
+
+  - risk: Placental abruption
+    model: LifestyleRiskFactor
+    source_factor: Sedentary work
+    app_field: work_type
+    condition: "'work_type'=='Desk'"
+    multiplier: 17.3
+    status: mapped
+    notes: "Sedentary is mapped to the existing Desk work_type choice."
+
+  - risk: Anemia
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi<18.5"
+    multiplier: 1.57
+    status: implemented
+
+  - risk: Anemia
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year<19 or full_year>=40"
+    multiplier: 1.45
+    status: implemented
+
+  - risk: Anemia
+    model: UserRiskFactor
+    source_factor: Race
+    app_field: race
+    condition: "'race'=='african'"
+    multiplier: 2.1
+    status: implemented
+
+  - risk: Anemia
+    model: LifestyleRiskFactor
+    source_factor: Sleep duration
+    app_field: average_sleep_hours
+    condition: "average_sleep_hours<=6"
+    multiplier: 1.38
+    status: implemented
+
+  - risk: Anemia
+    model: LifestyleRiskFactor
+    source_factor: Exercise duration
+    app_field: activity_duration_minutes
+    condition: "activity_duration_minutes<420"
+    multiplier: 1.3
+    status: implemented
+
+  - risk: Anemia
+    model: LifestyleRiskFactor
+    source_factor: Heavy manual / physical / mechanical labor
+    app_field: work_type
+    condition: "'work_type'=='Physical'"
+    multiplier: 1.55
+    status: mapped
+    notes: "Heavy manual, physical, and mechanical labor are mapped to Physical."
+
+  - risk: Anemia
+    model: LifestyleRiskFactor
+    source_factor: Wood/Coal household fuel
+    app_field: cooking_method
+    condition: "'cooking_method'=='wood' or 'cooking_method'=='charcoal'"
+    multiplier: 1.68
+    status: mapped
+    notes: "charcoal is treated as the app equivalent of coal."
+
+  - risk: PROM
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi<18.5"
+    multiplier: 1.62
+    status: implemented
+
+  - risk: PROM
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year>=35"
+    multiplier: 1.32
+    status: implemented
+
+  - risk: PROM
+    model: UserRiskFactor
+    source_factor: Race
+    app_field: race
+    condition: "'race'=='african'"
+    multiplier: 1.85
+    status: implemented
+
+  - risk: PROM
+    model: LifestyleRiskFactor
+    source_factor: Sleep duration
+    app_field: average_sleep_hours
+    condition: "average_sleep_hours<=6"
+    multiplier: 1.35
+    status: implemented
+
+  - risk: PROM
+    model: LifestyleRiskFactor
+    source_factor: Exercise duration
+    app_field: activity_duration_minutes
+    condition: "activity_duration_minutes<420"
+    multiplier: 1.3
+    status: implemented
+
+  - risk: PROM
+    model: LifestyleRiskFactor
+    source_factor: Heavy manual / physical / mechanical labor
+    app_field: work_type
+    condition: "'work_type'=='Physical'"
+    multiplier: 1.52
+    status: mapped
+    notes: "Heavy manual, physical, and mechanical labor are mapped to Physical."
+
+  - risk: PROM
+    model: LifestyleRiskFactor
+    source_factor: Wood/Coal household fuel
+    app_field: cooking_method
+    condition: "'cooking_method'=='wood' or 'cooking_method'=='charcoal'"
+    multiplier: 1.45
+    status: mapped
+    notes: "charcoal is treated as the app equivalent of coal."
+
+  - risk: Hyperemesis
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi>=25"
+    multiplier: 1.32
+    status: implemented
+
+  - risk: Hyperemesis
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year<19"
+    multiplier: 1.41
+    status: implemented
+
+  - risk: Hyperemesis
+    model: UserRiskFactor
+    source_factor: Race
+    app_field: race
+    condition: "'race'=='african'"
+    multiplier: 1.53
+    status: implemented
+
+  - risk: Hyperemesis
+    model: LifestyleRiskFactor
+    source_factor: Sleep duration
+    app_field: average_sleep_hours
+    condition: "average_sleep_hours<=6"
+    multiplier: 1.45
+    status: implemented
+
+  - risk: Hyperemesis
+    model: LifestyleRiskFactor
+    source_factor: Exercise duration
+    app_field: activity_duration_minutes
+    condition: "activity_duration_minutes<420"
+    multiplier: 1.18
+    status: implemented
+
+  - risk: Hyperemesis
+    model: LifestyleRiskFactor
+    source_factor: Shift work / night shifts
+    app_field: work_type
+    condition: "'work_type'=='Night Shift'"
+    multiplier: 1.36
+    status: mapped
+    notes: "Uses the existing Night Shift work_type choice."
+
+  - risk: Hyperemesis
+    model: LifestyleRiskFactor
+    source_factor: Wood/Coal household fuel
+    app_field: cooking_method
+    condition: "'cooking_method'=='wood' or 'cooking_method'=='charcoal'"
+    multiplier: 1.38
+    status: mapped
+    notes: "charcoal is treated as the app equivalent of coal."
+
+  - risk: Cardiovascular Complications
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi>=30"
+    multiplier: 1.95
+    status: implemented
+
+  - risk: Cardiovascular Complications
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year>35"
+    multiplier: 1.35
+    status: implemented
+
+  - risk: Cardiovascular Complications
+    model: UserRiskFactor
+    source_factor: Race
+    app_field: race
+    condition: "'race'=='african'"
+    multiplier: 1.54
+    status: implemented
+
+  - risk: Cardiovascular Complications
+    model: LifestyleRiskFactor
+    source_factor: Sleep duration
+    app_field: average_sleep_hours
+    condition: "average_sleep_hours<=6"
+    multiplier: 1.42
+    status: implemented
+
+  - risk: Cardiovascular Complications
+    model: LifestyleRiskFactor
+    source_factor: Exercise duration
+    app_field: activity_duration_minutes
+    condition: "activity_duration_minutes<420"
+    multiplier: 1.35
+    status: implemented
+
+  - risk: Cardiovascular Complications
+    model: LifestyleRiskFactor
+    source_factor: Shift work / night shifts
+    app_field: work_type
+    condition: "'work_type'=='Night Shift'"
+    multiplier: 1.48
+    status: mapped
+    notes: "Uses the existing Night Shift work_type choice."
+
+  - risk: Cardiovascular Complications
+    model: LifestyleRiskFactor
+    source_factor: Wood/Coal household fuel
+    app_field: cooking_method
+    condition: "'cooking_method'=='wood' or 'cooking_method'=='charcoal'"
+    multiplier: 1.65
+    status: mapped
+    notes: "charcoal is treated as the app equivalent of coal."
+
+  - risk: Fetal Hypoxia
+    model: UserRiskFactor
+    source_factor: BMI
+    app_field: bmi
+    condition: "bmi>=25"
+    multiplier: 1.65
+    status: implemented
+
+  - risk: Fetal Hypoxia
+    model: UserRiskFactor
+    source_factor: Maternal age
+    app_field: full_year
+    condition: "full_year>35"
+    multiplier: 1.4
+    status: implemented
+
+  - risk: Fetal Hypoxia
+    model: UserRiskFactor
+    source_factor: Race
+    app_field: race
+    condition: "'race'=='african'"
+    multiplier: 1.5
+    status: implemented
+
+  - risk: Fetal Hypoxia
+    model: LifestyleRiskFactor
+    source_factor: Sleep duration
+    app_field: average_sleep_hours
+    condition: "average_sleep_hours<=6"
+    multiplier: 1.8
+    status: implemented
+
+  - risk: Fetal Hypoxia
+    model: LifestyleRiskFactor
+    source_factor: Exercise duration
+    app_field: activity_duration_minutes
+    condition: "activity_duration_minutes<420"
+    multiplier: 1.25
+    status: implemented
+
+  - risk: Fetal Hypoxia
+    model: LifestyleRiskFactor
+    source_factor: Heavy manual / physical / mechanical labor
+    app_field: work_type
+    condition: "'work_type'=='Physical'"
+    multiplier: 1.35
+    status: mapped
+    notes: "Heavy manual, physical, and mechanical labor are mapped to Physical."
+
+  - risk: Fetal Hypoxia
+    model: LifestyleRiskFactor
+    source_factor: Wood/Coal household fuel
+    app_field: cooking_method
+    condition: "'cooking_method'=='wood' or 'cooking_method'=='charcoal'"
+    multiplier: 1.65
+    status: mapped
+    notes: "charcoal is treated as the app equivalent of coal."
+
+deferred_items:
+  - source_factor: Work Hours >40 hrs/week
+    status: deferred
+    reason: "No work_hours_per_week field exists yet."
+
+  - source_factor: Temperature
+    status: deferred
+    reason: "Requires rolling exposure windows, local percentiles, and pregnancy-week-aware environmental inputs."
+
+  - source_factor: Solar UV
+    status: deferred
+    reason: "Requires UV aggregation, cumulative or rolling windows, and pregnancy-week-aware environmental inputs."
+
+  - source_factor: Gestational window constraints for profile/lifestyle factors
+    status: deferred
+    reason: "Current UserRiskFactor and LifestyleRiskFactor conditions do not store or evaluate gestational windows."
