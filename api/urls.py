@@ -11,8 +11,10 @@ from .views import (
     MommySymptomsChecklistView,
     UserMommySymptomsSelectionView,
     UserMommySymptomsStatisticsView,
+    UserMommySymptomsClassStatisticsView,
     BabySymptomsChecklistView,
     UserBabySymptomsSelectionView,
+    UserBabySymptomsClassStatisticsView,
     HealthInsightView,
     MovementCSVUploadView,
     MovementJSONUploadView,
@@ -80,6 +82,11 @@ urlpatterns = [
         UserMommySymptomsStatisticsView.as_view(),
         name="symptoms-mommy-statistics",
     ),
+    path(
+        "symptoms/mommy/statistics/classes/",
+        UserMommySymptomsClassStatisticsView.as_view(),
+        name="symptoms-mommy-class-statistics",
+    ),
     # Baby
     path(
         "symptoms/baby/checklist/",
@@ -90,6 +97,11 @@ urlpatterns = [
         "symptoms/baby/selection/",
         UserBabySymptomsSelectionView.as_view(),
         name="symptoms-baby-selection",
+    ),
+    path(
+        "symptoms/baby/statistics/classes/",
+        UserBabySymptomsClassStatisticsView.as_view(),
+        name="symptoms-baby-class-statistics",
     ),
     path("movements/upload/", MovementCSVUploadView.as_view(), name="movements-upload"),
     path(

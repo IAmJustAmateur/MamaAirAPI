@@ -58,6 +58,8 @@ from .models import (
     UserMommySymptoms,
     MommySymptom,
     RiskDefinitionMommySymptom,
+    RiskDefinitionBabySymptom,
+    SYMPTOM_CLASS_METADATA,
     BabySymptom,
     UserBabySymptoms,
     Exposure,
@@ -271,6 +273,110 @@ class MommySymptomStatisticItemSchema(serializers.Serializer):
     quantity = serializers.IntegerField()
     risk_name = serializers.CharField()
     risk_id = serializers.IntegerField()
+
+
+class SymptomClassRiskSchema(serializers.Serializer):
+    risk_id = serializers.IntegerField()
+    risk_name = serializers.CharField()
+    source_phrase = serializers.CharField(allow_blank=True)
+
+
+class SymptomClassSymptomStatisticSchema(serializers.Serializer):
+    symptom_name = serializers.CharField()
+    symptom_id = serializers.IntegerField()
+    quantity = serializers.IntegerField()
+    risks = SymptomClassRiskSchema(many=True)
+
+
+class SymptomClassStatisticSchema(serializers.Serializer):
+    symptom_class = serializers.IntegerField()
+    class_name = serializers.CharField()
+    color_flag = serializers.CharField()
+    quantity = serializers.IntegerField()
+    symptoms = SymptomClassSymptomStatisticSchema(many=True)
+
+
+class SymptomClassStatisticsResponseSchema(serializers.Serializer):
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    classes = SymptomClassStatisticSchema(many=True)
+
+
+def _symptom_class_statistics(user, start_date, end_date, UserSymptomModel, LinkModel):
+    symptom_counts = list(
+        UserSymptomModel.objects.filter(
+            user=user,
+            recorded_at__date__gte=start_date,
+            recorded_at__date__lte=end_date,
+        )
+        .values("symptom_id", "symptom__name")
+        .annotate(quantity=Count("id"))
+        .order_by("symptom__name", "symptom_id")
+    )
+    if not symptom_counts:
+        return []
+
+    quantities_by_symptom_id = {
+        item["symptom_id"]: item["quantity"] for item in symptom_counts
+    }
+    names_by_symptom_id = {
+        item["symptom_id"]: item["symptom__name"] for item in symptom_counts
+    }
+    class_values = sorted(SYMPTOM_CLASS_METADATA.keys())
+
+    links = (
+        LinkModel.objects.filter(
+            symptom_id__in=quantities_by_symptom_id.keys(),
+            symptom_class__in=class_values,
+            risk_definition__is_enabled=True,
+        )
+        .select_related("risk_definition", "symptom")
+        .order_by(
+            "symptom_class",
+            "symptom__name",
+            "risk_definition__priority",
+            "risk_definition__name",
+        )
+    )
+
+    buckets = {}
+    symptoms_by_class = {}
+    for symptom_class in class_values:
+        metadata = SYMPTOM_CLASS_METADATA[symptom_class]
+        buckets[symptom_class] = {
+            "symptom_class": symptom_class,
+            "class_name": metadata["name"],
+            "color_flag": metadata["color_flag"],
+            "quantity": 0,
+            "symptoms": [],
+        }
+        symptoms_by_class[symptom_class] = {}
+
+    for link in links:
+        symptom_class = link.symptom_class
+        symptom_id = link.symptom_id
+        class_symptoms = symptoms_by_class[symptom_class]
+        if symptom_id not in class_symptoms:
+            quantity = quantities_by_symptom_id[symptom_id]
+            item = {
+                "symptom_name": names_by_symptom_id[symptom_id],
+                "symptom_id": symptom_id,
+                "quantity": quantity,
+                "risks": [],
+            }
+            class_symptoms[symptom_id] = item
+            buckets[symptom_class]["symptoms"].append(item)
+            buckets[symptom_class]["quantity"] += quantity
+
+        class_symptoms[symptom_id]["risks"].append(
+            {
+                "risk_name": link.risk_definition.name,
+                "risk_id": link.risk_definition_id,
+                "source_phrase": link.source_phrase,
+            }
+        )
+
+    return [bucket for bucket in buckets.values() if bucket["symptoms"]]
 
 
 @extend_schema(
@@ -639,6 +745,93 @@ class UserMommySymptomsStatisticsView(APIView):
         return Response(data)
 
 
+@extend_schema(
+    tags=["Symptoms Statistics - Mommy"],
+    summary="Get mommy symptoms statistics by symptom class for a period",
+    parameters=[
+        OpenApiParameter(
+            name="date",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Calendar date (YYYY-MM-DD). Overrides start_date/end_date if both are provided.",
+            type=str,
+        ),
+        OpenApiParameter(
+            name="start_date",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Period start date (YYYY-MM-DD), inclusive.",
+            type=str,
+        ),
+        OpenApiParameter(
+            name="end_date",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Period end date (YYYY-MM-DD), inclusive.",
+            type=str,
+        ),
+    ],
+    responses={200: SymptomClassStatisticsResponseSchema},
+    examples=[
+        OpenApiExample(
+            "Statistics by class",
+            value={
+                "start_date": "2026-03-01",
+                "end_date": "2026-03-07",
+                "classes": [
+                    {
+                        "symptom_class": 1,
+                        "class_name": "Acute & Emergency Indicators",
+                        "color_flag": "critical_red",
+                        "quantity": 2,
+                        "symptoms": [
+                            {
+                                "symptom_name": "vaginal bleeding",
+                                "symptom_id": 10,
+                                "quantity": 2,
+                                "risks": [
+                                    {
+                                        "risk_name": "Preterm birth",
+                                        "risk_id": 2,
+                                        "source_phrase": "Vaginal bleeding",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+            response_only=True,
+        )
+    ],
+)
+class UserMommySymptomsClassStatisticsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        start_date, end_date = _date_period_from_request(request)
+        logger.info(
+            "UserMommySymptomsClassStatisticsView GET, user=%s, start_date=%s, end_date=%s",
+            request.user,
+            start_date,
+            end_date,
+        )
+        classes = _symptom_class_statistics(
+            request.user,
+            start_date,
+            end_date,
+            UserMommySymptoms,
+            RiskDefinitionMommySymptom,
+        )
+        return Response(
+            {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "classes": classes,
+            }
+        )
+
+
 # ---------- BABY ----------
 
 
@@ -744,6 +937,61 @@ class UserBabySymptomsSelectionView(APIView):
                 "date": target_date.isoformat(),
                 "recorded_at": recorded_at.isoformat(),
                 "symptom_ids": sorted(list(existing)),
+            }
+        )
+
+
+@extend_schema(
+    tags=["Symptoms Statistics - Baby"],
+    summary="Get baby symptoms statistics by symptom class for a period",
+    parameters=[
+        OpenApiParameter(
+            name="date",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Calendar date (YYYY-MM-DD). Overrides start_date/end_date if both are provided.",
+            type=str,
+        ),
+        OpenApiParameter(
+            name="start_date",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Period start date (YYYY-MM-DD), inclusive.",
+            type=str,
+        ),
+        OpenApiParameter(
+            name="end_date",
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Period end date (YYYY-MM-DD), inclusive.",
+            type=str,
+        ),
+    ],
+    responses={200: SymptomClassStatisticsResponseSchema},
+)
+class UserBabySymptomsClassStatisticsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        start_date, end_date = _date_period_from_request(request)
+        logger.info(
+            "UserBabySymptomsClassStatisticsView GET, user=%s, start_date=%s, end_date=%s",
+            request.user,
+            start_date,
+            end_date,
+        )
+        classes = _symptom_class_statistics(
+            request.user,
+            start_date,
+            end_date,
+            UserBabySymptoms,
+            RiskDefinitionBabySymptom,
+        )
+        return Response(
+            {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "classes": classes,
             }
         )
 
