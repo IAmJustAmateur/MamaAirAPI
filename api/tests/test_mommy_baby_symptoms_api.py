@@ -9,6 +9,7 @@ from api.models import (
     BabySymptom,
     RiskDefinition,
     RiskDefinitionMommySymptom,
+    RiskDefinitionBabySymptom,
     UserMommySymptoms,
     UserBabySymptoms,
 )
@@ -52,8 +53,10 @@ class UserMommyBabySymptomsAPITests(APITestCase):
         self.mommy_checklist_url = reverse("symptoms-mommy-checklist")
         self.mommy_selection_url = reverse("symptoms-mommy-selection")
         self.mommy_statistics_url = reverse("symptoms-mommy-statistics")
+        self.mommy_class_statistics_url = reverse("symptoms-mommy-class-statistics")
         self.baby_checklist_url = reverse("symptoms-baby-checklist")
         self.baby_selection_url = reverse("symptoms-baby-selection")
+        self.baby_class_statistics_url = reverse("symptoms-baby-class-statistics")
 
     def _aware_at(self, day, hour=9):
         return timezone.make_aware(
@@ -156,6 +159,9 @@ class UserMommyBabySymptomsAPITests(APITestCase):
 
     # ---------------- MOMMY: Statistics ----------------
     def test_mommy_statistics_returns_counts_for_period_and_multiple_risks(self):
+        symptom = MommySymptom.objects.create(
+            name="Test mommy statistics isolated symptom"
+        )
         risk_1 = RiskDefinition.objects.create(
             name="Test mommy statistics risk A", is_enabled=True, priority=1
         )
@@ -163,25 +169,25 @@ class UserMommyBabySymptomsAPITests(APITestCase):
             name="Test mommy statistics risk B", is_enabled=True, priority=2
         )
         RiskDefinitionMommySymptom.objects.create(
-            risk_definition=risk_1, symptom=self.ms1
+            risk_definition=risk_1, symptom=symptom
         )
         RiskDefinitionMommySymptom.objects.create(
-            risk_definition=risk_2, symptom=self.ms1
+            risk_definition=risk_2, symptom=symptom
         )
 
         UserMommySymptoms.objects.create(
             user=self.user,
-            symptom=self.ms1,
+            symptom=symptom,
             recorded_at=self._aware_at(date(2026, 3, 1)),
         )
         UserMommySymptoms.objects.create(
             user=self.user,
-            symptom=self.ms1,
+            symptom=symptom,
             recorded_at=self._aware_at(date(2026, 3, 3)),
         )
         UserMommySymptoms.objects.create(
             user=self.user,
-            symptom=self.ms1,
+            symptom=symptom,
             recorded_at=self._aware_at(date(2026, 3, 10)),
         )
 
@@ -191,11 +197,11 @@ class UserMommyBabySymptomsAPITests(APITestCase):
         )
 
         self.assertEqual(resp.status_code, 200, resp.data)
-        rows = [row for row in resp.data if row["symptom_id"] == self.ms1.id]
+        rows = [row for row in resp.data if row["symptom_id"] == symptom.id]
         self.assertEqual(len(rows), 2)
         self.assertEqual({row["risk_id"] for row in rows}, {risk_1.id, risk_2.id})
         self.assertEqual({row["quantity"] for row in rows}, {2})
-        self.assertEqual({row["symptom_name"] for row in rows}, {self.ms1.name})
+        self.assertEqual({row["symptom_name"] for row in rows}, {symptom.name})
 
     def test_mommy_statistics_date_overrides_date_range(self):
         risk = RiskDefinition.objects.create(
@@ -326,6 +332,74 @@ class UserMommyBabySymptomsAPITests(APITestCase):
         self.assertEqual(reversed_range.status_code, 400)
         self.assertEqual(invalid_date.status_code, 400)
 
+    def test_mommy_class_statistics_groups_by_class_without_risk_double_counting(self):
+        symptom = MommySymptom.objects.create(
+            name="Test mommy class statistics acute symptom"
+        )
+        lifestyle_symptom = MommySymptom.objects.create(
+            name="Test mommy class statistics lifestyle symptom"
+        )
+        risk_1 = RiskDefinition.objects.create(
+            name="Test mommy class statistics risk A", is_enabled=True, priority=1
+        )
+        risk_2 = RiskDefinition.objects.create(
+            name="Test mommy class statistics risk B", is_enabled=True, priority=2
+        )
+        RiskDefinitionMommySymptom.objects.create(
+            risk_definition=risk_1,
+            symptom=symptom,
+            symptom_class=1,
+            source_phrase="Emergency source phrase",
+        )
+        RiskDefinitionMommySymptom.objects.create(
+            risk_definition=risk_2,
+            symptom=symptom,
+            symptom_class=1,
+            source_phrase="Second emergency source phrase",
+        )
+        RiskDefinitionMommySymptom.objects.create(
+            risk_definition=risk_2,
+            symptom=lifestyle_symptom,
+            symptom_class=4,
+            source_phrase="Lifestyle source phrase",
+        )
+        for day in [date(2026, 3, 1), date(2026, 3, 3)]:
+            UserMommySymptoms.objects.create(
+                user=self.user,
+                symptom=symptom,
+                recorded_at=self._aware_at(day),
+            )
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=lifestyle_symptom,
+            recorded_at=self._aware_at(date(2026, 3, 4)),
+        )
+        UserMommySymptoms.objects.create(
+            user=self.user,
+            symptom=symptom,
+            recorded_at=self._aware_at(date(2026, 3, 10)),
+        )
+
+        resp = self.client.get(
+            self.mommy_class_statistics_url,
+            {"start_date": "2026-03-01", "end_date": "2026-03-07"},
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["start_date"], "2026-03-01")
+        self.assertEqual(resp.data["end_date"], "2026-03-07")
+        classes = {item["symptom_class"]: item for item in resp.data["classes"]}
+        self.assertEqual(classes[1]["quantity"], 2)
+        self.assertEqual(classes[1]["color_flag"], "critical_red")
+        self.assertEqual(len(classes[1]["symptoms"]), 1)
+        self.assertEqual(classes[1]["symptoms"][0]["symptom_id"], symptom.id)
+        self.assertEqual(classes[1]["symptoms"][0]["quantity"], 2)
+        self.assertEqual(
+            {risk["risk_id"] for risk in classes[1]["symptoms"][0]["risks"]},
+            {risk_1.id, risk_2.id},
+        )
+        self.assertEqual(classes[4]["quantity"], 1)
+
     # ---------------- BABY: Checklist ----------------
     def test_baby_checklist_returns_id_and_name(self):
         """Checklist must return objects with id and name (strings)."""
@@ -413,3 +487,42 @@ class UserMommyBabySymptomsAPITests(APITestCase):
             format="json",
         )
         self.assertIn(r.status_code, (400, 422))
+
+    def test_baby_class_statistics_groups_by_class(self):
+        symptom = BabySymptom.objects.create(name="Test baby class statistics symptom")
+        risk = RiskDefinition.objects.create(
+            name="Test baby class statistics risk", is_enabled=True, priority=1
+        )
+        RiskDefinitionBabySymptom.objects.create(
+            risk_definition=risk,
+            symptom=symptom,
+            symptom_class=3,
+            source_phrase="Reduced fetal activity",
+        )
+        UserBabySymptoms.objects.create(
+            user=self.user,
+            symptom=symptom,
+            recorded_at=self._aware_at(date(2026, 4, 1)),
+        )
+        UserBabySymptoms.objects.create(
+            user=self.user,
+            symptom=symptom,
+            recorded_at=self._aware_at(date(2026, 4, 2)),
+        )
+
+        resp = self.client.get(
+            self.baby_class_statistics_url,
+            {"date": "2026-04-01"},
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["start_date"], "2026-04-01")
+        self.assertEqual(resp.data["end_date"], "2026-04-01")
+        self.assertEqual(len(resp.data["classes"]), 1)
+        class_data = resp.data["classes"][0]
+        self.assertEqual(class_data["symptom_class"], 3)
+        self.assertEqual(class_data["class_name"], "Fetal Activity & Growth Markers")
+        self.assertEqual(class_data["quantity"], 1)
+        self.assertEqual(class_data["symptoms"][0]["symptom_id"], symptom.id)
+        self.assertEqual(class_data["symptoms"][0]["quantity"], 1)
+        self.assertEqual(class_data["symptoms"][0]["risks"][0]["risk_id"], risk.id)

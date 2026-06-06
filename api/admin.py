@@ -215,16 +215,16 @@ class UserRiskFactorAdmin(admin.ModelAdmin):
 
 @admin.register(RiskDefinitionMommySymptom)
 class RiskDefinitionMommySymptomAdmin(admin.ModelAdmin):
-    list_display = ("risk_definition", "symptom")
-    search_fields = ("risk_definition__name", "symptom__name")
-    list_filter = ("risk_definition", "symptom")
+    list_display = ("risk_definition", "symptom", "symptom_class", "source_phrase")
+    search_fields = ("risk_definition__name", "symptom__name", "source_phrase")
+    list_filter = ("risk_definition", "symptom", "symptom_class")
 
 
 @admin.register(RiskDefinitionBabySymptom)
 class RiskDefinitionBabySymptomAdmin(admin.ModelAdmin):
-    list_display = ("risk_definition", "symptom")
-    search_fields = ("risk_definition__name", "symptom__name")
-    list_filter = ("risk_definition", "symptom")
+    list_display = ("risk_definition", "symptom", "symptom_class", "source_phrase")
+    search_fields = ("risk_definition__name", "symptom__name", "source_phrase")
+    list_filter = ("risk_definition", "symptom", "symptom_class")
 
 
 @admin.register(LifestyleRiskFactor)

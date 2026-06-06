@@ -92,9 +92,15 @@ CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/mommy/checklist/")
 
 MOMMY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/mommy/selection/")
 MOMMY_STATISTICS_URL = urljoin(BASE_URL, "api/symptoms/mommy/statistics/")
+MOMMY_CLASS_STATISTICS_URL = urljoin(
+    BASE_URL, "api/symptoms/mommy/statistics/classes/"
+)
 
 BABY_CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/baby/checklist/")
 BABY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/baby/selection/")
+BABY_CLASS_STATISTICS_URL = urljoin(
+    BASE_URL, "api/symptoms/baby/statistics/classes/"
+)
 
 EXPOSURE_HISTORY_URL = urljoin(BASE_URL, "api/exposure/history/")
 
@@ -282,6 +288,76 @@ def _assert_mommy_statistics_schema(body: list[dict]):
             raise AssertionError(f"risk_id must be int: {item}")
         if not isinstance(item["quantity"], int) or item["quantity"] < 1:
             raise AssertionError(f"quantity must be positive int: {item}")
+
+
+def _assert_symptom_class_statistics_schema(
+    body: dict, expected_start_date: str, expected_end_date: str, expect_non_empty=False
+):
+    if not isinstance(body, dict):
+        raise AssertionError(f"Class statistics must be object, got {type(body)}")
+    for key in ("start_date", "end_date", "classes"):
+        if key not in body:
+            raise AssertionError(f"Class statistics missing '{key}': {body}")
+    if body["start_date"] != expected_start_date:
+        raise AssertionError(
+            f"Class statistics start_date mismatch: {body['start_date']} vs {expected_start_date}"
+        )
+    if body["end_date"] != expected_end_date:
+        raise AssertionError(
+            f"Class statistics end_date mismatch: {body['end_date']} vs {expected_end_date}"
+        )
+    classes = body["classes"]
+    if not isinstance(classes, list):
+        raise AssertionError(f"Class statistics classes must be list, got {type(classes)}")
+    if expect_non_empty and not classes:
+        raise AssertionError("Class statistics classes must not be empty")
+
+    for class_item in classes:
+        if not isinstance(class_item, dict):
+            raise AssertionError(f"Class statistics class item must be dict: {class_item}")
+        for key in ("symptom_class", "class_name", "color_flag", "quantity", "symptoms"):
+            if key not in class_item:
+                raise AssertionError(
+                    f"Class statistics class item missing '{key}': {class_item}"
+                )
+        if class_item["symptom_class"] not in (1, 2, 3, 4):
+            raise AssertionError(f"Invalid symptom_class: {class_item}")
+        if not isinstance(class_item["class_name"], str) or not class_item["class_name"]:
+            raise AssertionError(f"class_name must be non-empty str: {class_item}")
+        if not isinstance(class_item["color_flag"], str) or not class_item["color_flag"]:
+            raise AssertionError(f"color_flag must be non-empty str: {class_item}")
+        if not isinstance(class_item["quantity"], int) or class_item["quantity"] < 1:
+            raise AssertionError(f"class quantity must be positive int: {class_item}")
+
+        symptoms = class_item["symptoms"]
+        if not isinstance(symptoms, list) or not symptoms:
+            raise AssertionError(f"class symptoms must be non-empty list: {class_item}")
+        for symptom in symptoms:
+            if not isinstance(symptom, dict):
+                raise AssertionError(f"class symptom must be dict: {symptom}")
+            for key in ("symptom_name", "symptom_id", "quantity", "risks"):
+                if key not in symptom:
+                    raise AssertionError(f"class symptom missing '{key}': {symptom}")
+            if not isinstance(symptom["symptom_name"], str):
+                raise AssertionError(f"symptom_name must be str: {symptom}")
+            if not isinstance(symptom["symptom_id"], int):
+                raise AssertionError(f"symptom_id must be int: {symptom}")
+            if not isinstance(symptom["quantity"], int) or symptom["quantity"] < 1:
+                raise AssertionError(f"symptom quantity must be positive int: {symptom}")
+            if not isinstance(symptom["risks"], list) or not symptom["risks"]:
+                raise AssertionError(f"symptom risks must be non-empty list: {symptom}")
+            for risk in symptom["risks"]:
+                if not isinstance(risk, dict):
+                    raise AssertionError(f"symptom risk must be dict: {risk}")
+                for key in ("risk_id", "risk_name", "source_phrase"):
+                    if key not in risk:
+                        raise AssertionError(f"symptom risk missing '{key}': {risk}")
+                if not isinstance(risk["risk_id"], int):
+                    raise AssertionError(f"risk_id must be int: {risk}")
+                if not isinstance(risk["risk_name"], str):
+                    raise AssertionError(f"risk_name must be str: {risk}")
+                if not isinstance(risk["source_phrase"], str):
+                    raise AssertionError(f"source_phrase must be str: {risk}")
 
 
 def _assert_summary_water_schema(
@@ -1100,6 +1176,49 @@ def step_7_1_mommy_statistics_get(access_token: str, target_date: str):
     pp("Mommy statistics GET invalid range response", safe_json(r))
 
 
+def step_7_2_mommy_class_statistics_get(access_token: str, target_date: str):
+    """GET mommy symptom class statistics by date/range and validate response schema."""
+    headers = auth_headers(access_token)
+
+    r = requests.get(
+        MOMMY_CLASS_STATISTICS_URL,
+        params={"date": target_date},
+        headers=headers,
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Mommy class statistics GET by date failed")
+    by_date = r.json()
+    _assert_symptom_class_statistics_schema(
+        by_date, target_date, target_date, expect_non_empty=True
+    )
+    pp("Mommy class statistics GET by date", by_date)
+
+    r = requests.get(
+        MOMMY_CLASS_STATISTICS_URL,
+        params={"start_date": target_date, "end_date": target_date},
+        headers=headers,
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Mommy class statistics GET by range failed")
+    by_range = r.json()
+    _assert_symptom_class_statistics_schema(
+        by_range, target_date, target_date, expect_non_empty=True
+    )
+    pp("Mommy class statistics GET by range", by_range)
+
+    r = requests.get(
+        MOMMY_CLASS_STATISTICS_URL,
+        params={"start_date": target_date},
+        headers=headers,
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 400, "Mommy class statistics missing end_date should fail")
+    pp("Mommy class statistics GET invalid range response", safe_json(r))
+
+
 def step_8_selection_post_clear(access_token: str, target_date: str):
     """Send empty list to clear selection for date."""
     # Чтобы гарантировать нужную дату — укажем recorded_at на эту дату в 09:00:00+offset
@@ -1259,6 +1378,39 @@ def step_13_baby_selection_post_replace(access_token: str, valid_ids: list[int])
     ), "IDs mismatch on GET after POST"
     pp("Baby selection GET (verify after replace)", got)
     return expected_date
+
+
+def step_13_1_baby_class_statistics_get(access_token: str, target_date: str):
+    """GET baby symptom class statistics by date/range and validate response schema."""
+    headers = auth_headers(access_token)
+
+    r = requests.get(
+        BABY_CLASS_STATISTICS_URL,
+        params={"date": target_date},
+        headers=headers,
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby class statistics GET by date failed")
+    by_date = r.json()
+    _assert_symptom_class_statistics_schema(
+        by_date, target_date, target_date, expect_non_empty=True
+    )
+    pp("Baby class statistics GET by date", by_date)
+
+    r = requests.get(
+        BABY_CLASS_STATISTICS_URL,
+        params={"start_date": target_date, "end_date": target_date},
+        headers=headers,
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby class statistics GET by range failed")
+    by_range = r.json()
+    _assert_symptom_class_statistics_schema(
+        by_range, target_date, target_date, expect_non_empty=True
+    )
+    pp("Baby class statistics GET by range", by_range)
 
 
 def step_14_baby_selection_post_clear(access_token: str, target_date: str):
@@ -2153,6 +2305,7 @@ def main():
 
     # 7.1) GET symptom statistics before clearing the selection
     step_7_1_mommy_statistics_get(token, date_used)
+    step_7_2_mommy_class_statistics_get(token, date_used)
 
     # 8) clear for that date, verify empty
     step_8_selection_post_clear(token, date_used)
@@ -2168,6 +2321,7 @@ def main():
     pp("Baby valid IDs", baby_valid_ids)
     step_12_baby_selection_get_today(token)
     baby_date_used = step_13_baby_selection_post_replace(token, baby_valid_ids)
+    step_13_1_baby_class_statistics_get(token, baby_date_used)
     step_14_baby_selection_post_clear(token, baby_date_used)
     step_15_baby_selection_post_invalid_ids(token)
     today = datetime.now().date().isoformat()

@@ -33,6 +33,37 @@ USER_RISK_FACTORS = [
     "race",
 ]
 
+SYMPTOM_CLASS_ACUTE = 1
+SYMPTOM_CLASS_SYSTEMIC = 2
+SYMPTOM_CLASS_FETAL = 3
+SYMPTOM_CLASS_LIFESTYLE = 4
+
+SYMPTOM_CLASS_CHOICES = [
+    (SYMPTOM_CLASS_ACUTE, _("Acute & Emergency Indicators")),
+    (SYMPTOM_CLASS_SYSTEMIC, _("Condition-Specific Systemic Indicators")),
+    (SYMPTOM_CLASS_FETAL, _("Fetal Activity & Growth Markers")),
+    (SYMPTOM_CLASS_LIFESTYLE, _("Lifestyle & Environmental Stressors")),
+]
+
+SYMPTOM_CLASS_METADATA = {
+    SYMPTOM_CLASS_ACUTE: {
+        "name": "Acute & Emergency Indicators",
+        "color_flag": "critical_red",
+    },
+    SYMPTOM_CLASS_SYSTEMIC: {
+        "name": "Condition-Specific Systemic Indicators",
+        "color_flag": "gray",
+    },
+    SYMPTOM_CLASS_FETAL: {
+        "name": "Fetal Activity & Growth Markers",
+        "color_flag": "mamaair_orange",
+    },
+    SYMPTOM_CLASS_LIFESTYLE: {
+        "name": "Lifestyle & Environmental Stressors",
+        "color_flag": "blue",
+    },
+}
+
 
 # def _calculate_risks(risks, fields, object, RiskModel):
 #     """
@@ -725,6 +756,11 @@ class RiskDefinitionMommySymptom(models.Model):
         RiskDefinition, on_delete=models.CASCADE, related_name="mommy_symptom_links"
     )
     symptom = models.ForeignKey("MommySymptom", on_delete=models.CASCADE)
+    symptom_class = models.PositiveSmallIntegerField(
+        choices=SYMPTOM_CLASS_CHOICES,
+        default=SYMPTOM_CLASS_SYSTEMIC,
+    )
+    source_phrase = models.CharField(max_length=512, blank=True, default="")
 
     class Meta:
         unique_together = ("risk_definition", "symptom")
@@ -735,6 +771,11 @@ class RiskDefinitionBabySymptom(models.Model):
         RiskDefinition, on_delete=models.CASCADE, related_name="baby_symptom_links"
     )
     symptom = models.ForeignKey("BabySymptom", on_delete=models.CASCADE)
+    symptom_class = models.PositiveSmallIntegerField(
+        choices=SYMPTOM_CLASS_CHOICES,
+        default=SYMPTOM_CLASS_FETAL,
+    )
+    source_phrase = models.CharField(max_length=512, blank=True, default="")
 
     class Meta:
         unique_together = ("risk_definition", "symptom")
