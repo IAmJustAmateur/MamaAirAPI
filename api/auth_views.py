@@ -40,7 +40,6 @@ class SigninThrottle(throttling.AnonRateThrottle):
 
 @extend_schema(
     tags=["Auth"],
-    operation_id="auth_google_sign_in",
     summary="Sign in with Google (Android)",
     description=(
         "Accept Google **ID token** from Android app, verify it on the server,"

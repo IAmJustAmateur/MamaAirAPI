@@ -424,6 +424,49 @@ class RegisterView(generics.CreateAPIView):
         )
 
 
+@extend_schema(
+    tags=["User"],
+    summary="Get current user profile",
+    description=(
+        "Returns the authenticated user's profile and pregnancy settings. "
+        "Use this after authentication to hydrate the mobile profile/onboarding state. "
+        "`bmi` is calculated from `height` and `weight_pre_pregnancy` when both are present."
+    ),
+    responses={200: UserProfileSerializer},
+    methods=["GET"],
+)
+@extend_schema(
+    tags=["User"],
+    summary="Update current user profile",
+    description=(
+        "Partially updates the authenticated user's profile. "
+        "When `week_of_pregnancy` is changed the backend recalculates `pregnancy_start_date`. "
+        "Choice values for `language`, `race`, `country`, and `preferred_share_channel` must match the API choices."
+    ),
+    request=UserProfileSerializer,
+    responses={200: UserProfileSerializer},
+    examples=[
+        OpenApiExample(
+            "Profile update",
+            value={
+                "name": "Jane Doe",
+                "date_of_birth": "1994-06-20",
+                "height": 168,
+                "weight_pre_pregnancy": 64,
+                "race": "african",
+                "country": "NG",
+                "is_first_pregnancy": True,
+                "week_of_pregnancy": 24,
+                "tracking_enabled": True,
+                "notifications_enabled": True,
+                "consent": True,
+                "preferred_share_channel": "whatsapp",
+            },
+            request_only=True,
+        )
+    ],
+    methods=["PATCH", "PUT"],
+)
 class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -471,14 +514,40 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 @extend_schema(
     tags=["Lifestyle"],
     summary="Get current user lifestyle (auto-created if missing)",
+    description=(
+        "Returns the user's lifestyle profile. If it does not exist yet, the backend creates an empty one. "
+        "Mobile clients can safely call this before showing lifestyle onboarding fields."
+    ),
     responses={200: UserLifeStyleSerializer},
     methods=["GET"],
 )
 @extend_schema(
     tags=["Lifestyle"],
     summary="Update current user lifestyle",
+    description=(
+        "Partially updates lifestyle inputs used by risk calculations and recommendations. "
+        "Choice values should be read from `GET /api/meta/choices/`."
+    ),
     request=UserLifeStyleSerializer,
     responses={200: UserLifeStyleSerializer},
+    examples=[
+        OpenApiExample(
+            "Lifestyle update",
+            value={
+                "average_sleep_hours": 7.5,
+                "work_type": "Desk",
+                "diet_type": "omnivore",
+                "cooking_method": "gas",
+                "activity_duration_minutes": 30,
+                "standing_hours_per_day": 3,
+                "commute_mode": "car",
+                "hydration_target_ml_per_day": 2200,
+                "cooking_venue": "indoor",
+                "ventilation_level": "medium",
+            },
+            request_only=True,
+        )
+    ],
     methods=["PATCH"],
 )
 class UserLifestyleView(generics.RetrieveUpdateAPIView):
@@ -999,9 +1068,10 @@ class UserBabySymptomsClassStatisticsView(APIView):
 @extend_schema(
     summary="Upload user movements via CSV",
     description=(
-        "Allows uploading a CSV file with user location data (latitude, longitude, timestamp). "
-        "Each row in the file is parsed and stored as a Movement object associated with the authenticated user. "
-        "The endpoint accepts a `multipart/form-data` request with a `file` field."
+        "Uploads a batch of timestamped location points for the authenticated user. "
+        "The endpoint accepts `multipart/form-data` with a `file` field. "
+        "CSV columns must be `latitude`, `longitude`, and `timestamp`; `timestamp` should be ISO-8601 and include a timezone when available. "
+        "After import, daily exposure is recomputed for each affected calendar date."
     ),
     request={
         "multipart/form-data": {
@@ -1022,7 +1092,15 @@ class UserBabySymptomsClassStatisticsView(APIView):
             examples=[
                 OpenApiExample(
                     "Success Example",
-                    value={"status": "ok", "imported": 42, "errors": []},
+                    value={
+                        "status": "ok",
+                        "imported": 24,
+                        "air_exposure_created": 24,
+                        "air_exposure_updated": 0,
+                        "exposures_recomputed": 1,
+                        "exposure_errors": [],
+                        "errors": [],
+                    },
                     response_only=True,
                 )
             ],
@@ -1142,9 +1220,10 @@ class MovementJSONUploadRequestSchema(serializers.Serializer):
 @extend_schema(
     summary="Upload user movements via JSON",
     description=(
-        "Allows uploading movement data as JSON with latitude, longitude and timestamp. "
-        "Each item is parsed and stored as a Movement object associated with the authenticated user. "
-        "The endpoint accepts an `application/json` request with a `movements` array."
+        "Uploads a batch of timestamped location points for the authenticated user as JSON. "
+        "Each item in `movements` must include `latitude`, `longitude`, and ISO-8601 `timestamp`; `indoor` is optional. "
+        "After import, daily exposure is recomputed for each affected calendar date. "
+        "This is the preferred movement upload format for mobile clients."
     ),
     request=MovementJSONUploadRequestSchema,
     responses={
@@ -1153,7 +1232,15 @@ class MovementJSONUploadRequestSchema(serializers.Serializer):
             examples=[
                 OpenApiExample(
                     "Success Example",
-                    value={"status": "ok", "imported": 42, "errors": []},
+                    value={
+                        "status": "ok",
+                        "imported": 24,
+                        "air_exposure_created": 24,
+                        "air_exposure_updated": 0,
+                        "exposures_recomputed": 1,
+                        "exposure_errors": [],
+                        "errors": [],
+                    },
                     response_only=True,
                 )
             ],
@@ -1331,6 +1418,24 @@ class EnvironmentView(APIView):
         return Response(AirExposureLogSerializer(latest_log).data)
 
 
+@extend_schema(
+    tags=["Advice"],
+    summary="Get current static advice templates",
+    description=(
+        "Returns advice templates for the current user. "
+        "If `week` is provided, advice can be filtered for that pregnancy week; invalid or missing values fall back to the user's current context."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="week",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Optional pregnancy week.",
+        )
+    ],
+    responses={200: AdviceTemplateSerializer(many=True)},
+)
 class CurrentAdviceView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = AdviceTemplateSerializer
@@ -1533,9 +1638,18 @@ class WeeklyExposureView(APIView):
 
 
 @extend_schema(
+    tags=["Dashboard"],
     summary="Get integrated summary",
-    description="Returns air quality, weather, exposure history, risk change and recommendations for mother and baby.",
-    responses={200: SummaryResponseSerializer},
+    description=(
+        "Main dashboard payload for the mobile app. "
+        "Returns the latest air quality/weather/UV values, current exposure, 7-day exposure history, "
+        "risk delta, weekly check-in/task/water state, WHO pollutant compliance, and generated recommendations. "
+        "`snapshot_id` should be stored by the client when marking a recommendation as completed."
+    ),
+    responses={
+        200: SummaryResponseSerializer,
+        204: OpenApiResponse(description="No air exposure data available for this user yet."),
+    },
 )
 class SummaryView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1844,6 +1958,7 @@ class ExposureHistoryView(APIView):
 
 
 @extend_schema(
+    tags=["Recommendations"],
     summary="List recommendation completions",
     description="Returns recommendation completion records for the authenticated user. "
     "Optional filtering by snapshot_id.",
@@ -1883,6 +1998,33 @@ class RecommendationCompletionView(APIView):
         )
         return Response(data)
 
+    @extend_schema(
+        tags=["Recommendations"],
+        summary="Upsert a recommendation completion",
+        description=(
+            "Marks one recommendation dimension as completed for a specific generated summary snapshot. "
+            "The upsert key is `snapshot_id`, `rule_id`, `rule_version`, and `dimension`; posting the same key again updates `status`."
+        ),
+        request=RecommendationCompletionUpsertSerializer,
+        responses={
+            201: RecommendationCompletionSerializer,
+            200: RecommendationCompletionSerializer,
+            400: ErrorResponseSerializer,
+        },
+        examples=[
+            OpenApiExample(
+                "Completion request",
+                value={
+                    "snapshot_id": 123,
+                    "rule_id": "alert.pm25.daily",
+                    "rule_version": 1,
+                    "dimension": "behavior",
+                    "status": "done",
+                },
+                request_only=True,
+            )
+        ],
+    )
     def post(self, request):
         logger.info(
             "RecommendationCompletionView POST, user=%s, payload_keys=%s",
@@ -1922,6 +2064,10 @@ class WellbeingCatalogView(APIView):
     @extend_schema(
         tags=["Wellbeing"],
         summary="Wellbeing catalog (water goal + mood chips + feeling chips)",
+        description=(
+            "Returns the selectable wellbeing catalog for the current user: water goal, mood chips, and feeling chips. "
+            "Use the returned `id` values in `POST /api/wellbeing/log/`."
+        ),
         responses={
             200: inline_serializer(
                 name="WellbeingCatalogResponse",
@@ -2007,6 +2153,10 @@ class UserWellbeingLogView(APIView):
     @extend_schema(
         tags=["Wellbeing"],
         summary="Get wellbeing log for date",
+        description=(
+            "Returns wellbeing state for one calendar date. "
+            "If no log exists yet, the endpoint returns an empty state with `water_amount: 0`, `moods: []`, and `feelings: []`."
+        ),
         parameters=[
             OpenApiParameter(
                 name="date",
@@ -2089,6 +2239,11 @@ class UserWellbeingLogView(APIView):
     @extend_schema(
         tags=["Wellbeing"],
         summary="Upsert wellbeing log for date",
+        description=(
+            "Updates wellbeing state for one calendar date. "
+            "`water_amount` is additive: posting `250` increases the stored daily amount by 250. "
+            "`mood_ids` and `feeling_ids` replace the selected chips when provided; omit a field to keep its previous selection."
+        ),
         request=inline_serializer(
             name="UserWellbeingLogUpsertRequest",
             fields={
@@ -2159,6 +2314,7 @@ class DailyCheckinView(APIView):
     @extend_schema(
         tags=["Wellbeing"],
         summary="Check whether daily checkin exists for date",
+        description="Returns whether the user has already checked in on the requested calendar date.",
         parameters=[
             OpenApiParameter(
                 name="date",
@@ -2201,6 +2357,10 @@ class DailyCheckinView(APIView):
     @extend_schema(
         tags=["Wellbeing"],
         summary="Create daily checkin for date",
+        description=(
+            "Creates a daily check-in marker for one calendar date. "
+            "Posting the same date twice returns a validation error because the marker is unique per user and date."
+        ),
         request=inline_serializer(
             name="DailyCheckinCreateRequest",
             fields={"date": serializers.DateField()},
@@ -2246,6 +2406,7 @@ class DailyTaskListView(APIView):
     @extend_schema(
         tags=["Wellbeing"],
         summary="Get active daily tasks",
+        description="Returns active task definitions ordered by `sort_order` and title. Use `code` values in task completion requests.",
         responses={200: DailyTaskSerializer(many=True)},
     )
     def get(self, request):
@@ -2260,6 +2421,7 @@ class TaskCompletionView(APIView):
     @extend_schema(
         tags=["Wellbeing"],
         summary="Get completed daily tasks for date",
+        description="Returns the list of active task codes completed by the user on the requested calendar date.",
         parameters=[
             OpenApiParameter(
                 name="date",
@@ -2320,6 +2482,10 @@ class TaskCompletionView(APIView):
     @extend_schema(
         tags=["Wellbeing"],
         summary="Replace completed daily tasks for date",
+        description=(
+            "Replaces the completed task set for one calendar date. "
+            "Send the full desired list of task `code` values; sending an empty list clears completions for that date."
+        ),
         request=inline_serializer(
             name="TaskCompletionUpsertRequest",
             fields={
