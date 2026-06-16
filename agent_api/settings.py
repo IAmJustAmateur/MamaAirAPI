@@ -99,6 +99,7 @@ INSTALLED_APPS = [
     "recommendations",
     # third-party apps
     "drf_spectacular",
+    "drf_spectacular_sidecar",
     #
     "debug_toolbar",
 ]
@@ -234,6 +235,8 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "PREPROCESSING_HOOKS": ["api.schema_hooks.hide_legacy_auth_endpoints"],
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
 }
 
 SIMPLE_JWT = {
