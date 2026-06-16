@@ -225,9 +225,15 @@ AUTHENTICATION_BACKENDS = [
 
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "DIAQNOSTIC API",
+    "TITLE": "MamaAir API",
+    "DESCRIPTION": (
+        "Backend API for the MamaAir mobile app. "
+        "Use Google sign-in to obtain JWT Bearer tokens for protected endpoints. "
+        "OpenAPI examples follow the mobile E2E flow in scripts/test_server_api.py."
+    ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "PREPROCESSING_HOOKS": ["api.schema_hooks.hide_legacy_auth_endpoints"],
 }
 
 SIMPLE_JWT = {
