@@ -77,6 +77,15 @@ class UserMommyBabySymptomsAPITests(APITestCase):
             self.assertIn("name", item)
             self.assertIsInstance(item["name"], str)
 
+    def test_mommy_checklist_returns_top_five_unique_items(self):
+        resp = self.client.get(self.mommy_checklist_url)
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        symptoms = resp.data["symptoms"]
+        ids = [item["id"] for item in symptoms]
+        self.assertLessEqual(len(symptoms), 5)
+        self.assertEqual(len(ids), len(set(ids)))
+
     # ---------------- MOMMY: Selection ----------------
     def test_mommy_selection_roundtrip_with_recorded_at_aware(self):
         """POST with aware recorded_at replaces the set for that calendar day; GET by date returns the same set."""
@@ -411,6 +420,15 @@ class UserMommyBabySymptomsAPITests(APITestCase):
             item = resp.data["symptoms"][0]
             self.assertIn("id", item)
             self.assertIn("name", item)
+
+    def test_baby_checklist_returns_top_five_unique_items(self):
+        resp = self.client.get(self.baby_checklist_url)
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        symptoms = resp.data["symptoms"]
+        ids = [item["id"] for item in symptoms]
+        self.assertLessEqual(len(symptoms), 5)
+        self.assertEqual(len(ids), len(set(ids)))
 
     # ---------------- BABY: Selection ----------------
     def test_baby_selection_roundtrip_with_recorded_at(self):
