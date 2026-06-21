@@ -412,20 +412,21 @@ class User(MyUser, PermissionsMixin):
         risk_list = [(key, value) for key, value in risks.items()]
         risk_list.sort(key=lambda x: x[1]["risk_value"], reverse=True)
         risk_list.sort(key=lambda x: x[1]["priority"], reverse=False)
-        all_risk_symptoms_for_mommy = {}
+        symptoms = []
+        seen_symptoms = set()
         for risk_tuple in risk_list:
             risk = RiskDefinition.objects.get(name=risk_tuple[0])
-            risk_symptoms = RiskDefinitionMommySymptom.objects.filter(
+            risk_symptoms = RiskDefinitionMommySymptom.objects.select_related(
+                "symptom"
+            ).filter(
                 risk_definition=risk
             )
-            all_risk_symptoms_for_mommy[risk_tuple[0]] = {
-                "value": risk_tuple[1],
-                "symptoms": [symptom.symptom.name for symptom in risk_symptoms],
-            }
-
-        symptoms = []
-        for risk, data in all_risk_symptoms_for_mommy.items():
-            symptoms.extend(data["symptoms"])
+            for risk_symptom in risk_symptoms:
+                symptom_name = risk_symptom.symptom.name
+                if symptom_name in seen_symptoms:
+                    continue
+                seen_symptoms.add(symptom_name)
+                symptoms.append(symptom_name)
         return symptoms[0:5]
 
     def get_baby_symptoms_for_checking(self):
@@ -433,9 +434,25 @@ class User(MyUser, PermissionsMixin):
         :return: A dictionary of baby symptoms for each risk factor
         :rtype: dict
         """
-        rdbs = RiskDefinitionBabySymptom.objects.all()
-        symptoms = [symptom.symptom.name for symptom in rdbs]
-        return symptoms
+        risks, integrated_risk = self.calculate_risk_factors()
+        risk_list = [(key, value) for key, value in risks.items()]
+        risk_list.sort(key=lambda x: x[1]["risk_value"], reverse=True)
+        risk_list.sort(key=lambda x: x[1]["priority"], reverse=False)
+
+        symptoms = []
+        seen_symptoms = set()
+        for risk_tuple in risk_list:
+            risk = RiskDefinition.objects.get(name=risk_tuple[0])
+            risk_symptoms = RiskDefinitionBabySymptom.objects.select_related(
+                "symptom"
+            ).filter(risk_definition=risk)
+            for risk_symptom in risk_symptoms:
+                symptom_name = risk_symptom.symptom.name
+                if symptom_name in seen_symptoms:
+                    continue
+                seen_symptoms.add(symptom_name)
+                symptoms.append(symptom_name)
+        return symptoms[0:5]
 
     def get_user_movements_df(
         self, start=None, end=None, hours: int = 24
