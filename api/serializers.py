@@ -330,9 +330,22 @@ class RecommendationSerializer(serializers.Serializer):
         return data
 
 
+class TaskCompletionCategoryCountSerializer(serializers.Serializer):
+    done = serializers.IntegerField()
+    total = serializers.IntegerField()
+
+
+class TaskCompletionCountsSerializer(serializers.Serializer):
+    diet = TaskCompletionCategoryCountSerializer()
+    activity = TaskCompletionCategoryCountSerializer()
+    behavior = TaskCompletionCategoryCountSerializer()
+    mental = TaskCompletionCategoryCountSerializer()
+
+
 class TaskCompletionDaySerializer(serializers.Serializer):
     date = serializers.DateField()
     tasks = serializers.ListField(child=serializers.SlugField())
+    counts = TaskCompletionCountsSerializer()
 
 
 class SummaryResponseSerializer(serializers.Serializer):
@@ -549,7 +562,7 @@ class DailyCheckinCreateSerializer(serializers.Serializer):
 class DailyTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyTask
-        fields = ("code", "title", "sort_order")
+        fields = ("code", "title", "category", "sort_order")
 
 
 class TaskCompletionUpsertSerializer(serializers.Serializer):

@@ -228,7 +228,8 @@ The E2E script exercises the current mobile integration flow: auth, profile, lif
 - Use Google sign-in as the mobile auth flow.
 - Read dropdown values from `GET /api/meta/choices/`.
 - `POST /api/wellbeing/log/` adds `water_amount` to the stored daily total.
-- `POST /api/task-completion/` replaces the completed task set for the date.
+- `GET /api/daily-tasks/` returns task `category` (`diet`, `activity`, `behavior`, `mental`) for UI grouping.
+- `POST /api/task-completion/` replaces the completed task set for the date and returns per-category `counts`.
 - `POST /api/symptoms/*/selection/` replaces the selected symptom set for the resolved date.
 - `GET /api/summary/` returns `snapshot_id`; use it for `POST /api/recommendation-completion/`.
 - `GET /api/air-exposure/` and `GET /api/summary/` may return `204` until movement/exposure data exists.

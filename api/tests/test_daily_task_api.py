@@ -19,22 +19,26 @@ class DailyTaskApiTests(APITestCase):
         DailyTask.objects.create(
             code="third_task",
             title="Third Task",
+            category="mental",
             sort_order=30,
         )
         DailyTask.objects.create(
             code="first_task",
             title="First Task",
+            category="diet",
             sort_order=10,
         )
         DailyTask.objects.create(
             code="inactive_task",
             title="Inactive Task",
+            category="behavior",
             sort_order=20,
             is_active=False,
         )
         DailyTask.objects.create(
             code="second_task",
             title="Second Task",
+            category="activity",
             sort_order=20,
         )
 
@@ -47,9 +51,24 @@ class DailyTaskApiTests(APITestCase):
 
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data == [
-            {"code": "first_task", "title": "First Task", "sort_order": 10},
-            {"code": "second_task", "title": "Second Task", "sort_order": 20},
-            {"code": "third_task", "title": "Third Task", "sort_order": 30},
+            {
+                "code": "first_task",
+                "title": "First Task",
+                "category": "diet",
+                "sort_order": 10,
+            },
+            {
+                "code": "second_task",
+                "title": "Second Task",
+                "category": "activity",
+                "sort_order": 20,
+            },
+            {
+                "code": "third_task",
+                "title": "Third Task",
+                "category": "mental",
+                "sort_order": 30,
+            },
         ]
 
     def test_get_excludes_inactive_daily_tasks(self):

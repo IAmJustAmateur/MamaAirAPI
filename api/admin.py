@@ -350,8 +350,16 @@ class DailyCheckinAdmin(admin.ModelAdmin):
 
 @admin.register(DailyTask)
 class DailyTaskAdmin(admin.ModelAdmin):
-    list_display = ("id", "code", "title", "sort_order", "is_active", "created_at")
-    list_filter = ("is_active",)
+    list_display = (
+        "id",
+        "code",
+        "title",
+        "category",
+        "sort_order",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("category", "is_active")
     search_fields = ("code", "title")
     ordering = ("sort_order", "title")
 

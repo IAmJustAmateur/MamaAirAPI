@@ -256,10 +256,14 @@ Response is an ordered list:
   {
     "code": "drink_water",
     "title": "Drink water",
+    "category": "diet",
     "sort_order": 10
   }
 ]
 ```
+
+`category` is one of: `diet`, `activity`, `behavior`, `mental`.
+`mental` is reserved for future mental wellbeing tasks and may have no active tasks yet.
 
 ### Task Completion
 
@@ -268,7 +272,13 @@ Response is an ordered list:
 ```json
 {
   "date": "2026-04-30",
-  "tasks": ["drink_water"]
+  "tasks": ["drink_water"],
+  "counts": {
+    "diet": { "done": 1, "total": 1 },
+    "activity": { "done": 0, "total": 1 },
+    "behavior": { "done": 0, "total": 1 },
+    "mental": { "done": 0, "total": 0 }
+  }
 }
 ```
 
@@ -277,11 +287,18 @@ Response is an ordered list:
 ```json
 {
   "date": "2026-04-30",
-  "tasks": ["drink_water", "avoid_smoke"]
+  "tasks": ["drink_water", "avoid_smoke"],
+  "counts": {
+    "diet": { "done": 1, "total": 1 },
+    "activity": { "done": 0, "total": 1 },
+    "behavior": { "done": 1, "total": 1 },
+    "mental": { "done": 0, "total": 0 }
+  }
 }
 ```
 
 Important behavior: this is replace-all for the date. Send the full desired list. Send an empty list to clear completions.
+`counts` contains done/total counts by task category for active tasks.
 
 ## Symptoms
 
@@ -441,7 +458,7 @@ Important fields:
 - `today_journey`: movement distance for today.
 - `daily_checkins`: check-in dates in the current week.
 - `water`: today's water state.
-- `task_completions`: completed task codes by date for the current week.
+- `task_completions`: completed task codes by date for the current week, including per-category `counts`.
 - `exposure_history`: last 7 days of integrated exposure scores.
 - `pollutant_compliance`: per-pollutant guideline comparison.
 

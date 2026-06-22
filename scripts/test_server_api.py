@@ -421,7 +421,7 @@ def _assert_task_completion_schema(
 ):
     if not isinstance(body, dict):
         raise AssertionError(f"task completion response must be object, got {type(body)}")
-    for k in ("date", "tasks"):
+    for k in ("date", "tasks", "counts"):
         if k not in body:
             raise AssertionError(f"task completion response missing '{k}'")
     if body["date"] != expected_date:
@@ -437,6 +437,25 @@ def _assert_task_completion_schema(
         raise AssertionError(
             f"task completion tasks mismatch: {body['tasks']} vs {expected_tasks}"
         )
+    _assert_task_completion_counts_schema(body["counts"], "task completion counts")
+
+
+def _assert_task_completion_counts_schema(counts: dict, label: str):
+    if not isinstance(counts, dict):
+        raise AssertionError(f"{label} must be object")
+    for category in ("diet", "activity", "behavior", "mental"):
+        if category not in counts:
+            raise AssertionError(f"{label} missing '{category}'")
+        item = counts[category]
+        if not isinstance(item, dict):
+            raise AssertionError(f"{label}.{category} must be object")
+        for key in ("done", "total"):
+            if key not in item:
+                raise AssertionError(f"{label}.{category} missing '{key}'")
+            if not isinstance(item[key], int) or item[key] < 0:
+                raise AssertionError(f"{label}.{category}.{key} must be non-negative int")
+        if item["done"] > item["total"]:
+            raise AssertionError(f"{label}.{category}.done must be <= total")
 
 
 def _assert_daily_tasks_schema(body: list[dict]) -> None:
@@ -449,13 +468,17 @@ def _assert_daily_tasks_schema(body: list[dict]) -> None:
     for i, task in enumerate(body):
         if not isinstance(task, dict):
             raise AssertionError(f"daily tasks[{i}] must be object")
-        for key in ("code", "title", "sort_order"):
+        for key in ("code", "title", "category", "sort_order"):
             if key not in task:
                 raise AssertionError(f"daily tasks[{i}] missing '{key}'")
         if not isinstance(task["code"], str) or not task["code"]:
             raise AssertionError(f"daily tasks[{i}].code must be non-empty string")
         if not isinstance(task["title"], str) or not task["title"]:
             raise AssertionError(f"daily tasks[{i}].title must be non-empty string")
+        if task["category"] not in ("diet", "activity", "behavior", "mental"):
+            raise AssertionError(
+                f"daily tasks[{i}].category must be diet/activity/behavior/mental"
+            )
         if not isinstance(task["sort_order"], int):
             raise AssertionError(f"daily tasks[{i}].sort_order must be int")
         if previous_sort_order is not None and task["sort_order"] < previous_sort_order:
@@ -824,7 +847,7 @@ def step_summary_get(
     for i, item in enumerate(task_completions):
         if not isinstance(item, dict):
             raise AssertionError(f"task_completions[{i}] must be object")
-        for k in ("date", "tasks"):
+        for k in ("date", "tasks", "counts"):
             if k not in item:
                 raise AssertionError(f"task_completions[{i}] missing '{k}'")
         if not isinstance(item["date"], str):
@@ -838,6 +861,9 @@ def step_summary_get(
                 raise AssertionError(
                     f"task_completions[{i}].tasks[{j}] must be non-empty string"
                 )
+        _assert_task_completion_counts_schema(
+            item["counts"], f"task_completions[{i}].counts"
+        )
     if task_dates != sorted(task_dates):
         raise AssertionError(
             f"task_completions must be sorted ascending: {task_dates}"
