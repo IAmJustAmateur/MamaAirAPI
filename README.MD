@@ -208,20 +208,27 @@ Run the Django server locally:
 python manage.py runserver
 ```
 
-Run the E2E script:
+Run the current-contract E2E script:
 
 ```bash
 python scripts/test_server_api.py --env local
+```
+
+Run the legacy-contract E2E script to verify older mobile builds still work:
+
+```bash
+python scripts/test_server_api_legacy.py --env local
 ```
 
 Useful overrides:
 
 ```bash
 python scripts/test_server_api.py --env production
+python scripts/test_server_api_legacy.py --env production
 python scripts/test_server_api.py --base-url https://api.mamaair.app/
 ```
 
-The E2E script exercises the current mobile integration flow: auth, profile, lifestyle, wellbeing, symptoms, movement upload, exposure, summary, and recommendation completion.
+The E2E scripts exercise the mobile integration flow: auth, profile, lifestyle, wellbeing, symptoms, movement upload, exposure, summary, and recommendation completion. The legacy script keeps older response assertions for backwards compatibility, while the main script validates the latest API contract.
 
 ## Notes for Mobile Developers
 
