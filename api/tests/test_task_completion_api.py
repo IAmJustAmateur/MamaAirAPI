@@ -24,16 +24,30 @@ class TaskCompletionApiTests(APITestCase):
         )
         cls.drink_water, _ = DailyTask.objects.get_or_create(
             code="drink_water",
-            defaults={"title": "Drink water", "sort_order": 10},
+            defaults={"title": "Drink water", "category": "diet", "sort_order": 10},
         )
         cls.cooking_smoke, _ = DailyTask.objects.get_or_create(
             code="cooking_smoke",
-            defaults={"title": "Cooking Smoke", "sort_order": 20},
+            defaults={
+                "title": "Cooking Smoke",
+                "category": "behavior",
+                "sort_order": 20,
+            },
         )
         cls.morning_walk, _ = DailyTask.objects.get_or_create(
             code="morning_walk",
-            defaults={"title": "Morning Walk", "sort_order": 30},
+            defaults={
+                "title": "Morning Walk",
+                "category": "activity",
+                "sort_order": 30,
+            },
         )
+        cls.drink_water.category = "diet"
+        cls.drink_water.save(update_fields=["category"])
+        cls.cooking_smoke.category = "behavior"
+        cls.cooking_smoke.save(update_fields=["category"])
+        cls.morning_walk.category = "activity"
+        cls.morning_walk.save(update_fields=["category"])
 
     def setUp(self):
         self.client.force_authenticate(self.user)
@@ -51,6 +65,12 @@ class TaskCompletionApiTests(APITestCase):
         assert resp.data == {
             "date": "2026-04-30",
             "tasks": ["cooking_smoke", "drink_water"],
+            "counts": {
+                "diet": {"done": 1, "total": 1},
+                "activity": {"done": 0, "total": 1},
+                "behavior": {"done": 1, "total": 1},
+                "mental": {"done": 0, "total": 0},
+            },
         }
         assert UserDailyTaskCompletion.objects.filter(
             user=self.user,
@@ -73,7 +93,16 @@ class TaskCompletionApiTests(APITestCase):
         )
 
         assert resp.status_code == status.HTTP_201_CREATED
-        assert resp.data == {"date": "2026-04-30", "tasks": ["drink_water"]}
+        assert resp.data == {
+            "date": "2026-04-30",
+            "tasks": ["drink_water"],
+            "counts": {
+                "diet": {"done": 1, "total": 1},
+                "activity": {"done": 0, "total": 1},
+                "behavior": {"done": 0, "total": 1},
+                "mental": {"done": 0, "total": 0},
+            },
+        }
         assert UserDailyTaskCompletion.objects.get(
             user=self.user,
             date=date(2026, 4, 30),
@@ -124,7 +153,16 @@ class TaskCompletionApiTests(APITestCase):
         resp = self.client.get(self.url, {"date": "2026-04-30"})
 
         assert resp.status_code == status.HTTP_200_OK
-        assert resp.data == {"date": "2026-04-30", "tasks": ["drink_water"]}
+        assert resp.data == {
+            "date": "2026-04-30",
+            "tasks": ["drink_water"],
+            "counts": {
+                "diet": {"done": 1, "total": 1},
+                "activity": {"done": 0, "total": 1},
+                "behavior": {"done": 0, "total": 1},
+                "mental": {"done": 0, "total": 0},
+            },
+        }
 
     def test_endpoint_requires_auth(self):
         self.client.force_authenticate(user=None)

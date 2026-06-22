@@ -219,6 +219,12 @@ class SummaryViewTests(APITestCase):
             {
                 "date": self.checkin_dates[-1].isoformat(),
                 "tasks": ["drink_water", "cooking_smoke"],
+                "counts": {
+                    "diet": {"done": 1, "total": 1},
+                    "activity": {"done": 0, "total": 1},
+                    "behavior": {"done": 1, "total": 1},
+                    "mental": {"done": 0, "total": 0},
+                },
             }
         ]
 
@@ -401,6 +407,12 @@ class SummaryViewTests(APITestCase):
             {
                 "date": self.checkin_dates[-1].isoformat(),
                 "tasks": ["drink_water", "cooking_smoke"],
+                "counts": {
+                    "diet": {"done": 1, "total": 1},
+                    "activity": {"done": 0, "total": 1},
+                    "behavior": {"done": 1, "total": 1},
+                    "mental": {"done": 0, "total": 0},
+                },
             }
         ]
         assert resp.data["risks_delta"]["mom"] is None

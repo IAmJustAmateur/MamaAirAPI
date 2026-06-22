@@ -1257,8 +1257,21 @@ class DailyCheckin(models.Model):
 
 
 class DailyTask(models.Model):
+    CATEGORY_CHOICES = [
+        ("diet", "Diet"),
+        ("activity", "Activity"),
+        ("behavior", "Behavior"),
+        ("mental", "Mental"),
+    ]
+
     code = models.SlugField(max_length=64, unique=True)
     title = models.CharField(max_length=255)
+    category = models.CharField(
+        max_length=16,
+        choices=CATEGORY_CHOICES,
+        default="behavior",
+        db_index=True,
+    )
     sort_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

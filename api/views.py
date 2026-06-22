@@ -126,7 +126,28 @@ from django.utils.dateparse import parse_datetime
 logger = logging.getLogger(__name__)
 
 
+def _active_daily_task_rows():
+    return list(DailyTask.objects.filter(is_active=True).values("code", "category"))
+
+
+def _task_completion_counts(task_codes, active_tasks=None):
+    completed_codes = set(task_codes)
+    counts = {
+        category: {"done": 0, "total": 0}
+        for category, _label in DailyTask.CATEGORY_CHOICES
+    }
+    for task in active_tasks if active_tasks is not None else _active_daily_task_rows():
+        category = task["category"]
+        if category not in counts:
+            continue
+        counts[category]["total"] += 1
+        if task["code"] in completed_codes:
+            counts[category]["done"] += 1
+    return counts
+
+
 def _task_completion_history(user, start_date, end_date):
+    active_tasks = _active_daily_task_rows()
     completions = (
         UserDailyTaskCompletion.objects.filter(
             user=user,
@@ -142,7 +163,11 @@ def _task_completion_history(user, start_date, end_date):
     for completion in completions:
         by_date.setdefault(completion.date, []).append(completion.task.code)
     return [
-        {"date": completion_date, "tasks": tasks}
+        {
+            "date": completion_date,
+            "tasks": tasks,
+            "counts": _task_completion_counts(tasks, active_tasks=active_tasks),
+        }
         for completion_date, tasks in by_date.items()
     ]
 
@@ -2421,7 +2446,10 @@ class TaskCompletionView(APIView):
     @extend_schema(
         tags=["Wellbeing"],
         summary="Get completed daily tasks for date",
-        description="Returns the list of active task codes completed by the user on the requested calendar date.",
+        description=(
+            "Returns the list of active task codes completed by the user on the requested calendar date, "
+            "plus per-category done/total counts for active tasks."
+        ),
         parameters=[
             OpenApiParameter(
                 name="date",
@@ -2432,13 +2460,7 @@ class TaskCompletionView(APIView):
             )
         ],
         responses={
-            200: inline_serializer(
-                name="TaskCompletionDayResponse",
-                fields={
-                    "date": serializers.DateField(),
-                    "tasks": serializers.ListField(child=serializers.SlugField()),
-                },
-            ),
+            200: TaskCompletionDaySerializer,
             400: inline_serializer(
                 name="TaskCompletionBadRequest",
                 fields={"detail": serializers.CharField()},
@@ -2476,7 +2498,11 @@ class TaskCompletionView(APIView):
             .order_by("task__sort_order", "task__title")
             .values_list("task__code", flat=True)
         )
-        data = {"date": parsed_date, "tasks": tasks}
+        data = {
+            "date": parsed_date,
+            "tasks": tasks,
+            "counts": _task_completion_counts(tasks),
+        }
         return Response(TaskCompletionDaySerializer(data).data)
 
     @extend_schema(
@@ -2484,7 +2510,8 @@ class TaskCompletionView(APIView):
         summary="Replace completed daily tasks for date",
         description=(
             "Replaces the completed task set for one calendar date. "
-            "Send the full desired list of task `code` values; sending an empty list clears completions for that date."
+            "Send the full desired list of task `code` values; sending an empty list clears completions for that date. "
+            "The response includes per-category done/total counts for active tasks."
         ),
         request=inline_serializer(
             name="TaskCompletionUpsertRequest",
@@ -2494,13 +2521,7 @@ class TaskCompletionView(APIView):
             },
         ),
         responses={
-            201: inline_serializer(
-                name="TaskCompletionUpsertResponse",
-                fields={
-                    "date": serializers.DateField(),
-                    "tasks": serializers.ListField(child=serializers.SlugField()),
-                },
-            ),
+            201: TaskCompletionDaySerializer,
             400: inline_serializer(
                 name="TaskCompletionUpsertBadRequest",
                 fields={"detail": serializers.CharField()},
@@ -2534,4 +2555,5 @@ class TaskCompletionView(APIView):
             data["date"],
             data["tasks"],
         )
+        data["counts"] = _task_completion_counts(data["tasks"])
         return Response(TaskCompletionDaySerializer(data).data, status=201)
