@@ -70,6 +70,21 @@ def parse_args():
         default=os.getenv("E2E_VERIFY_SSL"),
         help="Verify SSL certificates. Defaults to false for local, true otherwise.",
     )
+    parser.add_argument(
+        "--only",
+        choices=("all", "large-movements-json"),
+        default=os.getenv("E2E_ONLY", "all"),
+        help="Run only one E2E scenario. Defaults to the full suite.",
+    )
+    parser.add_argument(
+        "--large-movements-points",
+        type=int,
+        default=int(os.getenv("E2E_LARGE_MOVEMENTS_POINTS", "5000")),
+        help=(
+            "Number of movement points for --only large-movements-json. "
+            "Can also be set with E2E_LARGE_MOVEMENTS_POINTS."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1574,6 +1589,49 @@ def step_movements_upload_many_json(access_token: str) -> tuple[str, dict]:
     return target_date, (body if isinstance(body, dict) else {})
 
 
+def step_movements_upload_large_json(
+    access_token: str,
+    points: int,
+) -> tuple[str, dict, float]:
+    """POST a dense large JSON movements payload to exercise batched inserts."""
+    if points <= 0:
+        raise AssertionError("--large-movements-points must be greater than 0")
+
+    payload, target_date = build_json_many_points(
+        points=points,
+        step_minutes=0,
+        hours_back_start=2,
+    )
+    started = time.monotonic()
+    r = requests.post(
+        MOVEMENTS_UPLOAD_JSON_URL,
+        json=payload,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    elapsed = time.monotonic() - started
+    assert_status(r, [201, 207], "Large movements JSON upload failed")
+    body = safe_json(r)
+    pp("large movements JSON upload status code", r.status_code)
+    pp("large movements JSON upload elapsed seconds", round(elapsed, 2))
+    pp("Large movements JSON upload response", body)
+
+    if not isinstance(body, dict):
+        raise AssertionError(f"Large movements JSON response must be object: {body}")
+    if body.get("imported") != points:
+        raise AssertionError(
+            f"Expected imported={points}, got {body.get('imported')}: {body}"
+        )
+    if body.get("errors"):
+        raise AssertionError(f"Large movements JSON parse errors: {body['errors']}")
+    if body.get("exposure_errors"):
+        raise AssertionError(
+            f"Large movements JSON exposure errors: {body['exposure_errors']}"
+        )
+    return target_date, body, elapsed
+
+
 def step_air_exposure_poll_latest(
     access_token: str, max_attempts: int = 6, delay_sec: int = 5
 ) -> dict:
@@ -2228,8 +2286,48 @@ def step_exposure_history_days_param(access_token: str):
     pp("Exposure history (days=invalid -> 7)", d4)
 
 
+def run_large_movements_json_e2e():
+    if REG_API_KEY == "REPLACE_ME":
+        print(
+            "Set REG_API_KEY env var (server's settings.REGISTRATION_API_KEY) "
+            "to allow registration if the E2E user does not exist."
+        )
+
+    print(f"E2E_ENV: {ARGS.env}")
+    print(f"BASE_URL: {BASE_URL}")
+    print(f"VERIFY_SSL: {VERIFY_SSL}")
+    print(f"MOVEMENTS_UPLOAD_JSON_URL: {MOVEMENTS_UPLOAD_JSON_URL}")
+    print(f"LARGE_MOVEMENTS_POINTS: {ARGS.large_movements_points}")
+
+    step_meta_choices_public()
+    step_1_register()
+    token = step_2_token()
+
+    target_date, upload_info, elapsed = step_movements_upload_large_json(
+        token,
+        points=ARGS.large_movements_points,
+    )
+    exposure = step_air_exposure_poll_latest(token)
+    ts = exposure.get("timestamp")
+    if ts:
+        expo_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        delta = datetime.now(dt_timezone.utc) - expo_dt.astimezone(dt_timezone.utc)
+        if delta.total_seconds() >= 12 * 3600:
+            raise AssertionError(f"AirExposureLog after large upload looks stale: {ts}")
+
+    pp("Large JSON movements target date", target_date)
+    pp("Large JSON movements upload info", upload_info)
+    print(
+        "Large movements JSON E2E passed: "
+        f"{ARGS.large_movements_points} points in {elapsed:.2f}s."
+    )
+
+
 def main():
     # sanity
+    if ARGS.only == "large-movements-json":
+        run_large_movements_json_e2e()
+        return
 
     if REG_API_KEY == "REPLACE_ME":
         print(

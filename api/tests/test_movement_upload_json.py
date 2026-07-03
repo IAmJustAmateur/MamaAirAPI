@@ -8,12 +8,17 @@ from django.test import override_settings
 from rest_framework.test import APITestCase
 from rest_framework import status
 from unittest.mock import patch
+from datetime import timedelta
 from django.utils import timezone
 
 from zoneinfo import ZoneInfo
 
 from api.services.air_exposure_daily import recompute_daily_exposure
-from api.services.air_exposure import AQSample
+from api.services.air_exposure import (
+    AQSample,
+    MOVEMENT_BULK_CREATE_BATCH_SIZE,
+    ingest_movements_batch,
+)
 
 Movement = apps.get_model("api", "Movement")
 AirExposureLog = apps.get_model("api", "AirExposureLog")
@@ -47,11 +52,9 @@ class MovementUploadJSONTests(APITestCase):
             ]
         }
 
-    def test_upload_creates_movements_and_air_exposure_log(self):
-        payload = self._make_payload()
-
+    def _make_aq_sample(self) -> AQSample:
         bucket = timezone.make_aware(timezone.datetime(2025, 9, 8, 10, 0))
-        aq_sample = AQSample(
+        return AQSample(
             timestamp=bucket,
             aqi=3,
             pm25=18.0,
@@ -66,6 +69,11 @@ class MovementUploadJSONTests(APITestCase):
             provider="OWM",
             data_quality="ok",
         )
+
+    def test_upload_creates_movements_and_air_exposure_log(self):
+        payload = self._make_payload()
+
+        aq_sample = self._make_aq_sample()
 
         with patch(
             "api.services.air_exposure.fetch_aq_for_bucket", return_value=aq_sample
@@ -117,3 +125,65 @@ class MovementUploadJSONTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("errors", resp.data)
+
+    def test_ingest_uses_batched_bulk_create(self):
+        records = [
+            {"lat": 54.6872, "lon": 25.2797, "ts": timezone.now(), "indoor": False},
+            {
+                "lat": 54.6873,
+                "lon": 25.2798,
+                "ts": timezone.now() + timedelta(minutes=5),
+                "indoor": False,
+            },
+        ]
+
+        with (
+            patch(
+                "api.services.air_exposure.Movement.objects.bulk_create"
+            ) as bulk_create,
+            patch(
+                "api.services.air_exposure.fetch_aq_for_bucket",
+                return_value=self._make_aq_sample(),
+            ),
+            patch(
+                "api.services.air_exposure.upsert_air_exposure_log",
+                return_value=(True, None),
+            ),
+            patch("api.services.air_exposure.upsert_daily_exposure"),
+        ):
+            summary = ingest_movements_batch(user_id=self.user.id, records=records)
+
+        self.assertEqual(summary["imported"], len(records))
+        bulk_create.assert_called_once()
+        self.assertEqual(
+            bulk_create.call_args.kwargs["batch_size"],
+            MOVEMENT_BULK_CREATE_BATCH_SIZE,
+        )
+
+    def test_large_json_upload_persists_movements(self):
+        start = timezone.make_aware(timezone.datetime(2025, 9, 8, 10, 0))
+        movement_count = MOVEMENT_BULK_CREATE_BATCH_SIZE + 25
+        payload = {
+            "movements": [
+                {
+                    "latitude": 54.6872 + (idx % 5) * 0.00001,
+                    "longitude": 25.2797 + (idx % 5) * 0.00001,
+                    "timestamp": (start + timedelta(seconds=idx)).isoformat(),
+                }
+                for idx in range(movement_count)
+            ]
+        }
+
+        with patch(
+            "api.services.air_exposure.fetch_aq_for_bucket",
+            return_value=self._make_aq_sample(),
+        ):
+            url = reverse("movements-upload-json")
+            resp = self.client.post(url, payload, format="json")
+
+        self.assertIn(resp.status_code, (status.HTTP_201_CREATED, 207), resp.data)
+        self.assertEqual(resp.data["imported"], movement_count)
+        self.assertEqual(
+            Movement.objects.filter(user=self.user).count(),
+            movement_count,
+        )
