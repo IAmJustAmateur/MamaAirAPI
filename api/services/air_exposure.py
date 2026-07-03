@@ -25,6 +25,8 @@ Movement = apps.get_model("api", "Movement")
 AirExposureLog = apps.get_model("api", "AirExposureLog")
 DailyExposure = apps.get_model("api", "DailyExposure")
 
+MOVEMENT_BULK_CREATE_BATCH_SIZE = 1000
+
 
 # =========================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -424,7 +426,11 @@ def ingest_movements_batch(
 
     # 2) Сохранение movements батчем
     with transaction.atomic():
-        Movement.objects.bulk_create(mv_objs, ignore_conflicts=True)
+        Movement.objects.bulk_create(
+            mv_objs,
+            ignore_conflicts=True,
+            batch_size=MOVEMENT_BULK_CREATE_BATCH_SIZE,
+        )
 
     # 3) Группировка по часовому бакету и «гридy»
     groups: Dict[Tuple[timezone.datetime, str, bool], List[timezone.datetime]] = (
