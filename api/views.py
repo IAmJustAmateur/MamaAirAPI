@@ -5,7 +5,7 @@ import logging
 from zoneinfo import ZoneInfo
 
 # from io import TextIOWrapper
-from rest_framework.parsers import JSONParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
@@ -79,6 +79,7 @@ from .choices_emoji import (
 )
 from .serializers import (
     RegisterSerializer,
+    UserAvatarUploadSerializer,
     UserProfileSerializer,
     UserLifeStyleSerializer,
     HealthInsightSerializer,
@@ -554,6 +555,72 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     #     if week_of_pregnancy is not None:
     #         user.set_pregnancy_start_date(week_of_pregnancy)
     #         user.save(update_fields=["pregnancy_start_date"])
+
+
+@extend_schema(
+    tags=["User"],
+    summary="Upload current user avatar",
+    description=(
+        "Uploads a profile avatar image for the authenticated user. "
+        "Send multipart/form-data with an `avatar` file. "
+        "Supported image types are JPEG, PNG, and WebP up to 5 MB."
+    ),
+    request=UserAvatarUploadSerializer,
+    responses={200: UserProfileSerializer, 400: ErrorResponseSerializer},
+    examples=[
+        OpenApiExample(
+            "Avatar upload",
+            value={"avatar": "<binary image file>"},
+            request_only=True,
+        )
+    ],
+    methods=["POST"],
+)
+@extend_schema(
+    tags=["User"],
+    summary="Delete current user uploaded avatar",
+    description=(
+        "Deletes the uploaded avatar image for the authenticated user. "
+        "If a legacy social avatar_url exists, profile responses will fall back to it."
+    ),
+    responses={200: UserProfileSerializer},
+    methods=["DELETE"],
+)
+class UserAvatarView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        logger.info(
+            "UserAvatarView POST, user=%s, payload_keys=%s",
+            request.user,
+            _payload_keys(request.data),
+        )
+        serializer = UserAvatarUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user
+        old_avatar_name = user.avatar.name if user.avatar else None
+        user.avatar = serializer.validated_data["avatar"]
+        user.save(update_fields=["avatar"])
+
+        if old_avatar_name and old_avatar_name != user.avatar.name:
+            user.avatar.storage.delete(old_avatar_name)
+
+        logger.info("UserAvatarView uploaded avatar, user=%s", request.user)
+        return Response(UserProfileSerializer(user, context={"request": request}).data)
+
+    def delete(self, request):
+        logger.info("UserAvatarView DELETE, user=%s", request.user)
+        user = request.user
+        old_avatar_name = user.avatar.name if user.avatar else None
+        if old_avatar_name:
+            storage = user.avatar.storage
+            user.avatar = None
+            user.save(update_fields=["avatar"])
+            storage.delete(old_avatar_name)
+
+        return Response(UserProfileSerializer(user, context={"request": request}).data)
 
 
 @extend_schema(

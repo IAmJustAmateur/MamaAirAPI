@@ -1,5 +1,11 @@
 # api/tests/test_auth.py
 
+import os
+import shutil
+import tempfile
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -7,6 +13,14 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 from django.conf import settings
+
+
+PNG_1X1 = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+    b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+    b"\x00\x00\x00\rIDATx\x9cc\xf8\xcf\xc0\xf0\x1f\x00"
+    b"\x05\x00\x01\xff\x89\x99=\x1d\x00\x00\x00\x00IEND\xaeB`\x82"
+)
 
 
 class AuthTests(APITestCase):
@@ -206,3 +220,82 @@ class AuthTests(APITestCase):
             },
         )
         self.assertEqual(response.status_code, 401)
+
+
+class ProfileAvatarTests(APITestCase):
+    def setUp(self):
+        self.media_root = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media_root)
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        self.addCleanup(lambda: shutil.rmtree(self.media_root, ignore_errors=True))
+
+        self.user = User.objects.create_user(
+            email="avatar@example.com",
+            password="testpass123",
+            avatar_url="https://example.com/social-avatar.png",
+        )
+        self.client.force_authenticate(self.user)
+        self.avatar_url = reverse("profile-avatar")
+        self.profile_url = reverse("profile")
+
+    def _avatar_file(self, name="avatar.png"):
+        return SimpleUploadedFile(name, PNG_1X1, content_type="image/png")
+
+    def test_upload_avatar_returns_profile_with_uploaded_avatar_url(self):
+        response = self.client.post(
+            self.avatar_url,
+            {"avatar": self._avatar_file()},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertIn("/media/avatars/user_", response.data["avatar_url"])
+        self.assertNotEqual(
+            response.data["avatar_url"], "https://example.com/social-avatar.png"
+        )
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.avatar.name.startswith("avatars/user_"))
+
+        profile_response = self.client.get(self.profile_url)
+        self.assertEqual(profile_response.data["avatar_url"], response.data["avatar_url"])
+
+    def test_delete_avatar_removes_upload_and_falls_back_to_legacy_avatar_url(self):
+        upload_response = self.client.post(
+            self.avatar_url,
+            {"avatar": self._avatar_file()},
+            format="multipart",
+        )
+        self.assertEqual(upload_response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+        uploaded_path = self.user.avatar.path
+
+        delete_response = self.client.delete(self.avatar_url)
+
+        self.assertEqual(delete_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            delete_response.data["avatar_url"],
+            "https://example.com/social-avatar.png",
+        )
+        self.assertFalse(os.path.exists(uploaded_path))
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.avatar)
+
+    def test_upload_avatar_rejects_non_image(self):
+        file_obj = SimpleUploadedFile(
+            "avatar.txt",
+            b"not an image",
+            content_type="text/plain",
+        )
+
+        response = self.client.post(
+            self.avatar_url,
+            {"avatar": file_obj},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("avatar", response.data)

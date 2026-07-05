@@ -7,6 +7,7 @@ services:
     command: ./entrypoint.sh
     volumes:
       - static_volume:/app/static
+      - media_volume:/app/media
       - /home/ec2-user/secrets/firebase_service_account.json:/run/secrets/firebase_service_account.json:ro  # <<< NEW
     depends_on:
       - db
@@ -53,6 +54,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data                  # тут сертификаты
       - caddy_config:/config
+      - media_volume:/app/media:ro
       - static_volume:/app/static:ro      # чтобы раздавать /static/
     depends_on:
       - web
@@ -60,5 +62,6 @@ services:
 volumes:
   postgres_data:
   static_volume:
+  media_volume:
   caddy_data:
   caddy_config:

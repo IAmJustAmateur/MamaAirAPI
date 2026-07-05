@@ -74,7 +74,16 @@ class UserAdmin(BaseUserAdmin):
         (None, {"fields": ("email", "password")}),
         (
             "Personal info",
-            {"fields": ("name", "date_of_birth", "height", "weight_pre_pregnancy")},
+            {
+                "fields": (
+                    "name",
+                    "date_of_birth",
+                    "height",
+                    "weight_pre_pregnancy",
+                    "avatar",
+                    "avatar_url",
+                )
+            },
         ),
         (
             "Pregnancy",

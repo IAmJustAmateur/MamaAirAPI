@@ -102,6 +102,7 @@ REGISTER_URL = urljoin(BASE_URL, "api/auth/register/")
 TOKEN_URL = urljoin(BASE_URL, "api/auth/token/")  # <-- изменил
 REFRESH_URL = urljoin(BASE_URL, "api/auth/token/refresh/")  # <-- на будущее
 PROFILE_URL = urljoin(BASE_URL, "api/profile/")
+PROFILE_AVATAR_URL = urljoin(BASE_URL, "api/profile/avatar/")
 LIFESTYLE_URL = urljoin(BASE_URL, "api/lifestyle/")
 CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/mommy/checklist/")
 
@@ -136,6 +137,14 @@ WELLBEING_LOG_URL = urljoin(BASE_URL, "api/wellbeing/log/")
 DAILY_CHECKIN_URL = urljoin(BASE_URL, "api/daily-checkin/")
 DAILY_TASKS_URL = urljoin(BASE_URL, "api/daily-tasks/")
 TASK_COMPLETION_URL = urljoin(BASE_URL, "api/task-completion/")
+
+
+PNG_1X1 = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+    b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+    b"\x00\x00\x00\rIDATx\x9cc\xf8\xcf\xc0\xf0\x1f\x00"
+    b"\x05\x00\x01\xff\x89\x99=\x1d\x00\x00\x00\x00IEND\xaeB`\x82"
+)
 
 
 TIMEOUT = ARGS.timeout
@@ -1032,6 +1041,35 @@ def step_3_fill_profile(access_token: str):
         ), "consent_accepted_at should not be null"
 
     pp("Profile GET", data)
+
+
+def step_3_0_upload_avatar(access_token: str):
+    """POST /api/profile/avatar/ with multipart image upload"""
+    files = {"avatar": ("avatar.png", PNG_1X1, "image/png")}
+    r = requests.post(
+        PROFILE_AVATAR_URL,
+        files=files,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Profile avatar upload failed")
+    data = safe_json(r)
+    pp("Profile after avatar upload", data)
+
+    avatar_url = data.get("avatar_url")
+    assert avatar_url, f"Profile avatar upload did not return avatar_url: {data}"
+    assert "/media/avatars/" in avatar_url, f"Unexpected avatar_url: {avatar_url}"
+
+    r = requests.get(
+        PROFILE_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Profile GET after avatar upload failed")
+    profile = safe_json(r)
+    assert profile.get("avatar_url") == avatar_url
 
 
 def step_3_1_put_profile_update_pregnancy_week(access_token: str):
@@ -2365,6 +2403,7 @@ def main():
     print(f"REGISTER_URL: {REGISTER_URL}")
     print(f"TOKEN_URL: {TOKEN_URL}")
     print(f"PROFILE_URL: {PROFILE_URL}")
+    print(f"PROFILE_AVATAR_URL: {PROFILE_AVATAR_URL}")
     print(f"LIFESTYLE_URL: {LIFESTYLE_URL}")
     print(f"CHECKLIST_URL: {CHECKLIST_URL}")
     print(f"DAILY_TASKS_URL: {DAILY_TASKS_URL}")
@@ -2375,6 +2414,7 @@ def main():
     step_1_register()
     token = step_2_token()
     step_3_fill_profile(token)
+    step_3_0_upload_avatar(token)
     step_3_1_put_profile_update_pregnancy_week(token)
     step_4_lifestyle(token)
 
