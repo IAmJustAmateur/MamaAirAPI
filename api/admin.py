@@ -78,11 +78,28 @@ class UserAdmin(BaseUserAdmin):
         ),
         (
             "Pregnancy",
-            {"fields": ("race", "country", "is_first_pregnancy", "week_of_pregnancy")},
+            {
+                "fields": (
+                    "race",
+                    "country",
+                    "is_first_pregnancy",
+                    "pregnancy_number",
+                    "week_of_pregnancy",
+                )
+            },
         ),
         (
             "Settings",
-            {"fields": ("language", "tracking_enabled", "notifications_enabled")},
+            {
+                "fields": (
+                    "language",
+                    "timezone",
+                    "tracking_enabled",
+                    "notifications_enabled",
+                    "notification_window_from",
+                    "notification_window_to",
+                )
+            },
         ),
         (
             "Permissions",
@@ -126,6 +143,9 @@ class UserLifeStyleAdmin(admin.ModelAdmin):
         "work_type",
         "diet_type",
         "cooking_method",
+        "area",
+        "time_spent",
+        "time_of_day",
     )
     search_fields = ("user__email",)
 

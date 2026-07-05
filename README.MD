@@ -174,10 +174,14 @@ curl -X PATCH "$BASE_URL/api/profile/" \
     "weight_pre_pregnancy": 70,
     "race": "caucasian",
     "country": "NG",
-    "is_first_pregnancy": true,
+    "is_first_pregnancy": false,
+    "pregnancy_number": 2,
     "week_of_pregnancy": 12,
     "tracking_enabled": true,
     "notifications_enabled": true,
+    "notification_window_from": "09:00",
+    "notification_window_to": "21:00",
+    "timezone": "Africa/Lagos",
     "consent": true
   }'
 
