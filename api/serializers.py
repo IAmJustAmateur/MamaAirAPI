@@ -47,6 +47,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     pregnancy_number = serializers.IntegerField(
         required=False, allow_null=True, min_value=1
     )
+    avatar_url = serializers.URLField(allow_null=True, required=False)
 
     bmi = serializers.FloatField(read_only=True)
 
@@ -58,6 +59,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "user_permissions",
             "is_superuser",
             "is_staff",
+            "avatar",
         ]
         read_only_fields = (
             "registered_at",
@@ -150,6 +152,38 @@ class UserProfileSerializer(serializers.ModelSerializer):
             attrs["is_first_pregnancy"] = attrs["pregnancy_number"] == 1
 
         return attrs
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.avatar:
+            request = self.context.get("request")
+            avatar_url = instance.avatar.url
+            if request is not None:
+                avatar_url = request.build_absolute_uri(avatar_url)
+            data["avatar_url"] = avatar_url
+        return data
+
+
+class UserAvatarUploadSerializer(serializers.Serializer):
+    avatar = serializers.ImageField(write_only=True)
+
+    allowed_content_types = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+    max_size_bytes = 5 * 1024 * 1024
+
+    def validate_avatar(self, value):
+        content_type = getattr(value, "content_type", "")
+        if content_type not in self.allowed_content_types:
+            raise serializers.ValidationError(
+                "Unsupported image type. Use JPEG, PNG, or WebP."
+            )
+        if value.size > self.max_size_bytes:
+            raise serializers.ValidationError("Avatar image must be 5 MB or smaller.")
+        value.name = f"avatar.{self.allowed_content_types[content_type]}"
+        return value
 
 
 class UserLifeStyleSerializer(serializers.ModelSerializer):

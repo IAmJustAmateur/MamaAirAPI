@@ -1,5 +1,7 @@
 # api/models.py
 
+import uuid
+
 from django.db import models, transaction
 
 from datetime import date, timedelta
@@ -25,6 +27,11 @@ from api.services.aggregation import agg_max_plus_logistic_tail
 from django.conf import settings
 
 logger = getLogger(__name__)
+
+
+def user_avatar_upload_to(instance, filename):
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
+    return f"avatars/user_{instance.pk}/{uuid.uuid4().hex}.{suffix}"
 
 
 USER_RISK_FACTORS = [
@@ -218,6 +225,7 @@ class User(MyUser, PermissionsMixin):
 
     auth_provider = models.CharField(max_length=20, default="password")
     google_sub = models.CharField(max_length=255, null=True, blank=True, unique=True)
+    avatar = models.ImageField(upload_to=user_avatar_upload_to, null=True, blank=True)
     avatar_url = models.URLField(null=True, blank=True)
     consent = models.BooleanField(default=False)
     consent_accepted_at = models.DateTimeField(null=True, blank=True)

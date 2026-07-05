@@ -253,6 +253,9 @@ STATIC_URL = "/static/"
 # STATIC_ROOT = os.path.join(BASE_DIR, "static")
 STATIC_ROOT = "/app/static"
 
+MEDIA_URL = "/media/"
+MEDIA_ROOT = "/app/media"
+
 
 # Time zone, language, etc. can stay default or be adjusted
 LANGUAGE_CODE = "en-us"

@@ -91,15 +91,16 @@ The E2E script exercises this sequence:
 1. Sign in with Google and receive MamaAir `access` and `refresh` JWT tokens.
 2. Store `access` and `refresh` tokens securely.
 3. `PATCH /api/profile/` with onboarding profile fields.
-4. `GET /api/lifestyle/`, then `PATCH /api/lifestyle/`.
-5. Load `GET /api/meta/choices/` for dropdown values.
-6. Load wellbeing catalog with `GET /api/wellbeing/`.
-7. Sync daily wellbeing, check-in, and task completion state.
-8. Load symptom checklists and submit selected symptoms.
-9. Upload movement points with `POST /api/movements/upload/json/`.
-10. Poll `GET /api/air-exposure/` and then load `GET /api/summary/`.
-11. Store `summary.snapshot_id` when showing recommendations.
-12. Mark recommendation dimensions with `POST /api/recommendation-completion/`.
+4. Optionally upload an avatar with `POST /api/profile/avatar/`.
+5. `GET /api/lifestyle/`, then `PATCH /api/lifestyle/`.
+6. Load `GET /api/meta/choices/` for dropdown values.
+7. Load wellbeing catalog with `GET /api/wellbeing/`.
+8. Sync daily wellbeing, check-in, and task completion state.
+9. Load symptom checklists and submit selected symptoms.
+10. Upload movement points with `POST /api/movements/upload/json/`.
+11. Poll `GET /api/air-exposure/` and then load `GET /api/summary/`.
+12. Store `summary.snapshot_id` when showing recommendations.
+13. Mark recommendation dimensions with `POST /api/recommendation-completion/`.
 
 ## Profile
 
@@ -140,6 +141,32 @@ When `week_of_pregnancy` changes, the backend recalculates `pregnancy_start_date
 When `pregnancy_number` is provided, the backend keeps legacy `is_first_pregnancy` in sync (`1` => `true`, `2+` => `false`).
 `notification_window_from` and `notification_window_to` must be sent together in `HH:MM` format and must describe a same-day interval.
 `timezone` must be an IANA timezone such as `Africa/Lagos`, `Europe/Minsk`, or `Europe/Warsaw`.
+
+### Upload Avatar
+
+`POST /api/profile/avatar/`
+
+Send `multipart/form-data` with one file field:
+
+```text
+avatar=<jpeg|png|webp image file>
+```
+
+Supported image types: JPEG, PNG, WebP. Maximum size: 5 MB.
+
+Response is the updated profile. `avatar_url` points to the uploaded file when one exists:
+
+```json
+{
+  "id": 123,
+  "email": "user@example.com",
+  "avatar_url": "https://api.mamaair.app/media/avatars/user_123/abc123.png"
+}
+```
+
+`DELETE /api/profile/avatar/` deletes only the uploaded avatar. If the user has a legacy social `avatar_url`, profile responses fall back to that URL.
+
+In the current deployment, uploaded avatars are stored in local Django media storage under `/app/media`, backed by the `media_volume` Docker volume and served by Caddy at `/media/`.
 
 ## Meta Choices
 

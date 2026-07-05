@@ -14,6 +14,11 @@
     }
 
     # Проксируем всё остальное на Django
+    handle_path /media/* {
+        root * /app/media
+        file_server
+    }
+
     reverse_proxy web:8000 {
         header_up X-Forwarded-Proto {scheme}
         header_up X-Forwarded-For {remote}

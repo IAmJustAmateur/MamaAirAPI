@@ -106,6 +106,8 @@ Profile and configuration:
 
 - `GET /api/profile/`
 - `PATCH /api/profile/`
+- `POST /api/profile/avatar/`
+- `DELETE /api/profile/avatar/`
 - `GET /api/meta/choices/`
 - `POST /api/set-language/`
 - `GET /api/lifestyle/`
@@ -184,6 +186,11 @@ curl -X PATCH "$BASE_URL/api/profile/" \
     "timezone": "Africa/Lagos",
     "consent": true
   }'
+
+curl -X POST "$BASE_URL/api/profile/avatar/" \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer $ACCESS" \
+  -F "avatar=@avatar.png"
 
 curl "$BASE_URL/api/profile/" \
   -H "Accept: application/json" \
