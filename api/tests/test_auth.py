@@ -58,6 +58,60 @@ class AuthTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["email"], "test@example.com")
 
+    def test_profile_onboarding_fields_round_trip(self):
+        token_response = self.client.post(
+            self.token_url, {"email": "test@example.com", "password": "testpass123"}
+        )
+        access = token_response.data["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+        payload = {
+            "timezone": "Europe/Minsk",
+            "pregnancy_number": 2,
+            "notification_window_from": "09:00",
+            "notification_window_to": "21:00",
+        }
+        response = self.client.patch(self.profile_url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["timezone"], "Europe/Minsk")
+        self.assertEqual(response.data["pregnancy_number"], 2)
+        self.assertEqual(response.data["notification_window_from"], "09:00:00")
+        self.assertEqual(response.data["notification_window_to"], "21:00:00")
+        self.assertIs(response.data["is_first_pregnancy"], False)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.pregnancy_number, 2)
+        self.assertIs(self.user.is_first_pregnancy, False)
+
+    def test_profile_rejects_invalid_timezone(self):
+        token_response = self.client.post(
+            self.token_url, {"email": "test@example.com", "password": "testpass123"}
+        )
+        access = token_response.data["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+        response = self.client.patch(
+            self.profile_url, {"timezone": "Minsk"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("timezone", response.data)
+
+    def test_profile_requires_complete_notification_window(self):
+        token_response = self.client.post(
+            self.token_url, {"email": "test@example.com", "password": "testpass123"}
+        )
+        access = token_response.data["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+        response = self.client.patch(
+            self.profile_url, {"notification_window_from": "09:00"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("notification_window", response.data)
+
     def test_password_change_success(self):
         token = self.client.post(
             self.token_url, {"email": self.user.email, "password": "testpass123"}

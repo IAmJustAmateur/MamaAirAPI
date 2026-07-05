@@ -18,6 +18,9 @@ class MetaChoicesTests(APITestCase):
             "work_types",
             "diet_types",
             "cooking_methods",
+            "lifestyle_areas",
+            "lifestyle_time_spent",
+            "lifestyle_time_of_day",
             "exposure_levels",
         }
         self.assertTrue(expected_keys.issubset(resp.data.keys()))
@@ -42,3 +45,17 @@ class MetaChoicesTests(APITestCase):
         resp = self.client.get(self.url)
         countries = [x["value"] for x in resp.data["countries"]]
         self.assertIn("NG", countries)
+
+    def test_lifestyle_onboarding_choices_include_figma_values(self):
+        resp = self.client.get(self.url)
+
+        self.assertIn(
+            "peri_urban", [x["value"] for x in resp.data["lifestyle_areas"]]
+        )
+        self.assertIn(
+            "both_equally", [x["value"] for x in resp.data["lifestyle_time_spent"]]
+        )
+        self.assertIn(
+            "changes_day_to_day",
+            [x["value"] for x in resp.data["lifestyle_time_of_day"]],
+        )

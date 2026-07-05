@@ -123,16 +123,23 @@ Example:
   "weight_pre_pregnancy": 64,
   "race": "african",
   "country": "NG",
-  "is_first_pregnancy": true,
+  "is_first_pregnancy": false,
+  "pregnancy_number": 2,
   "week_of_pregnancy": 24,
   "tracking_enabled": true,
   "notifications_enabled": true,
+  "notification_window_from": "09:00",
+  "notification_window_to": "21:00",
+  "timezone": "Africa/Lagos",
   "consent": true,
   "preferred_share_channel": "whatsapp"
 }
 ```
 
 When `week_of_pregnancy` changes, the backend recalculates `pregnancy_start_date`.
+When `pregnancy_number` is provided, the backend keeps legacy `is_first_pregnancy` in sync (`1` => `true`, `2+` => `false`).
+`notification_window_from` and `notification_window_to` must be sent together in `HH:MM` format and must describe a same-day interval.
+`timezone` must be an IANA timezone such as `Africa/Lagos`, `Europe/Minsk`, or `Europe/Warsaw`.
 
 ## Meta Choices
 
@@ -146,6 +153,9 @@ This endpoint is public and returns supported values for dropdowns:
 - `work_types`
 - `diet_types`
 - `cooking_methods`
+- `lifestyle_areas`
+- `lifestyle_time_spent`
+- `lifestyle_time_of_day`
 - `exposure_levels`
 
 Use these values when submitting profile and lifestyle forms.
@@ -172,12 +182,21 @@ Example:
   "cooking_method": "gas",
   "activity_duration_minutes": 30,
   "standing_hours_per_day": 3,
+  "area": "urban",
+  "time_spent": "mostly_outdoors",
+  "time_of_day": "changes_day_to_day",
   "commute_mode": "car",
   "hydration_target_ml_per_day": 2200,
   "cooking_venue": "indoor",
   "ventilation_level": "medium"
 }
 ```
+
+Lifestyle onboarding choices:
+
+- `area`: `urban`, `peri_urban`, `rural`
+- `time_spent`: `mostly_indoors`, `mostly_outdoors`, `both_equally`
+- `time_of_day`: `morning_hours`, `midday_or_afternoon`, `evening`, `changes_day_to_day`
 
 ## Wellbeing and Daily State
 
@@ -517,10 +536,14 @@ curl -X PATCH "$BASE_URL/api/profile/" \
     "weight_pre_pregnancy": 70,
     "race": "caucasian",
     "country": "NG",
-    "is_first_pregnancy": true,
+    "is_first_pregnancy": false,
+    "pregnancy_number": 2,
     "week_of_pregnancy": 12,
     "tracking_enabled": true,
     "notifications_enabled": true,
+    "notification_window_from": "09:00",
+    "notification_window_to": "21:00",
+    "timezone": "Africa/Lagos",
     "consent": true
   }'
 

@@ -205,12 +205,16 @@ class User(MyUser, PermissionsMixin):
         max_length=255, null=True, blank=True, choices=COUNTRY_CHOICES
     )
     is_first_pregnancy = models.BooleanField(null=True, blank=True)
+    pregnancy_number = models.PositiveIntegerField(null=True, blank=True)
     week_of_pregnancy = models.IntegerField(null=True, blank=True)
 
     pregnancy_start_date = models.DateField(null=True, blank=True)
 
     tracking_enabled = models.BooleanField(default=False)
     notifications_enabled = models.BooleanField(default=False)
+    notification_window_from = models.TimeField(null=True, blank=True)
+    notification_window_to = models.TimeField(null=True, blank=True)
+    timezone = models.CharField(max_length=64, null=True, blank=True)
 
     auth_provider = models.CharField(max_length=20, default="password")
     google_sub = models.CharField(max_length=255, null=True, blank=True, unique=True)
@@ -220,6 +224,18 @@ class User(MyUser, PermissionsMixin):
     preferred_share_channel = models.CharField(
         max_length=255, null=True, blank=True, choices=SHARE_CHANNELS
     )
+
+    def sync_is_first_pregnancy(self):
+        if self.pregnancy_number is None:
+            return
+        self.is_first_pregnancy = self.pregnancy_number == 1
+
+    def save(self, *args, **kwargs):
+        self.sync_is_first_pregnancy()
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "pregnancy_number" in update_fields:
+            kwargs["update_fields"] = set(update_fields) | {"is_first_pregnancy"}
+        super().save(*args, **kwargs)
 
     def set_pregnancy_start_date(self):
         weeks = self.week_of_pregnancy
@@ -652,6 +668,34 @@ class UserLifeStyle(models.Model):
     )
 
     standing_hours_per_day = models.FloatField(null=True, blank=True)
+
+    AREA_CHOICES = [
+        ("urban", _("Urban")),
+        ("peri_urban", _("Peri-Urban")),
+        ("rural", _("Rural")),
+    ]
+    area = models.CharField(
+        max_length=32, choices=AREA_CHOICES, null=True, blank=True
+    )
+
+    TIME_SPENT_CHOICES = [
+        ("mostly_indoors", _("Mostly indoors")),
+        ("mostly_outdoors", _("Mostly outdoors")),
+        ("both_equally", _("Both equally")),
+    ]
+    time_spent = models.CharField(
+        max_length=32, choices=TIME_SPENT_CHOICES, null=True, blank=True
+    )
+
+    TIME_OF_DAY_CHOICES = [
+        ("morning_hours", _("Morning hours")),
+        ("midday_or_afternoon", _("Midday or afternoon")),
+        ("evening", _("Evening")),
+        ("changes_day_to_day", _("It changes day to day")),
+    ]
+    time_of_day = models.CharField(
+        max_length=32, choices=TIME_OF_DAY_CHOICES, null=True, blank=True
+    )
 
     # -------------------------
     # NEW FIELDS (customer request)

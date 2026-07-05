@@ -968,10 +968,14 @@ def step_3_fill_profile(access_token: str):
         "weight_pre_pregnancy": 70,
         "race": "caucasian",
         "country": "NG",
-        "is_first_pregnancy": True,
+        "is_first_pregnancy": False,
+        "pregnancy_number": 2,
         "week_of_pregnancy": 5,
         "tracking_enabled": True,
         "notifications_enabled": True,
+        "notification_window_from": "09:00",
+        "notification_window_to": "21:00",
+        "timezone": "Africa/Lagos",
         # NEW (User model + serializer mapping)
         "consent": True,
         "preferred_share_channel": "email",
@@ -999,8 +1003,23 @@ def step_3_fill_profile(access_token: str):
     data = r.json()
 
     # базовые поля + новые
-    for key in ("email", "language", "week_of_pregnancy", "consent"):
+    for key in (
+        "email",
+        "language",
+        "week_of_pregnancy",
+        "consent",
+        "pregnancy_number",
+        "timezone",
+        "notification_window_from",
+        "notification_window_to",
+    ):
         assert key in data, f"Profile missing '{key}'"
+
+    assert data["pregnancy_number"] == 2
+    assert data["is_first_pregnancy"] is False
+    assert data["timezone"] == "Africa/Lagos"
+    assert data["notification_window_from"].startswith("09:00")
+    assert data["notification_window_to"].startswith("21:00")
 
     # preferred_share_channel может не вернуться, если сериалайзер ещё не задеплоен
     if "preferred_share_channel" in data:
@@ -1062,6 +1081,9 @@ def step_4_lifestyle(access_token: str):
         "diet_type": "carnivore",
         "cooking_method": "gas",
         "activity_duration_minutes": 150,
+        "area": "urban",
+        "time_spent": "mostly_outdoors",
+        "time_of_day": "changes_day_to_day",
         # NEW FIELDS
         "commute_mode": "walk",
         "hydration_target_ml_per_day": 2200,

@@ -23,6 +23,7 @@ from .models import (
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.db import transaction
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -42,7 +43,10 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    week_of_pregnancy = serializers.IntegerField()
+    week_of_pregnancy = serializers.IntegerField(required=False, allow_null=True)
+    pregnancy_number = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1
+    )
 
     bmi = serializers.FloatField(read_only=True)
 
@@ -84,6 +88,69 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def validate_timezone(self, value):
+        if value in (None, ""):
+            return None
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError:
+            raise serializers.ValidationError(
+                "Invalid timezone. Use an IANA timezone, e.g. Europe/Minsk."
+            )
+        return value
+
+    def validate(self, attrs):
+        """
+        Consent and onboarding field consistency:
+        - set consent_accepted_at automatically when consent becomes true
+        - keep notification window as a complete same-day HH:MM interval
+        - mirror pregnancy_number into legacy is_first_pregnancy
+        """
+        attrs = super().validate(attrs) if hasattr(super(), "validate") else attrs
+        consent = attrs.get("consent", getattr(self.instance, "consent", None))
+
+        consent_accepted_at = attrs.get(
+            "consent_accepted_at",
+            getattr(self.instance, "consent_accepted_at", None),
+        )
+
+        if consent is True and not consent_accepted_at:
+            attrs["consent_accepted_at"] = timezone.now()
+
+        if consent is False:
+            attrs["consent_accepted_at"] = None
+
+        window_from = attrs.get(
+            "notification_window_from",
+            getattr(self.instance, "notification_window_from", None),
+        )
+        window_to = attrs.get(
+            "notification_window_to",
+            getattr(self.instance, "notification_window_to", None),
+        )
+        if (window_from is None) != (window_to is None):
+            raise serializers.ValidationError(
+                {
+                    "notification_window": (
+                        "notification_window_from and notification_window_to "
+                        "must be provided together."
+                    )
+                }
+            )
+        if window_from is not None and window_to is not None and window_from >= window_to:
+            raise serializers.ValidationError(
+                {
+                    "notification_window_to": (
+                        "Must be later than notification_window_from."
+                    )
+                }
+            )
+
+        if "pregnancy_number" in attrs and attrs["pregnancy_number"] is not None:
+            attrs["is_first_pregnancy"] = attrs["pregnancy_number"] == 1
+
+        return attrs
+
 
 class UserLifeStyleSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -100,6 +167,9 @@ class UserLifeStyleSerializer(serializers.ModelSerializer):
             "activity_duration_minutes",
             "work_schedule_pattern",
             "standing_hours_per_day",
+            "area",
+            "time_spent",
+            "time_of_day",
             # new fields
             "commute_mode",
             "hydration_target_ml_per_day",

@@ -263,6 +263,9 @@ class MetaChoicesResponseSchema(serializers.Serializer):
     work_types = ChoiceSchema(many=True)
     diet_types = ChoiceSchema(many=True)
     cooking_methods = ChoiceSchema(many=True)
+    lifestyle_areas = ChoiceSchema(many=True)
+    lifestyle_time_spent = ChoiceSchema(many=True)
+    lifestyle_time_of_day = ChoiceSchema(many=True)
     exposure_levels = ChoiceSchema(many=True)
 
 
@@ -409,15 +412,28 @@ def _symptom_class_statistics(user, start_date, end_date, UserSymptomModel, Link
     description="Registers a new user. Requires a valid API key in the `X-API-Key` header.",
     request=RegisterSerializer,
     responses={
-        201: OpenApiExample(
-            name="User created",
-            value={"message": "User created successfully"},
-            response_only=True,
+        201: OpenApiResponse(
+            response=inline_serializer(
+                name="RegisterSuccessResponse",
+                fields={"message": serializers.CharField()},
+            ),
+            examples=[
+                OpenApiExample(
+                    name="User created",
+                    value={"message": "User created successfully"},
+                    response_only=True,
+                )
+            ],
         ),
-        403: OpenApiExample(
-            name="Invalid API key",
-            value={"detail": "Invalid or missing API key."},
-            response_only=True,
+        403: OpenApiResponse(
+            response=ErrorResponseSerializer,
+            examples=[
+                OpenApiExample(
+                    name="Invalid API key",
+                    value={"detail": "Invalid or missing API key."},
+                    response_only=True,
+                )
+            ],
         ),
     },
     parameters=[
@@ -481,9 +497,13 @@ class RegisterView(generics.CreateAPIView):
                 "race": "african",
                 "country": "NG",
                 "is_first_pregnancy": True,
+                "pregnancy_number": 1,
                 "week_of_pregnancy": 24,
                 "tracking_enabled": True,
                 "notifications_enabled": True,
+                "notification_window_from": "09:00",
+                "notification_window_to": "21:00",
+                "timezone": "Africa/Lagos",
                 "consent": True,
                 "preferred_share_channel": "whatsapp",
             },
@@ -565,6 +585,9 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
                 "cooking_method": "gas",
                 "activity_duration_minutes": 30,
                 "standing_hours_per_day": 3,
+                "area": "urban",
+                "time_spent": "mostly_outdoors",
+                "time_of_day": "morning_hours",
                 "commute_mode": "car",
                 "hydration_target_ml_per_day": 2200,
                 "cooking_venue": "indoor",
@@ -1498,15 +1521,16 @@ class CurrentAdviceView(APIView):
         }
     },
     responses={
-        205: OpenApiExample(
-            "Successfully logged out",
-            value={"detail": "Successfully logged out"},
-            response_only=True,
-        ),
-        400: OpenApiExample(
-            "Invalid token",
-            value={"error": "Invalid refresh token"},
-            response_only=True,
+        205: OpenApiResponse(description="Successfully logged out."),
+        400: OpenApiResponse(
+            response=ErrorResponseSerializer,
+            examples=[
+                OpenApiExample(
+                    "Invalid token",
+                    value={"error": "Invalid refresh token"},
+                    response_only=True,
+                )
+            ],
         ),
     },
 )
@@ -1517,7 +1541,7 @@ class LogoutView(APIView):
     @extend_schema(
         request=LogoutSerializer,
         responses={
-            205: OpenApiTypes.NONE,
+            205: OpenApiResponse(description="Successfully logged out."),
             400: ErrorResponseSerializer,
         },
     )
@@ -1552,11 +1576,7 @@ class LogoutView(APIView):
     summary="Delete current user account",
     description="Deletes the authenticated user's account from the system. This action is irreversible.",
     responses={
-        204: OpenApiExample(
-            "Account deleted",
-            value={"detail": "Account deleted successfully"},
-            response_only=True,
-        )
+        204: OpenApiResponse(description="Account deleted successfully."),
     },
 )
 class DeleteAccountView(APIView):
@@ -1588,15 +1608,31 @@ class DeleteAccountView(APIView):
         }
     },
     responses={
-        200: OpenApiExample(
-            "Password changed",
-            value={"detail": "Password changed successfully"},
-            response_only=True,
+        200: OpenApiResponse(
+            response=inline_serializer(
+                name="PasswordChangeSuccessResponse",
+                fields={"detail": serializers.CharField()},
+            ),
+            examples=[
+                OpenApiExample(
+                    "Password changed",
+                    value={"detail": "Password changed successfully"},
+                    response_only=True,
+                )
+            ],
         ),
-        400: OpenApiExample(
-            "Wrong old password",
-            value={"old_password": "Wrong password."},
-            response_only=True,
+        400: OpenApiResponse(
+            response=inline_serializer(
+                name="PasswordChangeErrorResponse",
+                fields={"old_password": serializers.CharField(required=False)},
+            ),
+            examples=[
+                OpenApiExample(
+                    "Wrong old password",
+                    value={"old_password": "Wrong password."},
+                    response_only=True,
+                )
+            ],
         ),
     },
 )
@@ -1808,15 +1844,36 @@ class SummaryView(APIView):
         }
     },
     responses={
-        200: OpenApiExample(
-            "Success",
-            value={"message": "Language updated", "language": "fr"},
-            response_only=True,
+        200: OpenApiResponse(
+            response=inline_serializer(
+                name="SetLanguageSuccessResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "language": serializers.ChoiceField(
+                        choices=[code for code, _ in LANGUAGE_CHOICES]
+                    ),
+                },
+            ),
+            examples=[
+                OpenApiExample(
+                    "Success",
+                    value={"message": "Language updated", "language": "fr"},
+                    response_only=True,
+                )
+            ],
         ),
-        400: OpenApiExample(
-            "Invalid language",
-            value={"error": "Invalid language code"},
-            response_only=True,
+        400: OpenApiResponse(
+            response=inline_serializer(
+                name="SetLanguageErrorResponse",
+                fields={"error": serializers.CharField()},
+            ),
+            examples=[
+                OpenApiExample(
+                    "Invalid language",
+                    value={"error": "Invalid language code"},
+                    response_only=True,
+                )
+            ],
         ),
     },
 )
@@ -1899,6 +1956,13 @@ def _map_choices(choices):
                 "work_types": [{"value": "Desk", "label": "Desk"}],
                 "diet_types": [{"value": "carnivore", "label": "Carnivore"}],
                 "cooking_methods": [{"value": "gas", "label": "Gas"}],
+                "lifestyle_areas": [{"value": "urban", "label": "Urban"}],
+                "lifestyle_time_spent": [
+                    {"value": "mostly_indoors", "label": "Mostly indoors"}
+                ],
+                "lifestyle_time_of_day": [
+                    {"value": "morning_hours", "label": "Morning hours"}
+                ],
                 "exposure_levels": [{"value": "Clean", "label": "Clean"}],
             },
             response_only=True,
@@ -1928,6 +1992,9 @@ class MetaChoicesView(APIView):
             "cooking_methods": map_choices_with_emoji(
                 UserLifeStyle.COOKING_METHOD_CHOICES, COOKING_METHOD_EMOJI
             ),
+            "lifestyle_areas": _map_choices(UserLifeStyle.AREA_CHOICES),
+            "lifestyle_time_spent": _map_choices(UserLifeStyle.TIME_SPENT_CHOICES),
+            "lifestyle_time_of_day": _map_choices(UserLifeStyle.TIME_OF_DAY_CHOICES),
             "exposure_levels": _map_choices(EXPOSURE_LEVEL_CHOICES),
         }
         return Response(data)

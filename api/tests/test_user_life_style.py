@@ -54,6 +54,9 @@ class UserLifeStyleEndpointTests(APITestCase):
             "diet_type": "carnivore",
             "cooking_method": "gas",
             "activity_duration_minutes": 150,
+            "area": "peri_urban",
+            "time_spent": "mostly_outdoors",
+            "time_of_day": "changes_day_to_day",
         }
         # PATCH (update)
         resp = self.client.patch(self.lifestyle_url, patch_data, format="json")
@@ -65,6 +68,18 @@ class UserLifeStyleEndpointTests(APITestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         for k, v in patch_data.items():
             self.assertEqual(resp.data[k], v)
+
+    def test_lifestyle_rejects_unknown_onboarding_choice(self):
+        UserLifeStyle.objects.create(user=self.user)
+
+        resp = self.client.patch(
+            self.lifestyle_url,
+            {"area": "suburban"},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertIn("area", resp.data)
 
     def test_get_without_existing_lifestyle_autocreates(self):
         """If a lifestyle doesn't exist yet, GET should auto-create and return 200 (recommended UX)."""
