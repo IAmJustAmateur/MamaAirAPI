@@ -1822,6 +1822,252 @@ def step_validate_aq_via_debug(access_token: str, min_pm25: float = 10.0):
     print("✔ AQ via debug upsert validated (pm25_avg_24h >= threshold).")
 
 
+def _is_local_target() -> bool:
+    return BASE_URL.startswith("http://127.0.0.1") or BASE_URL.startswith(
+        "http://localhost"
+    )
+
+
+def _find_symptom_ids_by_name(items: list[dict], names: list[str]) -> list[int]:
+    by_name = {
+        str(item.get("name", "")).strip().lower(): item.get("id")
+        for item in items
+        if isinstance(item, dict)
+    }
+    missing = [name for name in names if name.lower() not in by_name]
+    if missing:
+        raise AssertionError(f"Missing symptoms in checklist: {missing}")
+    return [by_name[name.lower()] for name in names]
+
+
+def step_patch_lifestyle_for_level3_recommendations(access_token: str):
+    patch_data = {
+        "average_sleep_hours": 7.5,
+        "work_type": "Desk",
+        "diet_type": "carnivore",
+        "cooking_method": "charcoal",
+        "activity_duration_minutes": 150,
+        "area": "urban",
+        "time_spent": "mostly_outdoors",
+        "time_of_day": "midday_or_afternoon",
+        "commute_mode": "walk",
+        "hydration_target_ml_per_day": 2200,
+        "sleep_target_window": "22:00-06:00",
+        "rest_microbreak_preference": "10min",
+        "supplement_preferences": "ginger tea; moringa",
+        "cooking_venue": "indoor",
+        "ventilation_level": "low",
+    }
+    r = requests.patch(
+        LIFESTYLE_URL,
+        json=patch_data,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Lifestyle PATCH for Level 3 recommendations failed")
+    body = r.json()
+    pp("Lifestyle for Level 3 recommendations", body)
+    for key, value in patch_data.items():
+        if body.get(key) != value:
+            raise AssertionError(
+                f"Level 3 lifestyle '{key}' expected {value}, got {body.get(key)}"
+            )
+
+
+def step_post_mommy_symptoms_for_level3_recommendations(access_token: str) -> str:
+    names = [
+        "leaking fluid",
+        "severe vomiting",
+        "persistent fatigue",
+        "dizziness",
+        "chest pain",
+    ]
+    r = requests.get(
+        CHECKLIST_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Mommy checklist GET for Level 3 recommendations failed")
+    items = r.json().get("symptoms", [])
+    try:
+        ids = _find_symptom_ids_by_name(items, names)
+    except AssertionError:
+        if _is_local_target():
+            return step_local_insert_symptoms_for_level3("mommy", names)
+        raise
+    date_used = step_7_selection_post_replace(access_token, ids)
+    print(f"Level 3 mommy symptoms set: {names}")
+    return date_used
+
+
+def step_post_baby_symptoms_for_level3_recommendations(access_token: str) -> str:
+    names = ["severely reduced kicks"]
+    r = requests.get(
+        BABY_CHECKLIST_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Baby checklist GET for Level 3 recommendations failed")
+    items = r.json().get("symptoms", [])
+    try:
+        ids = _find_symptom_ids_by_name(items, names)
+    except AssertionError:
+        if _is_local_target():
+            return step_local_insert_symptoms_for_level3("baby", names)
+        raise
+    date_used = step_13_baby_selection_post_replace(access_token, ids)
+    print(f"Level 3 baby symptoms set: {names}")
+    return date_used
+
+
+def _ensure_django_for_local_e2e():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "agent_api.settings")
+    import django
+
+    django.setup()
+
+
+def step_local_insert_symptoms_for_level3(kind: str, names: list[str]) -> str:
+    if not _is_local_target():
+        raise AssertionError("Direct symptom insert is only available for local E2E")
+
+    _ensure_django_for_local_e2e()
+    from django.utils import timezone as django_timezone
+    from api.models import (
+        BabySymptom,
+        MommySymptom,
+        User,
+        UserBabySymptoms,
+        UserMommySymptoms,
+    )
+
+    user = User.objects.get(email=EMAIL)
+    recorded_at = django_timezone.now()
+    if kind == "mommy":
+        symptom_model = MommySymptom
+        through_model = UserMommySymptoms
+    elif kind == "baby":
+        symptom_model = BabySymptom
+        through_model = UserBabySymptoms
+    else:
+        raise AssertionError(f"Unknown symptom kind: {kind}")
+
+    for name in names:
+        symptom, _ = symptom_model.objects.get_or_create(name=name)
+        through_model.objects.create(
+            user=user,
+            symptom=symptom,
+            recorded_at=recorded_at,
+        )
+    date_used = django_timezone.localdate(recorded_at).isoformat()
+    print(f"Local Level 3 {kind} symptoms inserted: {names}")
+    return date_used
+
+
+def step_local_prepare_weather_and_clear_snapshots_for_level3() -> bool:
+    if not _is_local_target():
+        print("[!] Skipping local DB setup for Level 3 weather/snapshot reset.")
+        return False
+
+    _ensure_django_for_local_e2e()
+    from django.utils import timezone as django_timezone
+    from api.models import AirExposureLog, HealthInsightSnapshot, User
+
+    user = User.objects.get(email=EMAIL)
+    deleted_count, _ = HealthInsightSnapshot.objects.filter(user=user).delete()
+    AirExposureLog.objects.create(
+        user=user,
+        timestamp=django_timezone.now(),
+        latitude=6.5244,
+        longitude=3.3792,
+        temperature=36.5,
+        humidity=70,
+        aqi=4,
+        exposure_minutes=60,
+    )
+    print(
+        "Local Level 3 setup: cleared "
+        f"{deleted_count} snapshots and inserted high-temperature AirExposureLog."
+    )
+    return True
+
+
+def step_prepare_level3_recommendation_inputs(
+    access_token: str, admin_access_token: str
+) -> set[str]:
+    local_weather_seeded = step_local_prepare_weather_and_clear_snapshots_for_level3()
+    step_patch_lifestyle_for_level3_recommendations(access_token)
+    step_post_mommy_symptoms_for_level3_recommendations(access_token)
+    step_post_baby_symptoms_for_level3_recommendations(access_token)
+    step_debug_exposure_upsert(
+        admin_access_token,
+        user_email=EMAIL,
+        pollutants={"pm25_avg_24h": 20.0, "no2_24h_mean": 26.0},
+    )
+
+    expected = {
+        "alert.prom",
+        "alert.fetal_hypoxia",
+        "alert.hyperemesis",
+        "alert.anemia",
+        "alert.cardiovascular",
+        "alert.pm25.daily",
+        "alert.cooking.solid_fuel",
+        "alert.cooking.indoor_solid_fuel",
+        "alert.outdoor.midday",
+    }
+    if local_weather_seeded:
+        expected.add("alert.heat.high")
+    return expected
+
+
+def step_validate_level3_recommendations(body: dict, expected_rule_ids: set[str]):
+    recs = body.get("recommendations", [])
+    if not isinstance(recs, list):
+        raise AssertionError(f"recommendations must be list, got {type(recs)}")
+    got_rule_ids = {r.get("rule_id") for r in recs if isinstance(r, dict)}
+    missing = sorted(expected_rule_ids - got_rule_ids)
+    if missing:
+        raise AssertionError(
+            f"Missing Level 3 recommendations: {missing}; got={sorted(got_rule_ids)}"
+        )
+
+    by_rule = {r.get("rule_id"): r for r in recs if isinstance(r, dict)}
+    text_checks = {
+        "alert.hyperemesis": ("ogi", "recommendation_diet"),
+        "alert.anemia": ("iron-folate", "recommendation_diet"),
+        "alert.fetal_hypoxia": ("same-day", "alert"),
+        "alert.cooking.indoor_solid_fuel": (
+            "cross-ventilation",
+            "recommendation_behavior",
+        ),
+        "alert.outdoor.midday": ("early morning", "recommendation_activity"),
+        "alert.pm25.daily": ("smoke exposure", "alert"),
+    }
+    for rule_id, (needle, field) in text_checks.items():
+        if rule_id not in expected_rule_ids:
+            continue
+        value = str(by_rule.get(rule_id, {}).get(field, "")).lower()
+        if needle.lower() not in value:
+            raise AssertionError(
+                f"{rule_id}.{field} should contain '{needle}', got: {value}"
+            )
+
+    pp(
+        "Level 3 recommendations validated",
+        {
+            "expected": sorted(expected_rule_ids),
+            "matched": sorted(expected_rule_ids & got_rule_ids),
+        },
+    )
+
+
 def step_recommendation_completion_upsert(
     access_token: str, snapshot_id: int, rule_id: str, rule_version: int = 1
 ):
@@ -2555,10 +2801,10 @@ def main():
     print("✔ Movements JSON uploaded and AirExposureLog generated.")
 
     admin_access_token = login_as_superuser()
-    # --- Advice + debug upsert -> AQ alert ---
-    print("\n--- AQ via debug upsert ----")
-    step_debug_exposure_upsert(
-        admin_access_token, user_email=EMAIL, pollutants={"pm25_avg_24h": 20.0}
+    # --- Level 3 recommendations + debug upsert -> recommendation alerts ---
+    print("\n--- Level 3 recommendations via API/debug inputs ----")
+    level3_expected_rule_ids = step_prepare_level3_recommendation_inputs(
+        token, admin_access_token
     )
 
     step_summary_get(
@@ -2579,6 +2825,7 @@ def main():
     )
     assert_status(summary_r, 200, "Summary GET (for completion) failed")
     summary_body = summary_r.json()
+    step_validate_level3_recommendations(summary_body, level3_expected_rule_ids)
 
     snapshot_id = summary_body["snapshot_id"]
     recs = summary_body.get("recommendations", [])

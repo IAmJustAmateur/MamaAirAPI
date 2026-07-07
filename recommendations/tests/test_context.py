@@ -11,6 +11,7 @@ from api.models import (
     UserMommySymptoms,
     UserBabySymptoms,
     Exposure,
+    AirExposureLog,
     UserLifeStyle,
 )
 from .utils import make_user_with_bmi
@@ -34,6 +35,11 @@ class EvalContextBuilderTests(TestCase):
             diet_type="carnivore",
             cooking_method="gas",
             activity_duration_minutes=120,
+            time_spent="mostly_outdoors",
+            time_of_day="midday_or_afternoon",
+            commute_mode="walk",
+            cooking_venue="indoor",
+            ventilation_level="low",
         )
         # Exposure (берём последний)
         Exposure.objects.create(
@@ -47,6 +53,16 @@ class EvalContextBuilderTests(TestCase):
             timestamp=timezone.localdate(),
             exposure_level=4.0,
             pollutants={"pm25_avg_24h": 10, "no2_24h_mean": 26},
+        )
+        AirExposureLog.objects.create(
+            user=self.u,
+            timestamp=timezone.now(),
+            latitude=6.5244,
+            longitude=3.3792,
+            temperature=36.0,
+            humidity=70,
+            aqi=4,
+            exposure_minutes=60,
         )
 
         # Symptoms (в окне и вне окна)
@@ -77,8 +93,16 @@ class EvalContextBuilderTests(TestCase):
         self.assertEqual(round(ctx["profile"]["bmi"], 0), 31)
         self.assertTrue(ctx["is_20w_plus"])
         self.assertEqual(ctx["lifestyle"]["cooking_method"], "gas")
+        self.assertEqual(ctx["lifestyle"]["time_spent"], "mostly_outdoors")
+        self.assertEqual(ctx["lifestyle"]["time_of_day"], "midday_or_afternoon")
+        self.assertEqual(ctx["lifestyle"]["commute_mode"], "walk")
+        self.assertEqual(ctx["lifestyle"]["cooking_venue"], "indoor")
+        self.assertEqual(ctx["lifestyle"]["ventilation_level"], "low")
         self.assertEqual(ctx["aq"]["pollutants"]["pm25_avg_24h"], 10)
         self.assertEqual(ctx["aq"]["pollutants"]["no2_24h_mean"], 26)
+        self.assertEqual(ctx["aq"]["temperature"], 36.0)
+        self.assertEqual(ctx["aq"]["humidity"], 70)
+        self.assertEqual(ctx["aq"]["aqi"], 4)
 
     def test_symptoms_window_and_aliases(self):
         ctx = EvalContextBuilder(self.u, recent_hours=24).build()
