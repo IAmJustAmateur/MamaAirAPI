@@ -14,6 +14,7 @@ from api.models import (
     UserMommySymptoms,
     UserBabySymptoms,
     Exposure,
+    AirExposureLog,
     UserLifeStyle,  # модель с RISK_FIELDS
 )
 
@@ -35,8 +36,33 @@ class EvalContextBuilder:
         "increase heart rate": "increased heart rate",
         "kick count low": "lower kick count",
         "stillness 6hr": "stillness 6h",
+        "dried mouth": "dry mouth",
+        "tiredness": "persistent tiredness",
+        "contractions_gt_1_per_10min": "contraction frequency",
+        "contractions": "contraction frequency",
+        "abdominal or back pain": "non-specific abdominal pain",
         # добавляйте по мере необходимости
     }
+
+    LIFESTYLE_CONTEXT_FIELDS = (
+        "average_sleep_hours",
+        "work_type",
+        "diet_type",
+        "cooking_method",
+        "activity_duration_minutes",
+        "work_schedule_pattern",
+        "standing_hours_per_day",
+        "area",
+        "time_spent",
+        "time_of_day",
+        "commute_mode",
+        "hydration_target_ml_per_day",
+        "sleep_target_window",
+        "rest_microbreak_preference",
+        "supplement_preferences",
+        "cooking_venue",
+        "ventilation_level",
+    )
 
     def __init__(self, user: User, recent_hours: int = 24) -> None:
         self.user = user
@@ -149,16 +175,11 @@ class EvalContextBuilder:
         q = UserLifeStyle.objects.filter(user=self.user).order_by("-id")
         ls = q.first()
         out = {}
-        fields = getattr(
-            UserLifeStyle,
-            "RISK_FIELDS",
-            [
-                "average_sleep_hours",
-                "work_type",
-                "diet_type",
-                "cooking_method",
-                "activity_duration_minutes",
-            ],
+        fields = tuple(
+            dict.fromkeys(
+                tuple(getattr(UserLifeStyle, "RISK_FIELDS", ()))
+                + self.LIFESTYLE_CONTEXT_FIELDS
+            )
         )
         if ls:
             for f in fields:
@@ -174,12 +195,33 @@ class EvalContextBuilder:
             .order_by("-timestamp")  # суточный агрегат, берём последний день
             .first()
         )
+        latest_log = (
+            AirExposureLog.objects.filter(user=self.user).order_by("-timestamp").first()
+        )
+        weather = {}
+        if latest_log:
+            weather = {
+                "aqi": latest_log.aqi,
+                "temperature": latest_log.temperature,
+                "humidity": latest_log.humidity,
+                "pressure": latest_log.pressure,
+                "uvi": latest_log.uvi,
+                "uvi_level": latest_log.uvi_level,
+                "wind_speed": latest_log.wind_speed,
+                "log_timestamp": latest_log.timestamp.isoformat(),
+            }
         if not exp:
-            return {"pollutants": {}, "exposure_level": None, "date": None}
+            return {
+                "pollutants": {},
+                "exposure_level": None,
+                "date": None,
+                **weather,
+            }
         return {
             "pollutants": exp.pollutants or {},
             "exposure_level": exp.exposure_level,
             "date": exp.timestamp.isoformat(),
+            **weather,
         }
 
     def _build_symptom_map(self, model_cls) -> Dict[str, bool]:

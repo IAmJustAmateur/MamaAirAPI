@@ -16,6 +16,8 @@ from api.models import (
 
 from api.models import (
     HealthInsightSnapshot,
+    AirExposureLog,
+    Exposure,
 )
 from .utils import _build_movements_csv_many
 
@@ -187,6 +189,8 @@ class AdviceEndpointTests(APITestCase):
         recs = self._get_recommendations()
         self.assertTrue(self._has_rule(recs, "alert.pm25.daily"), recs)
         self.assertTrue(self._has_category(recs, "air_quality"), recs)
+        match = next((r for r in recs if r.get("rule_id") == "alert.pm25.daily"), {})
+        self.assertIn("smoke exposure", match.get("alert", "").lower())
 
     def test_lifestyle_sleep_low(self):
         """
@@ -213,3 +217,112 @@ class AdviceEndpointTests(APITestCase):
         recs = self._get_recommendations()
         self.assertTrue(self._has_rule(recs, "alert.bmi.high"), recs)
         self.assertTrue(self._has_category(recs, "general"), recs)
+
+    def test_medical_hyperemesis_level3(self):
+        self._wipe_snapshots()
+        self._set_profile(height=170, weight_pre_pregnancy=65, week_of_pregnancy=12)
+        self._add_mommy_symptoms_now("severe vomiting")
+
+        recs = self._get_recommendations()
+        match = next(
+            (r for r in recs if r.get("rule_id") == "alert.hyperemesis"), None
+        )
+        self.assertIsNotNone(match, recs)
+        self.assertEqual(match["category"], "medical")
+        self.assertIn("severe vomiting", match["alert"].lower())
+        self.assertIn("ogi", match["recommendation_diet"].lower())
+        self.assertIn("cool", match["recommendation_activity"].lower())
+        self.assertIn("fluids", match["recommendation_behavior"].lower())
+
+    def test_heat_and_indoor_solid_fuel_level3(self):
+        self._wipe_snapshots()
+        self._set_profile(height=170, weight_pre_pregnancy=65, week_of_pregnancy=18)
+        self._ensure_lifestyle(
+            cooking_method="charcoal",
+            cooking_venue="indoor",
+            ventilation_level="low",
+            time_spent="mostly_outdoors",
+            time_of_day="midday_or_afternoon",
+        )
+        AirExposureLog.objects.create(
+            user=self.user,
+            timestamp=timezone.now(),
+            latitude=6.5244,
+            longitude=3.3792,
+            temperature=36.5,
+            humidity=70,
+            exposure_minutes=60,
+        )
+
+        recs = self._get_recommendations()
+        self.assertTrue(self._has_rule(recs, "alert.heat.high"), recs)
+        self.assertTrue(self._has_rule(recs, "alert.cooking.solid_fuel"), recs)
+        self.assertTrue(self._has_rule(recs, "alert.cooking.indoor_solid_fuel"), recs)
+        self.assertTrue(self._has_rule(recs, "alert.outdoor.midday"), recs)
+
+    def test_gas_cooking_with_high_no2_level3(self):
+        self._wipe_snapshots()
+        self._set_profile(height=170, weight_pre_pregnancy=65, week_of_pregnancy=18)
+        self._ensure_lifestyle(cooking_method="gas")
+        Exposure.objects.create(
+            user=self.user,
+            timestamp=timezone.localdate(),
+            exposure_level=2.0,
+            pollutants={"no2_24h_mean": 26.0},
+        )
+
+        recs = self._get_recommendations()
+        match = next(
+            (r for r in recs if r.get("rule_id") == "alert.cooking.gas_and_no2_high"),
+            None,
+        )
+        self.assertIsNotNone(match, recs)
+        self.assertIn("gas cooking", match["alert"].lower())
+        self.assertIn("electric", match["recommendation_behavior"].lower())
+
+    def test_medical_gdm_level3(self):
+        self._wipe_snapshots()
+        self._set_profile(height=170, weight_pre_pregnancy=65, week_of_pregnancy=24)
+        self._add_mommy_symptoms_now(
+            "increased thirst",
+            "increased urination",
+            "dried mouth",
+        )
+
+        recs = self._get_recommendations()
+        match = next((r for r in recs if r.get("rule_id") == "alert.gdm"), None)
+        self.assertIsNotNone(match, recs)
+        self.assertIn("glucose test", match["alert"].lower())
+        self.assertIn("sorghum", match["recommendation_diet"].lower())
+        self.assertIn("bitterleaf", match["recommendation_behavior"].lower())
+
+    def test_medical_lbw_level3(self):
+        self._wipe_snapshots()
+        self._set_profile(height=170, weight_pre_pregnancy=65, week_of_pregnancy=28)
+        self._add_mommy_symptoms_now("no belly growth", "poor appetite")
+        self._add_baby_symptoms_now("reduced fetal movement")
+
+        recs = self._get_recommendations()
+        match = next((r for r in recs if r.get("rule_id") == "alert.lbw"), None)
+        self.assertIsNotNone(match, recs)
+        self.assertIn("fetal growth", match["alert"].lower())
+        self.assertIn("koko plus", match["recommendation_diet"].lower())
+        self.assertIn("heavy lifting", match["recommendation_activity"].lower())
+
+    def test_medical_preterm_labor_level3(self):
+        self._wipe_snapshots()
+        self._set_profile(height=170, weight_pre_pregnancy=65, week_of_pregnancy=26)
+        self._add_mommy_symptoms_now(
+            "contraction frequency",
+            "increased heart rate",
+            "fever",
+        )
+
+        recs = self._get_recommendations()
+        match = next(
+            (r for r in recs if r.get("rule_id") == "alert.preterm_labor"), None
+        )
+        self.assertIsNotNone(match, recs)
+        self.assertIn("preterm labor", match["alert"].lower())
+        self.assertIn("heat", match["recommendation_diet"].lower())
+        self.assertIn("neem", match["recommendation_behavior"].lower())

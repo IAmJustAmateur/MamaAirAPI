@@ -10,6 +10,7 @@ from api.models import (
     MommySymptom,
     BabySymptom,
     UserMommySymptoms,
+    UserBabySymptoms,
     UserLifeStyle,
     Exposure,
 )
@@ -65,3 +66,43 @@ class MedicalRulesTests(TestCase):
         recs = evaluate_recommendations(self.u)
         ids = [r["id"] for r in recs]
         self.assertIn("alert.preeclampsia.v1", ids)
+
+    def test_anemia_triggers(self):
+        t = timezone.now() - timedelta(hours=2)
+        fatigue, _ = MommySymptom.objects.get_or_create(name="persistent fatigue")
+        dizziness, _ = MommySymptom.objects.get_or_create(name="dizziness")
+        UserMommySymptoms.objects.create(user=self.u, symptom=fatigue, recorded_at=t)
+        UserMommySymptoms.objects.create(user=self.u, symptom=dizziness, recorded_at=t)
+
+        recs = evaluate_recommendations(self.u)
+        ids = [r["id"] for r in recs]
+        self.assertIn("alert.anemia.v1", ids)
+
+    def test_prom_triggers(self):
+        t = timezone.now() - timedelta(hours=2)
+        leaking, _ = MommySymptom.objects.get_or_create(name="leaking fluid")
+        UserMommySymptoms.objects.create(user=self.u, symptom=leaking, recorded_at=t)
+
+        recs = evaluate_recommendations(self.u)
+        ids = [r["id"] for r in recs]
+        self.assertIn("alert.prom.v1", ids)
+
+    def test_fetal_hypoxia_triggers(self):
+        t = timezone.now() - timedelta(hours=2)
+        stillness, _ = BabySymptom.objects.get_or_create(name="prolonged stillness")
+        UserBabySymptoms.objects.create(user=self.u, symptom=stillness, recorded_at=t)
+
+        recs = evaluate_recommendations(self.u)
+        ids = [r["id"] for r in recs]
+        self.assertIn("alert.fetal_hypoxia.v1", ids)
+
+    def test_cardiovascular_triggers(self):
+        t = timezone.now() - timedelta(hours=2)
+        chest_pain, _ = MommySymptom.objects.get_or_create(name="chest pain")
+        UserMommySymptoms.objects.create(
+            user=self.u, symptom=chest_pain, recorded_at=t
+        )
+
+        recs = evaluate_recommendations(self.u)
+        ids = [r["id"] for r in recs]
+        self.assertIn("alert.cardiovascular.v1", ids)
