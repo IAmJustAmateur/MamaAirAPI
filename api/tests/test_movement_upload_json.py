@@ -82,6 +82,17 @@ class MovementUploadJSONTests(APITestCase):
             resp = self.client.post(url, payload, format="json")
 
         self.assertIn(resp.status_code, (status.HTTP_201_CREATED, 207), resp.data)
+        self.assertTrue(
+            {
+                "status",
+                "imported",
+                "air_exposure_created",
+                "air_exposure_updated",
+                "exposures_recomputed",
+                "exposure_errors",
+                "errors",
+            }.issubset(resp.data.keys())
+        )
 
         self.assertEqual(Movement.objects.filter(user=self.user).count(), 2)
 
@@ -108,6 +119,30 @@ class MovementUploadJSONTests(APITestCase):
         exp = Exposure.objects.get(user=self.user, timestamp=date_local)
         self.assertGreaterEqual(exp.exposure_level, 0.0)
         self.assertIn("pm25_avg_24h", exp.pollutants)
+
+    def test_reupload_same_payload_keeps_single_air_exposure_log(self):
+        payload = self._make_payload()
+        aq_sample = self._make_aq_sample()
+        url = reverse("movements-upload-json")
+
+        with patch(
+            "api.services.air_exposure.fetch_aq_for_bucket", return_value=aq_sample
+        ):
+            first_response = self.client.post(url, payload, format="json")
+            second_response = self.client.post(url, payload, format="json")
+
+        self.assertIn(
+            first_response.status_code, (status.HTTP_201_CREATED, 207), first_response.data
+        )
+        self.assertIn(
+            second_response.status_code,
+            (status.HTTP_201_CREATED, 207),
+            second_response.data,
+        )
+        self.assertEqual(
+            AirExposureLog.objects.filter(user=self.user).count(),
+            1,
+        )
 
     def test_bad_json_returns_errors(self):
         url = reverse("movements-upload-json")
