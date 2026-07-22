@@ -49,6 +49,8 @@ jobs:
       DB_PASSWORD: postgres
       DB_HOST: 127.0.0.1
       DB_PORT: "5432"
+      MOVEMENT_H3_RESOLUTION: "8"
+      MOVEMENT_COORDINATE_ACTIVE_KEY_VERSION: "1"
 
     steps:
       - name: Check out repository
@@ -59,6 +61,20 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+
+      - name: Generate ephemeral coordinate encryption key
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import secrets
+
+          key = base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+          keyring = json.dumps({"1": key}, separators=(",", ":"))
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(f"MOVEMENT_COORDINATE_KEYS={keyring}\n")
+          PY
 
       - name: Install dependencies
         run: |
