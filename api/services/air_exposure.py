@@ -16,6 +16,9 @@ from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
 
+from api.services.h3_grid import latlng_to_cell
+from api.services.movement_location import prepare_movement_location
+
 OWM_BASE_URL = "http://api.openweathermap.org/data/2.5/air_pollution/history"
 
 OWM_API_KEY = settings.OWM_API_KEY  # type: ignore
@@ -327,6 +330,7 @@ def upsert_air_exposure_log(
     # Чтобы избежать дрожания координат — храним округлённые
     lat_ = round(lat, 5)
     lon_ = round(lon, 5)
+    h3_cell = latlng_to_cell(lat, lon)
 
     obj, created = AirExposureLog.objects.get_or_create(
         user_id=user_id,
@@ -335,6 +339,7 @@ def upsert_air_exposure_log(
         longitude=lon_,
         indoor=indoor,
         defaults={
+            "h3_cell": h3_cell,
             "aqi": aq.aqi,
             "pm25": aq.pm25,
             "pm10": aq.pm10,
@@ -374,21 +379,24 @@ def upsert_air_exposure_log(
     if aq.wind_speed is not None:
         obj.wind_speed = aq.wind_speed
 
-    obj.save(
-        update_fields=[
-            "pm25",
-            "pm10",
-            "no2",
-            "so2",
-            "co",
-            "o3",
-            "aqi",
-            "temperature",
-            "humidity",
-            "wind_speed",
-            "exposure_minutes",
-        ]
-    )
+    update_fields = [
+        "pm25",
+        "pm10",
+        "no2",
+        "so2",
+        "co",
+        "o3",
+        "aqi",
+        "temperature",
+        "humidity",
+        "wind_speed",
+        "exposure_minutes",
+    ]
+    if obj.h3_cell != h3_cell:
+        obj.h3_cell = h3_cell
+        update_fields.append("h3_cell")
+
+    obj.save(update_fields=update_fields)
     return False, obj
 
 
@@ -412,16 +420,24 @@ def ingest_movements_batch(
     if not records:
         return {"imported": 0, "air_exposure_created": 0, "air_exposure_updated": 0}
 
-    # 1) Подготовка Movement-объектов (без лишних импортов)
+    # 1) Prepare every representation before the transaction. If H3 or
+    # encryption fails, no Movement from this batch is written.
     mv_objs = []
     for r in records:
-        lat = float(r["lat"])
-        lon = float(r["lon"])
+        location = prepare_movement_location(r["lat"], r["lon"])
         ts = r["ts"]
         if timezone.is_naive(ts):
             ts = timezone.make_aware(ts, timezone.get_current_timezone())
         mv_objs.append(
-            Movement(user_id=user_id, latitude=lat, longitude=lon, timestamp=ts)
+            Movement(
+                user_id=user_id,
+                latitude=location.latitude,
+                longitude=location.longitude,
+                timestamp=ts,
+                h3_cell=location.h3_cell,
+                coordinates_encrypted=location.coordinates_encrypted,
+                coordinates_key_version=location.coordinates_key_version,
+            )
         )
 
     # 2) Сохранение movements батчем
