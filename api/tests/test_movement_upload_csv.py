@@ -17,6 +17,8 @@ from api.services.air_exposure_daily import recompute_daily_exposure
 
 # Импортируем AQSample из сервиса, чтобы вернуть его из мока
 from api.services.air_exposure import AQSample
+from api.services.coordinate_encryption import decrypt_coordinates
+from api.services.h3_grid import latlng_to_cell
 
 Movement = apps.get_model("api", "Movement")
 AirExposureLog = apps.get_model("api", "AirExposureLog")
@@ -77,8 +79,32 @@ class MovementUploadCSVTests(APITestCase):
 
         self.assertIn(resp.status_code, (status.HTTP_201_CREATED, 207), resp.data)
 
-        # Проверяем, что движения записались
-        self.assertEqual(Movement.objects.filter(user=self.user).count(), 2)
+        # Проверяем, что движения записались во всех представлениях.
+        movements = list(
+            Movement.objects.filter(user=self.user).order_by("timestamp")
+        )
+        expected_coordinates = [
+            (54.6872, 25.2797),
+            (54.6873, 25.2798),
+        ]
+        self.assertEqual(len(movements), len(expected_coordinates))
+        for movement, (latitude, longitude) in zip(
+            movements, expected_coordinates
+        ):
+            with self.subTest(timestamp=movement.timestamp):
+                self.assertEqual(
+                    movement.h3_cell,
+                    latlng_to_cell(latitude, longitude),
+                )
+                self.assertIsNotNone(movement.coordinates_encrypted)
+                self.assertEqual(movement.coordinates_key_version, 1)
+
+                decrypted = decrypt_coordinates(
+                    movement.coordinates_encrypted,
+                    movement.coordinates_key_version,
+                )
+                self.assertAlmostEqual(decrypted.latitude, latitude, places=7)
+                self.assertAlmostEqual(decrypted.longitude, longitude, places=7)
 
         # И что создался ровно один часовой лог экспозиции
         self.assertEqual(AirExposureLog.objects.filter(user=self.user).count(), 1)
@@ -88,6 +114,10 @@ class MovementUploadCSVTests(APITestCase):
         self.assertAlmostEqual(float(log.pm25), 18.0, places=2)
         self.assertAlmostEqual(float(log.pm10), 30.0, places=2)
         self.assertGreater(log.exposure_minutes, 0)
+        self.assertEqual(
+            log.h3_cell,
+            latlng_to_cell(log.latitude, log.longitude),
+        )
         # Бакет — начало часа 10:00 локального TZ
         local_hour = log.timestamp.astimezone(timezone.get_current_timezone()).hour
         self.assertEqual(local_hour, 10)
