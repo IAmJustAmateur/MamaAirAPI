@@ -888,9 +888,30 @@ class Movement(models.Model):
     longitude = models.FloatField()
     timestamp = models.DateTimeField()
 
+    # Additive security fields. They remain nullable during rollout and backfill.
+    h3_cell = models.CharField(
+        max_length=15, null=True, blank=True, db_index=True, editable=False
+    )
+    coordinates_encrypted = models.BinaryField(null=True, blank=True, editable=False)
+    coordinates_key_version = models.PositiveSmallIntegerField(
+        null=True, blank=True, editable=False
+    )
+    coordinates_purged_at = models.DateTimeField(
+        null=True, blank=True, editable=False
+    )
+
     class Meta:
         db_table = "movements"  # existing table name
         ordering = ["-timestamp"]
+        indexes = [
+            models.Index(
+                fields=["user", "timestamp"], name="movement_user_ts_idx"
+            ),
+            models.Index(
+                fields=["user", "h3_cell", "timestamp"],
+                name="movement_user_h3_ts_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user.email} @ {self.timestamp}"
@@ -903,6 +924,9 @@ class AirExposureLog(models.Model):
     timestamp = models.DateTimeField(db_index=True)
     latitude = models.FloatField()
     longitude = models.FloatField()
+    h3_cell = models.CharField(
+        max_length=15, null=True, blank=True, db_index=True, editable=False
+    )
 
     pm25 = models.FloatField(null=True, blank=True)
     pm10 = models.FloatField(null=True, blank=True)
@@ -926,6 +950,12 @@ class AirExposureLog(models.Model):
 
     class Meta:
         ordering = ["-timestamp"]
+        indexes = [
+            models.Index(
+                fields=["user", "h3_cell", "timestamp"],
+                name="airexp_user_h3_ts_idx",
+            ),
+        ]
 
 
 class HealthInsightSnapshot(models.Model):
