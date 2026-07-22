@@ -132,7 +132,9 @@ class MovementUploadJSONTests(APITestCase):
             second_response = self.client.post(url, payload, format="json")
 
         self.assertIn(
-            first_response.status_code, (status.HTTP_201_CREATED, 207), first_response.data
+            first_response.status_code,
+            (status.HTTP_201_CREATED, 207),
+            first_response.data,
         )
         self.assertIn(
             second_response.status_code,
