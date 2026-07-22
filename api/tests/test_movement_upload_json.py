@@ -184,6 +184,17 @@ class MovementUploadJSONTests(APITestCase):
         self.assertEqual(Movement.objects.filter(user=self.user).count(), 0)
         self.assertEqual(AirExposureLog.objects.filter(user=self.user).count(), 0)
 
+    def test_invalid_second_coordinate_rejects_entire_batch(self):
+        payload = self._make_payload()
+        payload["movements"][1]["latitude"] = 91.0
+
+        url = reverse("movements-upload-json")
+        resp = self.client.post(url, payload, format="json")
+
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(Movement.objects.filter(user=self.user).count(), 0)
+        self.assertEqual(AirExposureLog.objects.filter(user=self.user).count(), 0)
+
     def test_bad_json_returns_errors(self):
         url = reverse("movements-upload-json")
         resp = self.client.post(
