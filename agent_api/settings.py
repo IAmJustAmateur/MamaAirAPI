@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import json
 import os
 
 from datetime import timedelta
@@ -38,6 +39,22 @@ DJANGO_ENV = os.getenv("DJANGO_ENV", "development")
 print(f"DJANGO_ENV: {DJANGO_ENV}")
 OWM_API_KEY = os.getenv("OWM_API_KEY")
 print(f"OWM_API_KEY is set: {OWM_API_KEY is not None}")
+
+MOVEMENT_H3_RESOLUTION = int(os.getenv("MOVEMENT_H3_RESOLUTION", "8"))
+MOVEMENT_COORDINATE_ACTIVE_KEY_VERSION = int(
+    os.getenv("MOVEMENT_COORDINATE_ACTIVE_KEY_VERSION", "1")
+)
+
+_coordinate_keys_raw = os.getenv("MOVEMENT_COORDINATE_KEYS", "{}")
+try:
+    _coordinate_keys = json.loads(_coordinate_keys_raw)
+    if not isinstance(_coordinate_keys, dict):
+        raise ValueError("MOVEMENT_COORDINATE_KEYS must be a JSON object")
+    MOVEMENT_COORDINATE_KEYS = {
+        int(version): encoded_key for version, encoded_key in _coordinate_keys.items()
+    }
+except (TypeError, ValueError, json.JSONDecodeError) as exc:
+    raise ValueError("MOVEMENT_COORDINATE_KEYS must be a valid JSON object") from exc
 
 
 if DJANGO_ENV in {"staging", "production"}:
