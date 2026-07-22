@@ -19,6 +19,8 @@ from api.services.air_exposure import (
     MOVEMENT_BULK_CREATE_BATCH_SIZE,
     ingest_movements_batch,
 )
+from api.services.coordinate_encryption import decrypt_coordinates
+from api.services.h3_grid import latlng_to_cell
 
 Movement = apps.get_model("api", "Movement")
 AirExposureLog = apps.get_model("api", "AirExposureLog")
@@ -94,7 +96,30 @@ class MovementUploadJSONTests(APITestCase):
             }.issubset(resp.data.keys())
         )
 
-        self.assertEqual(Movement.objects.filter(user=self.user).count(), 2)
+        movements = list(
+            Movement.objects.filter(user=self.user).order_by("timestamp")
+        )
+        self.assertEqual(len(movements), 2)
+        for movement, source in zip(movements, payload["movements"]):
+            with self.subTest(timestamp=movement.timestamp):
+                self.assertEqual(
+                    movement.h3_cell,
+                    latlng_to_cell(source["latitude"], source["longitude"]),
+                )
+                self.assertIsNotNone(movement.coordinates_encrypted)
+                self.assertEqual(movement.coordinates_key_version, 1)
+                self.assertIsNone(movement.coordinates_purged_at)
+
+                decrypted = decrypt_coordinates(
+                    movement.coordinates_encrypted,
+                    movement.coordinates_key_version,
+                )
+                self.assertAlmostEqual(
+                    decrypted.latitude, source["latitude"], places=7
+                )
+                self.assertAlmostEqual(
+                    decrypted.longitude, source["longitude"], places=7
+                )
 
         self.assertEqual(AirExposureLog.objects.filter(user=self.user).count(), 1)
         log = AirExposureLog.objects.get(user=self.user)
@@ -102,6 +127,10 @@ class MovementUploadJSONTests(APITestCase):
         self.assertAlmostEqual(float(log.pm25), 18.0, places=2)
         self.assertAlmostEqual(float(log.pm10), 30.0, places=2)
         self.assertGreater(log.exposure_minutes, 0)
+        self.assertEqual(
+            log.h3_cell,
+            latlng_to_cell(log.latitude, log.longitude),
+        )
         local_hour = log.timestamp.astimezone(timezone.get_current_timezone()).hour
         self.assertEqual(local_hour, 10)
 
@@ -145,6 +174,15 @@ class MovementUploadJSONTests(APITestCase):
             AirExposureLog.objects.filter(user=self.user).count(),
             1,
         )
+
+    @override_settings(MOVEMENT_COORDINATE_KEYS={})
+    def test_missing_encryption_key_rejects_batch_without_writes(self):
+        url = reverse("movements-upload-json")
+        resp = self.client.post(url, self._make_payload(), format="json")
+
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(Movement.objects.filter(user=self.user).count(), 0)
+        self.assertEqual(AirExposureLog.objects.filter(user=self.user).count(), 0)
 
     def test_bad_json_returns_errors(self):
         url = reverse("movements-upload-json")
