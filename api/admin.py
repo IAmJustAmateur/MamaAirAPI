@@ -181,18 +181,51 @@ admin.site.register(UserBabySymptoms, UserBabySymptomsAdmin)
 
 
 class MovementAdmin(admin.ModelAdmin):
-    list_display = ("user", "latitude", "longitude", "timestamp")
-    search_fields = ("user__email",)
-    list_filter = ("timestamp", "user")
+    list_display = (
+        "user",
+        "latitude",
+        "longitude",
+        "h3_cell",
+        "has_encrypted_coordinates",
+        "coordinates_key_version",
+        "coordinates_purged_at",
+        "timestamp",
+    )
+    search_fields = ("user__email", "h3_cell")
+    list_filter = (
+        "timestamp",
+        "user",
+        "coordinates_key_version",
+        "coordinates_purged_at",
+    )
+    readonly_fields = (
+        "h3_cell",
+        "has_encrypted_coordinates",
+        "coordinates_key_version",
+        "coordinates_purged_at",
+    )
+
+    @admin.display(boolean=True, description="Coordinates encrypted")
+    def has_encrypted_coordinates(self, obj):
+        return bool(obj.coordinates_encrypted)
 
 
 admin.site.register(Movement, MovementAdmin)
 
 
 class AirExposureLogAdmin(admin.ModelAdmin):
-    list_display = ("user", "timestamp", "aqi", "pm25", "pm10", "indoor")
+    list_display = (
+        "user",
+        "timestamp",
+        "h3_cell",
+        "aqi",
+        "pm25",
+        "pm10",
+        "indoor",
+    )
     list_filter = ("indoor", "timestamp")
-    search_fields = ("user__email",)
+    search_fields = ("user__email", "h3_cell")
+    readonly_fields = ("h3_cell",)
 
 
 admin.site.register(AirExposureLog, AirExposureLogAdmin)
