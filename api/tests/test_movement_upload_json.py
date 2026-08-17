@@ -191,7 +191,7 @@ class MovementUploadJSONTests(APITestCase):
         url = reverse("movements-upload-json")
         resp = self.client.post(url, payload, format="json")
 
-        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Movement.objects.filter(user=self.user).count(), 0)
         self.assertEqual(AirExposureLog.objects.filter(user=self.user).count(), 0)
 

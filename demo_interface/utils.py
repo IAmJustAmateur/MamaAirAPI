@@ -5,6 +5,7 @@ from django.utils import timezone
 from zoneinfo import ZoneInfo
 
 from api.models import Movement
+from api.services.movement_location import prepare_movement_location
 
 # Границы Нигерии (грубая рамка — достаточно для правдоподобной генерации)
 NIGERIA_BOUNDS = {
@@ -159,12 +160,16 @@ def generate_plausible_movements_24h(
             # держим точку в пределах Нигерии
             lat, lon = _clamp_to_nigeria(lat, lon)
 
+        location = prepare_movement_location(lat, lon)
         movements.append(
             Movement(
                 user=user,
-                latitude=lat,
-                longitude=lon,
+                latitude=location.latitude,
+                longitude=location.longitude,
                 timestamp=ts_utc,
+                h3_cell=location.h3_cell,
+                coordinates_encrypted=location.coordinates_encrypted,
+                coordinates_key_version=location.coordinates_key_version,
             )
         )
 

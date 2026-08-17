@@ -147,3 +147,25 @@ class MovementUploadCSVTests(APITestCase):
         resp = self.client.post(url, {"file": bad_csv}, format="multipart")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("errors", resp.data)
+
+    def test_invalid_coordinate_rejects_batch_without_writes(self):
+        csv_content = (
+            "latitude,longitude,timestamp\n"
+            "54.6872,25.2797,2025-09-08T10:10:00+03:00\n"
+            "91.0,25.2798,2025-09-08T10:40:00+03:00\n"
+        )
+        file = SimpleUploadedFile(
+            "movements.csv",
+            csv_content.encode("utf-8"),
+            content_type="text/csv",
+        )
+
+        response = self.client.post(
+            reverse("movements-upload"),
+            {"file": file},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Movement.objects.filter(user=self.user).count(), 0)
+        self.assertEqual(AirExposureLog.objects.filter(user=self.user).count(), 0)
