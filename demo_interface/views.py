@@ -7,6 +7,7 @@ from django.contrib import messages
 from .forms import *
 from django.shortcuts import get_object_or_404
 from api.models import Movement, User, Exposure
+from api.services.movement_location import prepare_movement_location
 import random
 from datetime import datetime, timedelta
 from io import TextIOWrapper
@@ -178,11 +179,17 @@ def perform_actions(request):
                     file = TextIOWrapper(uploaded_file.file, encoding="utf-8")
                     reader = csv.DictReader(file)
                     for row in reader:
+                        location = prepare_movement_location(
+                            row["latitude"], row["longitude"]
+                        )
                         Movement.objects.create(
                             user=selected_user,
-                            latitude=float(row["latitude"]),
-                            longitude=float(row["longitude"]),
+                            latitude=location.latitude,
+                            longitude=location.longitude,
                             timestamp=datetime.fromisoformat(row["timestamp"]),
+                            h3_cell=location.h3_cell,
+                            coordinates_encrypted=location.coordinates_encrypted,
+                            coordinates_key_version=location.coordinates_key_version,
                         )
                     messages.success(request, "Movement data uploaded.")
                 else:

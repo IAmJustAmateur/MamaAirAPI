@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - "feature/**"
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  django-tests:
+    name: Django tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: mamaair_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d mamaair_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_ENV: staging
+      DEBUG: "False"
+      SECRET_KEY: ci-only-not-production
+      ALLOWED_HOSTS: 127.0.0.1,localhost
+      REGISTRATION_API_KEY: ci-registration-key
+      DB_NAME: mamaair_test
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      MOVEMENT_H3_RESOLUTION: "8"
+      MOVEMENT_COORDINATE_ACTIVE_KEY_VERSION: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Generate ephemeral coordinate encryption key
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import secrets
+
+          key = base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+          keyring = json.dumps({"1": key}, separators=(",", ":"))
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(f"MOVEMENT_COORDINATE_KEYS={keyring}\n")
+          PY
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Django system checks
+        run: python manage.py check
+
+      - name: Check for missing migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run test suite
+        run: python manage.py test --verbosity=2

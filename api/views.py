@@ -111,6 +111,7 @@ from .services.analytics import get_today_journey
 from .services.air_exposure import ingest_movements_batch
 from .services.air_exposure_daily import recompute_daily_exposure
 from .services.helpers import parse_csv_to_records, parse_json_to_records
+from .services.h3_grid import InvalidCoordinatesError
 from .permissions import HasValidRegistrationAPIKey
 from .services.aq_logs_services import update_air_exposure_log_with_weather
 
@@ -1276,6 +1277,13 @@ class MovementCSVUploadView(APIView):
 
         try:
             summary = ingest_movements_batch(user_id=request.user.id, records=records)
+        except InvalidCoordinatesError as e:
+            logger.warning(
+                "MovementCSVUploadView rejected coordinates, user=%s, error=%s",
+                request.user,
+                e,
+            )
+            return Response({"status": "error", "detail": str(e)}, status=400)
         except Exception as e:
             logger.exception(
                 "MovementCSVUploadView ingest failed, user=%s", request.user
@@ -1418,6 +1426,13 @@ class MovementJSONUploadView(APIView):
 
         try:
             summary = ingest_movements_batch(user_id=request.user.id, records=records)
+        except InvalidCoordinatesError as e:
+            logger.warning(
+                "MovementJSONUploadView rejected coordinates, user=%s, error=%s",
+                request.user,
+                e,
+            )
+            return Response({"status": "error", "detail": str(e)}, status=400)
         except Exception as e:
             logger.exception(
                 "MovementJSONUploadView ingest failed, user=%s", request.user
