@@ -21,7 +21,7 @@ load_dotenv()
 
 ENVIRONMENTS = {
     "local": "http://127.0.0.1:8000/",
-    "production": "https://api.mamaair.app/",
+    "production": "https://api.mamaair.work/",
 }
 
 
