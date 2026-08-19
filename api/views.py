@@ -98,7 +98,8 @@ from .serializers import (
     PasswordChangeSerializer,
     LogoutSerializer,
     ErrorResponseSerializer,
-    WeeklyExposureSerializer,
+    WEEKLY_EXPOSURE_RESPONSE_SCHEMA,
+    ErrorSerializer,
     SummaryResponseSerializer,
     SymptomSelectionSerializer,
     ChecklistItemSerializer,
@@ -1811,20 +1812,44 @@ class PasswordChangeView(APIView):
     description="Returns weekly air quality exposure levels for the current user.",
     responses={
         200: OpenApiResponse(
-            response=WeeklyExposureSerializer(many=True),
-            description="A dictionary where each key is the pregnancy week and value is exposure level.",
+            response=WEEKLY_EXPOSURE_RESPONSE_SCHEMA,
+            description=(
+                "Object keyed by decimal pregnancy-week strings. Each present week "
+                "contains a non-null exposure level. Missing weeks are omitted; users "
+                "without weekly exposure records receive an empty object."
+            ),
             examples=[
                 OpenApiExample(
-                    "Example output",
+                    "Populated result",
                     value={
-                        "12": {"level": "moderate"},
-                        "13": {"level": "unhealthy"},
-                        "14": {"level": "clean"},
+                        "12": {"level": "Moderate"},
+                        "13": {"level": "Unhealthy"},
                     },
+                    response_only=True,
+                ),
+                OpenApiExample(
+                    "Partial result",
+                    value={"13": {"level": "Unhealthy"}},
+                    response_only=True,
+                ),
+                OpenApiExample(
+                    "Empty result",
+                    value={},
+                    response_only=True,
+                ),
+            ],
+        ),
+        401: OpenApiResponse(
+            response=ErrorSerializer,
+            description="Authentication credentials were not provided or are invalid.",
+            examples=[
+                OpenApiExample(
+                    "Authentication required",
+                    value={"detail": "Authentication credentials were not provided."},
                     response_only=True,
                 )
             ],
-        )
+        ),
     },
 )
 class WeeklyExposureView(APIView):

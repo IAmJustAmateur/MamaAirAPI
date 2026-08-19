@@ -17,6 +17,7 @@ from .models import (
     DailyTask,
     UserDailyTaskCompletion,
     UserWellbeingLog,
+    EXPOSURE_LEVEL_CHOICES,
 )
 
 
@@ -307,9 +308,42 @@ class ErrorResponseSerializer(serializers.Serializer):
     error = serializers.CharField()
 
 
-class WeeklyExposureSerializer(serializers.Serializer):
-    pregnancy_week = serializers.IntegerField()
-    exposure_level = serializers.CharField()
+WEEKLY_EXPOSURE_LEVEL_VALUES = [
+    value for value, _label in EXPOSURE_LEVEL_CHOICES
+]
+
+
+class WeeklyExposureLevelSerializer(serializers.Serializer):
+    level = serializers.ChoiceField(
+        choices=WEEKLY_EXPOSURE_LEVEL_VALUES,
+        help_text="Exposure classification for the pregnancy week.",
+    )
+
+
+class WeeklyExposureResponseSerializer(serializers.DictField):
+    """Validate the existing dynamic pregnancy-week response map."""
+
+    child = WeeklyExposureLevelSerializer()
+
+
+WEEKLY_EXPOSURE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Map of decimal pregnancy-week keys to weekly exposure classifications."
+    ),
+    "additionalProperties": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["level"],
+        "properties": {
+            "level": {
+                "type": "string",
+                "enum": WEEKLY_EXPOSURE_LEVEL_VALUES,
+                "description": "Exposure classification for the pregnancy week.",
+            }
+        },
+    },
+}
 
 
 class PollutantSerializer(serializers.Serializer):
