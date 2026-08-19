@@ -351,11 +351,22 @@ class PollutantSerializer(serializers.Serializer):
     who_limit = serializers.FloatField(source="who limit")
 
 
+class ExposureRiskMapField(serializers.DictField):
+    """Type risk values for OpenAPI without coercing the existing JSON output."""
+
+    child = serializers.CharField()
+
+    def to_representation(self, value):
+        return value
+
+
 class SimpleExposureSerializer(serializers.ModelSerializer):
     """
     Минимальный сериалайзер для Exposure.
     Берём только гарантированные поля, чтобы избежать расхождений со схемой.
     """
+
+    risks = ExposureRiskMapField()
 
     class Meta:
         model = Exposure
