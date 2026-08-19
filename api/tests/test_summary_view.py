@@ -3,6 +3,7 @@ from unittest.mock import patch, Mock
 
 from django.utils import timezone
 from django.urls import reverse
+from drf_spectacular.generators import SchemaGenerator
 from rest_framework.test import APITestCase
 from rest_framework import status
 
@@ -17,6 +18,7 @@ from api.models import (
     UserDailyTaskCompletion,
     UserWellbeingLog,
 )
+from api.serializers import SummaryResponseSerializer
 
 User = get_user_model()
 
@@ -282,6 +284,10 @@ class SummaryViewTests(APITestCase):
 
         mas = resp.data["week_info"]
         assert mas is not None
+        assert set(mas) == {"week", "locale", "text", "source"}
+
+        serializer = SummaryResponseSerializer(data=resp.data)
+        assert serializer.is_valid(), serializer.errors
 
         hist = resp.data["exposure_history"]
         assert isinstance(hist, dict)
@@ -452,3 +458,84 @@ class SummaryViewTests(APITestCase):
             False,
             None,
         )  # допускаем обе ветки на случай округлений
+
+    def test_summary_view_without_air_exposure_log_preserves_204_response(self):
+        AirExposureLog.objects.filter(user=self.user).delete()
+
+        response = self.client.get(reverse("summary"))
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert response.data == {"detail": "No air exposure data found."}
+
+
+class SummaryOpenAPITests(APITestCase):
+    @staticmethod
+    def _resolve(schema, value):
+        if "$ref" in value:
+            component_name = value["$ref"].rsplit("/", 1)[-1]
+            return schema["components"]["schemas"][component_name]
+        if "allOf" in value and len(value["allOf"]) == 1:
+            return SummaryOpenAPITests._resolve(schema, value["allOf"][0])
+        return value
+
+    def test_summary_schema_types_week_info_water_and_no_data_response(self):
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        operation = schema["paths"]["/api/summary/"]["get"]
+        responses = operation["responses"]
+
+        summary_schema = self._resolve(
+            schema,
+            responses["200"]["content"]["application/json"]["schema"],
+        )
+        properties = summary_schema["properties"]
+
+        week_info_property = properties["week_info"]
+        assert week_info_property["nullable"] is True
+        week_info_schema = self._resolve(schema, week_info_property)
+        assert set(week_info_schema["required"]) == {
+            "week",
+            "locale",
+            "text",
+            "source",
+        }
+        assert week_info_schema["properties"]["week"] == {
+            "type": "integer",
+            "maximum": 40,
+            "minimum": 1,
+        }
+        source_schema = self._resolve(
+            schema, week_info_schema["properties"]["source"]
+        )
+        assert source_schema["enum"] == ["db"]
+
+        water_schema = self._resolve(schema, properties["water"])
+        assert set(water_schema["required"]) == {"date", "amount", "unit"}
+        assert water_schema["properties"]["date"] == {
+            "type": "string",
+            "format": "date",
+        }
+        assert water_schema["properties"]["amount"]["type"] == "number"
+        assert water_schema["properties"]["amount"]["minimum"] == 0.0
+        assert water_schema["properties"]["unit"]["type"] == "string"
+
+        daily_level_schema = properties["daily_exposure_level"]
+        assert daily_level_schema["nullable"] is True
+        daily_level_enum = next(
+            self._resolve(schema, option)
+            for option in daily_level_schema["oneOf"]
+            if option.get("$ref", "").rsplit("/", 1)[-1] != "NullEnum"
+        )
+        assert daily_level_enum["enum"] == [
+            "Clean",
+            "Very Good",
+            "Moderate",
+            "Acceptable",
+            "Unhealthy",
+            "High",
+            "Hazardous",
+            "Extreme",
+        ]
+
+        assert responses["204"] == {
+            "description": "No air exposure data available for this user yet."
+        }
