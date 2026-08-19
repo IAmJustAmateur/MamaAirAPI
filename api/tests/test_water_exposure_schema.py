@@ -22,14 +22,23 @@ class WaterExposureSerializerContractTests(APITestCase):
         exposure = Exposure.objects.create(
             user=self.user,
             exposure_level=0.62,
-            risks={"pm25": "moderate", "uvi": "low"},
+            risks={
+                "preterm_birth": 1.25,
+                "gestational_hypertension": 1.0,
+            },
         )
 
         payload = SimpleExposureSerializer(exposure).data
 
         self.assertEqual(
             payload["risks"],
-            {"pm25": "moderate", "uvi": "low"},
+            {
+                "preterm_birth": 1.25,
+                "gestational_hypertension": 1.0,
+            },
+        )
+        self.assertTrue(
+            all(isinstance(value, float) for value in payload["risks"].values())
         )
         serializer = SimpleExposureSerializer(data=payload)
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -71,7 +80,7 @@ class WaterExposureOpenAPIContractTests(SimpleTestCase):
             return cls._resolve(value["allOf"][0])
         return value
 
-    def test_summary_exposure_risks_are_typed_string_maps(self):
+    def test_summary_exposure_risks_are_typed_numeric_maps(self):
         operation = self.schema["paths"]["/api/summary/"]["get"]
         summary = self._resolve(
             operation["responses"]["200"]["content"]["application/json"][
@@ -85,7 +94,7 @@ class WaterExposureOpenAPIContractTests(SimpleTestCase):
             self.assertEqual(risks["type"], "object")
             self.assertEqual(
                 risks["additionalProperties"],
-                {"type": "string"},
+                {"type": "number", "format": "double"},
             )
 
     def test_water_goal_and_daily_log_have_stable_value_and_unit_types(self):
