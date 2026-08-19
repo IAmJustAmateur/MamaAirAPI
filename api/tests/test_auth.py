@@ -222,6 +222,46 @@ class AuthTests(APITestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    @override_settings(REGISTRATION_API_KEY="test-registration-key")
+    def test_register_user_with_invalid_api_key(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "email": "invalid-key@example.com",
+                "password": "password123",
+            },
+            HTTP_X_API_KEY="wrong-registration-key",
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(User.objects.filter(email="invalid-key@example.com").exists())
+
+    @override_settings(REGISTRATION_API_KEY=None)
+    def test_register_user_when_api_key_is_not_configured(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "email": "unconfigured-key@example.com",
+                "password": "password123",
+            },
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(
+            User.objects.filter(email="unconfigured-key@example.com").exists()
+        )
+
+    @override_settings(REGISTRATION_API_KEY="")
+    def test_register_user_when_api_key_is_blank(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "email": "blank-key@example.com",
+                "password": "password123",
+            },
+            HTTP_X_API_KEY="",
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(User.objects.filter(email="blank-key@example.com").exists())
+
 
 class ProfileAvatarTests(APITestCase):
     def setUp(self):
