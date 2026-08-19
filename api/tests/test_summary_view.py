@@ -67,13 +67,13 @@ class SummaryViewTests(APITestCase):
             user=self.user,
             timestamp=self.now,
             exposure_level=0.62,
-            risks={"pm25": "moderate"},
+            risks={"preterm_birth": 1.25},
         )
         self.exp_old = Exposure.objects.create(
             user=self.user,
             timestamp=self.prev,
             exposure_level=0.40,
-            risks={"pm25": "low"},
+            risks={"preterm_birth": 1.0},
         )
 
         self.exp_new.pollutants = {"pm25": 18.0, "pm10": 30.0}
@@ -251,6 +251,8 @@ class SummaryViewTests(APITestCase):
         assert isinstance(me, dict)
         assert set(["id", "timestamp", "exposure_level", "risks"]).issubset(me.keys())
         assert float(me["exposure_level"]) == self.exp_new.exposure_level
+        assert me["risks"] == {"preterm_birth": 1.25}
+        assert all(isinstance(value, float) for value in me["risks"].values())
 
         # delta = 0.62 - 0.40 = 0.22
         assert (
