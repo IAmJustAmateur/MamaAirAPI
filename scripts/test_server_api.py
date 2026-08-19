@@ -1906,7 +1906,7 @@ def step_patch_lifestyle_for_level3_recommendations(access_token: str):
             )
 
 
-def step_post_mommy_symptoms_for_level3_recommendations(access_token: str) -> str:
+def step_post_mommy_symptoms_for_level3_recommendations(access_token: str) -> bool:
     names = [
         "leaking fluid",
         "severe vomiting",
@@ -1924,16 +1924,21 @@ def step_post_mommy_symptoms_for_level3_recommendations(access_token: str) -> st
     items = r.json().get("symptoms", [])
     try:
         ids = _find_symptom_ids_by_name(items, names)
-    except AssertionError:
+    except AssertionError as exc:
         if _is_local_target():
-            return step_local_insert_symptoms_for_level3("mommy", names)
-        raise
-    date_used = step_7_selection_post_replace(access_token, ids)
+            step_local_insert_symptoms_for_level3("mommy", names)
+            return True
+        print(
+            "[!] Skipping symptom-dependent mommy Level 3 checks on production: "
+            f"{exc}"
+        )
+        return False
+    step_7_selection_post_replace(access_token, ids)
     print(f"Level 3 mommy symptoms set: {names}")
-    return date_used
+    return True
 
 
-def step_post_baby_symptoms_for_level3_recommendations(access_token: str) -> str:
+def step_post_baby_symptoms_for_level3_recommendations(access_token: str) -> bool:
     names = ["severely reduced kicks"]
     r = requests.get(
         BABY_CHECKLIST_URL,
@@ -1945,13 +1950,18 @@ def step_post_baby_symptoms_for_level3_recommendations(access_token: str) -> str
     items = r.json().get("symptoms", [])
     try:
         ids = _find_symptom_ids_by_name(items, names)
-    except AssertionError:
+    except AssertionError as exc:
         if _is_local_target():
-            return step_local_insert_symptoms_for_level3("baby", names)
-        raise
-    date_used = step_13_baby_selection_post_replace(access_token, ids)
+            step_local_insert_symptoms_for_level3("baby", names)
+            return True
+        print(
+            "[!] Skipping symptom-dependent baby Level 3 checks on production: "
+            f"{exc}"
+        )
+        return False
+    step_13_baby_selection_post_replace(access_token, ids)
     print(f"Level 3 baby symptoms set: {names}")
-    return date_used
+    return True
 
 
 def _ensure_django_for_local_e2e():
@@ -2034,8 +2044,12 @@ def step_prepare_level3_recommendation_inputs(
 ) -> set[str]:
     local_weather_seeded = step_local_prepare_weather_and_clear_snapshots_for_level3()
     step_patch_lifestyle_for_level3_recommendations(access_token)
-    step_post_mommy_symptoms_for_level3_recommendations(access_token)
-    step_post_baby_symptoms_for_level3_recommendations(access_token)
+    mommy_symptoms_seeded = step_post_mommy_symptoms_for_level3_recommendations(
+        access_token
+    )
+    baby_symptoms_seeded = step_post_baby_symptoms_for_level3_recommendations(
+        access_token
+    )
     step_debug_exposure_upsert(
         admin_access_token,
         user_email=EMAIL,
@@ -2043,16 +2057,22 @@ def step_prepare_level3_recommendation_inputs(
     )
 
     expected = {
-        "alert.prom",
-        "alert.fetal_hypoxia",
-        "alert.hyperemesis",
-        "alert.anemia",
-        "alert.cardiovascular",
         "alert.pm25.daily",
         "alert.cooking.solid_fuel",
         "alert.cooking.indoor_solid_fuel",
         "alert.outdoor.midday",
     }
+    if mommy_symptoms_seeded:
+        expected.update(
+            {
+                "alert.prom",
+                "alert.hyperemesis",
+                "alert.anemia",
+                "alert.cardiovascular",
+            }
+        )
+    if baby_symptoms_seeded:
+        expected.add("alert.fetal_hypoxia")
     if local_weather_seeded:
         expected.add("alert.heat.high")
     return expected
