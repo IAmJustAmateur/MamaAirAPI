@@ -351,11 +351,22 @@ class PollutantSerializer(serializers.Serializer):
     who_limit = serializers.FloatField(source="who limit")
 
 
+class ExposureRiskMapField(serializers.DictField):
+    """Describe calculated risk scores without changing their JSON representation."""
+
+    child = serializers.FloatField()
+
+    def to_representation(self, value):
+        return value
+
+
 class SimpleExposureSerializer(serializers.ModelSerializer):
     """
     Минимальный сериалайзер для Exposure.
     Берём только гарантированные поля, чтобы избежать расхождений со схемой.
     """
+
+    risks = ExposureRiskMapField()
 
     class Meta:
         model = Exposure
@@ -466,6 +477,16 @@ class RecommendationSerializer(serializers.Serializer):
             data["message"] = data["alert"]
 
         return data
+
+
+class HealthInsightResponseSerializer(serializers.ModelSerializer):
+    """OpenAPI-only contract for the existing health insight response."""
+
+    recommendations = RecommendationSerializer(many=True)
+
+    class Meta:
+        model = HealthInsightSnapshot
+        exclude = ["user"]
 
 
 class TaskCompletionCategoryCountSerializer(serializers.Serializer):
@@ -587,6 +608,23 @@ class RecommendationCompletionUpsertSerializer(serializers.Serializer):
         ).exists():
             raise serializers.ValidationError("Snapshot not found for this user.")
         return value
+
+
+class RecommendationCompletionValidationErrorSerializer(serializers.Serializer):
+    """Field-level validation errors returned by the completion endpoint."""
+
+    snapshot_id = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
+    rule_id = serializers.ListField(child=serializers.CharField(), required=False)
+    rule_version = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
+    dimension = serializers.ListField(child=serializers.CharField(), required=False)
+    status = serializers.ListField(child=serializers.CharField(), required=False)
+    non_field_errors = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
 
 
 class RecommendationCompletionSerializer(serializers.ModelSerializer):

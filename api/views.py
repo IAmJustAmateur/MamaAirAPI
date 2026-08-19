@@ -35,6 +35,7 @@ from rest_framework import serializers, generics, permissions
 from .serializers import (
     RecommendationCompletionUpsertSerializer,
     RecommendationCompletionSerializer,
+    RecommendationCompletionValidationErrorSerializer,
 )
 
 # from django.utils.translation import gettext as _
@@ -93,6 +94,7 @@ from .serializers import (
     UserProfileSerializer,
     UserLifeStyleSerializer,
     HealthInsightSerializer,
+    HealthInsightResponseSerializer,
     AirExposureLogSerializer,
     AdviceTemplateSerializer,
     PasswordChangeSerializer,
@@ -1545,7 +1547,7 @@ class MovementJSONUploadView(APIView):
         "This endpoint is typically used to populate the user's dashboard."
     ),
     responses={
-        200: HealthInsightSerializer,
+        200: HealthInsightResponseSerializer,
         204: OpenApiResponse(
             description="No health insight data available for the user."
         ),
@@ -2267,7 +2269,7 @@ class RecommendationCompletionView(APIView):
         responses={
             201: RecommendationCompletionSerializer,
             200: RecommendationCompletionSerializer,
-            400: ErrorResponseSerializer,
+            400: RecommendationCompletionValidationErrorSerializer,
         },
         examples=[
             OpenApiExample(

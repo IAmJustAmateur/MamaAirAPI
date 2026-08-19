@@ -1,6 +1,6 @@
 from datetime import date
 from django.test import TestCase
-from api.models import User, RiskDefinition, UserRiskFactor, UserLifeStyle
+from api.models import Exposure, User, RiskDefinition, UserRiskFactor, UserLifeStyle
 
 
 class UserRiskCalculationTest(TestCase):
@@ -78,6 +78,12 @@ class UserRiskCalculationTest(TestCase):
     def test_risk_calculations(self):
         risks, integrated_risk = self.user.calculate_risk_factors()
         self.assertIn("Preeclampsia", risks)
+
+        exposure = Exposure.objects.get(user=self.user)
+        self.assertTrue(exposure.risks)
+        self.assertTrue(
+            all(isinstance(value, float) for value in exposure.risks.values())
+        )
 
         # expected_multiplier = 2.8 * 2.2
 
