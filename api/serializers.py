@@ -352,9 +352,9 @@ class PollutantSerializer(serializers.Serializer):
 
 
 class ExposureRiskMapField(serializers.DictField):
-    """Type risk values for OpenAPI without coercing the existing JSON output."""
+    """Describe calculated risk scores without changing their JSON representation."""
 
-    child = serializers.CharField()
+    child = serializers.FloatField()
 
     def to_representation(self, value):
         return value
