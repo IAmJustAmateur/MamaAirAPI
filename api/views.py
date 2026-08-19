@@ -70,6 +70,16 @@ from .models import (
     DailyTask,
     UserDailyTaskCompletion,
     UserWellbeingLog,
+    SYMPTOM_CHECKLIST_MOMMY,
+    SYMPTOM_CHECKLIST_BABY,
+)
+from recommendations.services.symptom_monitoring import (
+    InvalidSymptomChecklist,
+    get_or_create_daily_checklist,
+    get_user_timezone,
+    local_date_for_user,
+    local_day_bounds,
+    record_response,
 )
 from .choices_emoji import (
     map_choices_with_emoji,
@@ -196,7 +206,7 @@ def _parse_recorded_at_param(request):
             }
         )
     if timezone.is_naive(dt):
-        dt = timezone.make_aware(dt, timezone.get_default_timezone())
+        dt = timezone.make_aware(dt, get_user_timezone(request.user))
     return dt
 
 
@@ -211,7 +221,7 @@ def _target_date_from_request(request):
             return date_cls.fromisoformat(raw_date)
         except ValueError:
             raise ValidationError({"date": "Invalid date. Use YYYY-MM-DD."})
-    return _parse_recorded_at_param(request).date()
+    return local_date_for_user(request.user, _parse_recorded_at_param(request))
 
 
 def _date_period_from_request(request):
@@ -274,10 +284,12 @@ class MetaChoicesResponseSchema(serializers.Serializer):
 # ---- Symptom checklists & selection ----
 class ChecklistItemSchema(serializers.Serializer):
     id = serializers.IntegerField(allow_null=True)
+    code = serializers.CharField()
     name = serializers.CharField()
 
 
 class ChecklistResponseSchema(serializers.Serializer):
+    checklist_id = serializers.UUIDField()
     symptoms = ChecklistItemSchema(many=True)
 
 
@@ -289,12 +301,18 @@ class SymptomSelectionRequestSchema(serializers.Serializer):
         required=False,
         help_text="ISO-8601. If timezone is omitted, interpreted in server TIME_ZONE.",
     )
+    checklist_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="Optional. Older mobile clients may omit it.",
+    )
 
 
 class SymptomSelectionResponseSchema(serializers.Serializer):
     date = serializers.DateField()
     recorded_at = serializers.DateTimeField(required=False, allow_null=True)
     symptom_ids = serializers.ListField(child=serializers.IntegerField())
+    checklist_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class MommySymptomStatisticItemSchema(serializers.Serializer):
@@ -694,15 +712,16 @@ class UserLifestyleView(generics.RetrieveUpdateAPIView):
 
 @extend_schema(
     tags=["Symptoms – Mommy"],
-    summary="Mommy symptoms checklist (id + name)",
+    summary="Persistent mommy symptoms checklist",
     responses={200: ChecklistResponseSchema},
     examples=[
         OpenApiExample(
             "Checklist",
             value={
+                "checklist_id": "67d6ca17-8fca-4739-865f-3d4d3f4b6945",
                 "symptoms": [
-                    {"id": 10, "name": "Headache"},
-                    {"id": 12, "name": "Nausea"},
+                    {"id": 10, "code": "mommy.headache", "name": "Headache"},
+                    {"id": 12, "code": "mommy.nausea", "name": "Nausea"},
                 ]
             },
             response_only=True,
@@ -713,19 +732,22 @@ class MommySymptomsChecklistView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        """Mommy symptoms checklist (id + name)"""
+        """Return the stable mommy checklist for the user's current local day."""
         logger.info("MommySymptomsChecklistView GET, user=%s", request.user)
         user: User = request.user
-        names = user.get_mommy_symptoms_for_checking()  # list[str]
-        qs = MommySymptom.objects.filter(name__in=names).values("id", "name")
-        by_name = {row["name"]: row for row in qs}
+        checklist, _created = get_or_create_daily_checklist(
+            user, SYMPTOM_CHECKLIST_MOMMY
+        )
         items = [
-            {"id": (by_name[n]["id"] if n in by_name else None), "name": n}
-            for n in names
+            {
+                "id": item.symptom_id_snapshot,
+                "code": item.symptom_code,
+                "name": item.display_name,
+            }
+            for item in checklist.items.all()
         ]
-        # сериалайзер для единообразия валидации/формата (не обязательно)
         data = ChecklistItemSerializer(items, many=True).data
-        return Response({"symptoms": data})
+        return Response({"checklist_id": checklist.id, "symptoms": data})
 
 
 @extend_schema(
@@ -758,7 +780,11 @@ class MommySymptomsChecklistView(APIView):
     examples=[
         OpenApiExample(
             "Request",
-            value={"symptom_ids": [10, 12], "recorded_at": "2025-09-01T08:30:00+03:00"},
+            value={
+                "symptom_ids": [10, 12],
+                "recorded_at": "2025-09-01T08:30:00+03:00",
+                "checklist_id": "67d6ca17-8fca-4739-865f-3d4d3f4b6945",
+            },
             request_only=True,
         ),
         OpenApiExample(
@@ -767,6 +793,7 @@ class MommySymptomsChecklistView(APIView):
                 "date": "2025-09-01",
                 "recorded_at": "2025-09-01T08:30:00+03:00",
                 "symptom_ids": [10, 12],
+                "checklist_id": "67d6ca17-8fca-4739-865f-3d4d3f4b6945",
             },
             response_only=True,
         ),
@@ -802,23 +829,25 @@ class UserMommySymptomsSelectionView(APIView):
             request.data,
         )
         user: User = request.user
-        ser = SymptomSelectionSerializer(data=request.data)
+        ser = SymptomSelectionSerializer(data=request.data, context={"user": user})
         ser.is_valid(raise_exception=True)
         ids = ser.validated_data["symptom_ids"]
         recorded_at = ser.validated_data["recorded_at"]
-        target_date = recorded_at.date()
+        target_date = local_date_for_user(user, recorded_at)
 
         # Валидация существования ID
-        existing = set(
-            MommySymptom.objects.filter(id__in=ids).values_list("id", flat=True)
-        )
+        selected_symptoms = list(MommySymptom.objects.filter(id__in=ids))
+        existing = {symptom.pk for symptom in selected_symptoms}
         missing = sorted(set(ids) - existing)
         if missing:
             raise ValidationError({"symptom_ids": f"Unknown ids: {missing}"})
 
         # Полная замена набора за день
+        day_start, day_end = local_day_bounds(user, target_date)
         UserMommySymptoms.objects.filter(
-            user=user, recorded_at__date=target_date
+            user=user,
+            recorded_at__gte=day_start,
+            recorded_at__lt=day_end,
         ).delete()
         bulk = [
             UserMommySymptoms(user=user, symptom_id=sid, recorded_at=recorded_at)
@@ -827,13 +856,25 @@ class UserMommySymptomsSelectionView(APIView):
         if bulk:
             UserMommySymptoms.objects.bulk_create(bulk)
 
-        return Response(
-            {
-                "date": target_date.isoformat(),
-                "recorded_at": recorded_at.isoformat(),
-                "symptom_ids": sorted(list(existing)),
-            }
-        )
+        try:
+            response_event = record_response(
+                user=user,
+                checklist_type=SYMPTOM_CHECKLIST_MOMMY,
+                recorded_at=recorded_at,
+                selected_symptoms=selected_symptoms,
+                checklist_id=ser.validated_data.get("checklist_id"),
+            )
+        except InvalidSymptomChecklist as exc:
+            raise ValidationError({"checklist_id": str(exc)}) from exc
+
+        response_data = {
+            "date": target_date.isoformat(),
+            "recorded_at": recorded_at.isoformat(),
+            "symptom_ids": sorted(existing),
+        }
+        if response_event.checklist_id:
+            response_data["checklist_id"] = response_event.checklist_id
+        return Response(response_data)
 
 
 @extend_schema(
@@ -1022,25 +1063,29 @@ class UserMommySymptomsClassStatisticsView(APIView):
 
 @extend_schema(
     tags=["Symptoms – Baby"],
-    summary="Baby symptoms checklist (id + name)",
+    summary="Persistent baby symptoms checklist",
     responses={200: ChecklistResponseSchema},
 )
 class BabySymptomsChecklistView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        """Baby symptoms checklist (id + name)"""
+        """Return the stable baby checklist for the user's current local day."""
         logger.info("BabySymptomsChecklistView GET, user=%s", request.user)
         user: User = request.user
-        names = user.get_baby_symptoms_for_checking()  # list[str]
-        qs = BabySymptom.objects.filter(name__in=names).values("id", "name")
-        by_name = {row["name"]: row for row in qs}
+        checklist, _created = get_or_create_daily_checklist(
+            user, SYMPTOM_CHECKLIST_BABY
+        )
         items = [
-            {"id": (by_name[n]["id"] if n in by_name else None), "name": n}
-            for n in names
+            {
+                "id": item.symptom_id_snapshot,
+                "code": item.symptom_code,
+                "name": item.display_name,
+            }
+            for item in checklist.items.all()
         ]
         data = ChecklistItemSerializer(items, many=True).data
-        return Response({"symptoms": data})
+        return Response({"checklist_id": checklist.id, "symptoms": data})
 
 
 @extend_schema(
@@ -1094,21 +1139,23 @@ class UserBabySymptomsSelectionView(APIView):
             request.data,
         )
         user: User = request.user
-        ser = SymptomSelectionSerializer(data=request.data)
+        ser = SymptomSelectionSerializer(data=request.data, context={"user": user})
         ser.is_valid(raise_exception=True)
         ids = ser.validated_data["symptom_ids"]
         recorded_at = ser.validated_data["recorded_at"]
-        target_date = recorded_at.date()
+        target_date = local_date_for_user(user, recorded_at)
 
-        existing = set(
-            BabySymptom.objects.filter(id__in=ids).values_list("id", flat=True)
-        )
+        selected_symptoms = list(BabySymptom.objects.filter(id__in=ids))
+        existing = {symptom.pk for symptom in selected_symptoms}
         missing = sorted(set(ids) - existing)
         if missing:
             raise ValidationError({"symptom_ids": f"Unknown ids: {missing}"})
 
+        day_start, day_end = local_day_bounds(user, target_date)
         UserBabySymptoms.objects.filter(
-            user=user, recorded_at__date=target_date
+            user=user,
+            recorded_at__gte=day_start,
+            recorded_at__lt=day_end,
         ).delete()
         bulk = [
             UserBabySymptoms(user=user, symptom_id=sid, recorded_at=recorded_at)
@@ -1117,13 +1164,25 @@ class UserBabySymptomsSelectionView(APIView):
         if bulk:
             UserBabySymptoms.objects.bulk_create(bulk)
 
-        return Response(
-            {
-                "date": target_date.isoformat(),
-                "recorded_at": recorded_at.isoformat(),
-                "symptom_ids": sorted(list(existing)),
-            }
-        )
+        try:
+            response_event = record_response(
+                user=user,
+                checklist_type=SYMPTOM_CHECKLIST_BABY,
+                recorded_at=recorded_at,
+                selected_symptoms=selected_symptoms,
+                checklist_id=ser.validated_data.get("checklist_id"),
+            )
+        except InvalidSymptomChecklist as exc:
+            raise ValidationError({"checklist_id": str(exc)}) from exc
+
+        response_data = {
+            "date": target_date.isoformat(),
+            "recorded_at": recorded_at.isoformat(),
+            "symptom_ids": sorted(existing),
+        }
+        if response_event.checklist_id:
+            response_data["checklist_id"] = response_event.checklist_id
+        return Response(response_data)
 
 
 @extend_schema(
