@@ -468,6 +468,16 @@ class RecommendationSerializer(serializers.Serializer):
         return data
 
 
+class HealthInsightResponseSerializer(serializers.ModelSerializer):
+    """OpenAPI-only contract for the existing health insight response."""
+
+    recommendations = RecommendationSerializer(many=True)
+
+    class Meta:
+        model = HealthInsightSnapshot
+        exclude = ["user"]
+
+
 class TaskCompletionCategoryCountSerializer(serializers.Serializer):
     done = serializers.IntegerField()
     total = serializers.IntegerField()
@@ -587,6 +597,23 @@ class RecommendationCompletionUpsertSerializer(serializers.Serializer):
         ).exists():
             raise serializers.ValidationError("Snapshot not found for this user.")
         return value
+
+
+class RecommendationCompletionValidationErrorSerializer(serializers.Serializer):
+    """Field-level validation errors returned by the completion endpoint."""
+
+    snapshot_id = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
+    rule_id = serializers.ListField(child=serializers.CharField(), required=False)
+    rule_version = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
+    dimension = serializers.ListField(child=serializers.CharField(), required=False)
+    status = serializers.ListField(child=serializers.CharField(), required=False)
+    non_field_errors = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
 
 
 class RecommendationCompletionSerializer(serializers.ModelSerializer):
