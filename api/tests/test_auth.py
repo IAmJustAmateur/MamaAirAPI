@@ -198,8 +198,8 @@ class AuthTests(APITestCase):
         response = self.client.post(reverse("set-language"), {"language": "fr"})
         self.assertEqual(response.status_code, 401)
 
+    @override_settings(REGISTRATION_API_KEY="test-registration-key")
     def test_register_user_success_with_api_key(self):
-        headers = {"X-API-Key": settings.REGISTRATION_API_KEY}
         response = self.client.post(
             reverse("register"),
             {
@@ -211,6 +211,7 @@ class AuthTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertTrue(User.objects.filter(email="newuser@example.com").exists())
 
+    @override_settings(REGISTRATION_API_KEY="test-registration-key")
     def test_register_user_without_api_key(self):
         response = self.client.post(
             reverse("register"),

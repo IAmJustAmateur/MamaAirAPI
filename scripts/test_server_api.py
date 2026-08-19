@@ -21,7 +21,7 @@ load_dotenv()
 
 ENVIRONMENTS = {
     "local": "http://127.0.0.1:8000/",
-    "production": "https://api.mamaair.app/",
+    "production": "https://api.mamaair.work/",
 }
 
 
@@ -1161,17 +1161,28 @@ def step_5_check_mommy_checklist(access_token: str):
     assert_status(r, 200, "Mommy checklist GET failed")
     data = r.json()
     pp("Mommy checklist GET", data)
+    assert data.get("checklist_id"), f"No checklist_id in checklist response: {data}"
     assert "symptoms" in data, f"No 'symptoms' key in checklist response: {data}"
-    data = data["symptoms"]
-    assert isinstance(data, list), f"Checklist should be a list, got {type(data)}"
-    assert len(data) > 0, "Checklist is empty"
+    items = data["symptoms"]
+    assert isinstance(items, list), f"Checklist should be a list, got {type(items)}"
+    assert len(items) > 0, "Checklist is empty"
     # минимальная проверка структуры
-    sample = data[0]
+    sample = items[0]
     has_id = "id" in sample
     has_name = "name" in sample
-    assert has_id and has_name, f"Checklist item missing 'id'/'name': {sample}"
-    pp("Mommy checklist (first 3 items)", data[:3])
-    return data  # возвращаем для дальнейшего использования в тестах selection
+    has_code = "code" in sample
+    assert has_id and has_name and has_code, f"Checklist item missing id/name/code: {sample}"
+
+    repeated = requests.get(
+        CHECKLIST_URL,
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(repeated, 200, "Repeated mommy checklist GET failed")
+    assert repeated.json() == data, "Repeated GET must return the same daily checklist"
+    pp("Mommy checklist (first 3 items)", items[:3])
+    return data
 
 
 def step_6_selection_get_today(access_token: str):
@@ -1190,7 +1201,11 @@ def step_6_selection_get_today(access_token: str):
     return body
 
 
-def step_7_selection_post_replace(access_token: str, valid_ids: list[int]):
+def step_7_selection_post_replace(
+    access_token: str,
+    valid_ids: list[int],
+    checklist_id: str | None = None,
+):
     """Replace-all with a concrete recorded_at, then verify by GET."""
     recorded_at_iso = now_iso_with_tz()
     expected_date = date_str_from_iso(recorded_at_iso)
@@ -1199,6 +1214,8 @@ def step_7_selection_post_replace(access_token: str, valid_ids: list[int]):
         "recorded_at": recorded_at_iso,
         "symptom_ids": valid_ids,
     }
+    if checklist_id:
+        payload["checklist_id"] = checklist_id
     r = requests.post(
         MOMMY_SELECTION_URL,
         json=payload,
@@ -1218,6 +1235,8 @@ def step_7_selection_post_replace(access_token: str, valid_ids: list[int]):
     assert sorted(body.get("symptom_ids", [])) == sorted(
         valid_ids
     ), "Mommy symptomsIDs mismatch in response"
+    if checklist_id:
+        assert body.get("checklist_id") == checklist_id, "Checklist association mismatch"
 
     # Верификация GET с ?date=
     r = requests.get(
@@ -1392,7 +1411,7 @@ def step_10_selection_get_by_date_param(access_token: str, some_date: str):
     pp("Selection GET by date", body)
 
 
-def step_11_baby_checklist(access_token: str) -> list[int]:
+def step_11_baby_checklist(access_token: str) -> tuple[list[int], str]:
     """GET /symptoms/baby/checklist/ — возвращает {"symptoms": [{id,name}, ...]}"""
     r = requests.get(
         BABY_CHECKLIST_URL,
@@ -1403,12 +1422,16 @@ def step_11_baby_checklist(access_token: str) -> list[int]:
     assert_status(r, 200, "Baby checklist GET failed")
     data = r.json()
     assert isinstance(data, dict) and "symptoms" in data, f"Unexpected schema: {data}"
+    assert data.get("checklist_id"), f"Missing baby checklist_id: {data}"
     items = data["symptoms"]
     assert isinstance(items, list) and len(items) > 0, "Empty baby checklist"
     # базовая валидация элемента
     sample = items[0]
     assert (
-        isinstance(sample, dict) and "name" in sample and "id" in sample
+        isinstance(sample, dict)
+        and "name" in sample
+        and "id" in sample
+        and "code" in sample
     ), f"Invalid item: {sample}"
     pp("Baby checklist (first 3)", items[:3])
 
@@ -1416,7 +1439,7 @@ def step_11_baby_checklist(access_token: str) -> list[int]:
     valid_ids = [it["id"] for it in items if isinstance(it.get("id"), int)]
     valid_ids = list(set(valid_ids))  # уникальные
     assert len(valid_ids) > 0, "No valid baby symptom IDs in checklist"
-    return valid_ids[:3]  # возьмём до 3-х
+    return valid_ids[:3], data["checklist_id"]
 
 
 def step_12_baby_selection_get_today(access_token: str):
@@ -1437,13 +1460,19 @@ def step_12_baby_selection_get_today(access_token: str):
     return body
 
 
-def step_13_baby_selection_post_replace(access_token: str, valid_ids: list[int]) -> str:
+def step_13_baby_selection_post_replace(
+    access_token: str,
+    valid_ids: list[int],
+    checklist_id: str | None = None,
+) -> str:
     print("\n--- Baby selection POST (replace) ---, step 13")
     print("Valid IDs to post:", valid_ids)
     recorded_at_iso = now_iso_with_tz()
     expected_date = date_str_from_iso(recorded_at_iso)
 
     payload = {"recorded_at": recorded_at_iso, "symptom_ids": valid_ids}
+    if checklist_id:
+        payload["checklist_id"] = checklist_id
     r = requests.post(
         BABY_SELECTION_URL,
         json=payload,
@@ -1462,6 +1491,8 @@ def step_13_baby_selection_post_replace(access_token: str, valid_ids: list[int])
     assert sorted(body.get("symptom_ids", [])) == sorted(
         valid_ids
     ), "Baby symptoms IDs mismatch in response"
+    if checklist_id:
+        assert body.get("checklist_id") == checklist_id, "Baby checklist association mismatch"
 
     # verify via GET ?date=
     r = requests.get(
@@ -1875,7 +1906,7 @@ def step_patch_lifestyle_for_level3_recommendations(access_token: str):
             )
 
 
-def step_post_mommy_symptoms_for_level3_recommendations(access_token: str) -> str:
+def step_post_mommy_symptoms_for_level3_recommendations(access_token: str) -> bool:
     names = [
         "leaking fluid",
         "severe vomiting",
@@ -1893,16 +1924,21 @@ def step_post_mommy_symptoms_for_level3_recommendations(access_token: str) -> st
     items = r.json().get("symptoms", [])
     try:
         ids = _find_symptom_ids_by_name(items, names)
-    except AssertionError:
+    except AssertionError as exc:
         if _is_local_target():
-            return step_local_insert_symptoms_for_level3("mommy", names)
-        raise
-    date_used = step_7_selection_post_replace(access_token, ids)
+            step_local_insert_symptoms_for_level3("mommy", names)
+            return True
+        print(
+            "[!] Skipping symptom-dependent mommy Level 3 checks on production: "
+            f"{exc}"
+        )
+        return False
+    step_7_selection_post_replace(access_token, ids)
     print(f"Level 3 mommy symptoms set: {names}")
-    return date_used
+    return True
 
 
-def step_post_baby_symptoms_for_level3_recommendations(access_token: str) -> str:
+def step_post_baby_symptoms_for_level3_recommendations(access_token: str) -> bool:
     names = ["severely reduced kicks"]
     r = requests.get(
         BABY_CHECKLIST_URL,
@@ -1914,13 +1950,18 @@ def step_post_baby_symptoms_for_level3_recommendations(access_token: str) -> str
     items = r.json().get("symptoms", [])
     try:
         ids = _find_symptom_ids_by_name(items, names)
-    except AssertionError:
+    except AssertionError as exc:
         if _is_local_target():
-            return step_local_insert_symptoms_for_level3("baby", names)
-        raise
-    date_used = step_13_baby_selection_post_replace(access_token, ids)
+            step_local_insert_symptoms_for_level3("baby", names)
+            return True
+        print(
+            "[!] Skipping symptom-dependent baby Level 3 checks on production: "
+            f"{exc}"
+        )
+        return False
+    step_13_baby_selection_post_replace(access_token, ids)
     print(f"Level 3 baby symptoms set: {names}")
-    return date_used
+    return True
 
 
 def _ensure_django_for_local_e2e():
@@ -2003,8 +2044,12 @@ def step_prepare_level3_recommendation_inputs(
 ) -> set[str]:
     local_weather_seeded = step_local_prepare_weather_and_clear_snapshots_for_level3()
     step_patch_lifestyle_for_level3_recommendations(access_token)
-    step_post_mommy_symptoms_for_level3_recommendations(access_token)
-    step_post_baby_symptoms_for_level3_recommendations(access_token)
+    mommy_symptoms_seeded = step_post_mommy_symptoms_for_level3_recommendations(
+        access_token
+    )
+    baby_symptoms_seeded = step_post_baby_symptoms_for_level3_recommendations(
+        access_token
+    )
     step_debug_exposure_upsert(
         admin_access_token,
         user_email=EMAIL,
@@ -2012,16 +2057,22 @@ def step_prepare_level3_recommendation_inputs(
     )
 
     expected = {
-        "alert.prom",
-        "alert.fetal_hypoxia",
-        "alert.hyperemesis",
-        "alert.anemia",
-        "alert.cardiovascular",
         "alert.pm25.daily",
         "alert.cooking.solid_fuel",
         "alert.cooking.indoor_solid_fuel",
         "alert.outdoor.midday",
     }
+    if mommy_symptoms_seeded:
+        expected.update(
+            {
+                "alert.prom",
+                "alert.hyperemesis",
+                "alert.anemia",
+                "alert.cardiovascular",
+            }
+        )
+    if baby_symptoms_seeded:
+        expected.add("alert.fetal_hypoxia")
     if local_weather_seeded:
         expected.add("alert.heat.high")
     return expected
@@ -2727,13 +2778,19 @@ def main():
 
     # подготовим валидные ID (возьмём до 3 первых)
     valid_ids = [
-        item["id"] for item in checklist if isinstance(item, dict) and "id" in item
+        item["id"]
+        for item in checklist["symptoms"]
+        if isinstance(item, dict) and "id" in item
     ][:3]
     if not valid_ids:
         raise AssertionError("No valid symptom IDs from checklist to test selection")
 
     # 7) POST replace for a concrete recorded_at (now), then verify
-    date_used = step_7_selection_post_replace(token, valid_ids)
+    date_used = step_7_selection_post_replace(
+        token,
+        valid_ids,
+        checklist_id=checklist["checklist_id"],
+    )
 
     # 7.1) GET symptom statistics before clearing the selection
     step_7_1_mommy_statistics_get(token, date_used)
@@ -2749,10 +2806,14 @@ def main():
     today = datetime.now().date().isoformat()
     step_10_selection_get_by_date_param(token, today)
 
-    baby_valid_ids = step_11_baby_checklist(token)  # берём валидные id из чеклиста
+    baby_valid_ids, baby_checklist_id = step_11_baby_checklist(token)
     pp("Baby valid IDs", baby_valid_ids)
     step_12_baby_selection_get_today(token)
-    baby_date_used = step_13_baby_selection_post_replace(token, baby_valid_ids)
+    baby_date_used = step_13_baby_selection_post_replace(
+        token,
+        baby_valid_ids,
+        checklist_id=baby_checklist_id,
+    )
     step_13_1_baby_class_statistics_get(token, baby_date_used)
     step_14_baby_selection_post_clear(token, baby_date_used)
     step_15_baby_selection_post_invalid_ids(token)

@@ -31,6 +31,10 @@ from .models import (
     DailyCheckin,
     DailyTask,
     UserDailyTaskCompletion,
+    GeneratedSymptomChecklist,
+    GeneratedSymptomChecklistItem,
+    SymptomChecklistResponse,
+    SymptomChecklistResponseItem,
 )
 from django.contrib.auth import authenticate, login
 
@@ -258,8 +262,105 @@ class HealthInsightSnapshotAdmin(admin.ModelAdmin):
 admin.site.register(HealthInsightSnapshot, HealthInsightSnapshotAdmin)
 
 
-admin.site.register(MommySymptom)
-admin.site.register(BabySymptom)
+@admin.register(MommySymptom)
+class MommySymptomAdmin(admin.ModelAdmin):
+    list_display = ("name", "code")
+    search_fields = ("name", "code")
+    readonly_fields = ("code",)
+
+
+@admin.register(BabySymptom)
+class BabySymptomAdmin(admin.ModelAdmin):
+    list_display = ("name", "code")
+    search_fields = ("name", "code")
+    readonly_fields = ("code",)
+
+
+class GeneratedSymptomChecklistItemInline(admin.TabularInline):
+    model = GeneratedSymptomChecklistItem
+    extra = 0
+    can_delete = False
+    readonly_fields = (
+        "symptom_id_snapshot",
+        "symptom_code",
+        "display_name",
+        "position",
+        "status",
+    )
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(GeneratedSymptomChecklist)
+class GeneratedSymptomChecklistAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "checklist_type",
+        "local_date",
+        "algorithm_version",
+        "generated_at",
+    )
+    list_filter = ("checklist_type", "local_date", "algorithm_version")
+    search_fields = ("id", "user__email", "items__symptom_code")
+    readonly_fields = (
+        "id",
+        "user",
+        "checklist_type",
+        "local_date",
+        "algorithm_version",
+        "generated_at",
+    )
+    inlines = (GeneratedSymptomChecklistItemInline,)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class SymptomChecklistResponseItemInline(admin.TabularInline):
+    model = SymptomChecklistResponseItem
+    extra = 0
+    can_delete = False
+    readonly_fields = ("symptom_code", "display_name", "position", "status")
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SymptomChecklistResponse)
+class SymptomChecklistResponseAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "checklist_type",
+        "local_date",
+        "checklist",
+        "submitted_at",
+    )
+    list_filter = ("checklist_type", "local_date", "submitted_at")
+    search_fields = ("id", "checklist__id", "user__email")
+    readonly_fields = (
+        "id",
+        "checklist",
+        "user",
+        "checklist_type",
+        "local_date",
+        "recorded_at",
+        "submitted_at",
+        "reported_symptom_ids",
+        "reported_symptom_codes",
+    )
+    inlines = (SymptomChecklistResponseItemInline,)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(RiskDefinition)

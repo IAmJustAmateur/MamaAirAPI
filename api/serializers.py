@@ -228,6 +228,7 @@ class SymptomSelectionSerializer(serializers.Serializer):
         required=True,
     )
     recorded_at = serializers.CharField(required=False, allow_blank=False)
+    checklist_id = serializers.UUIDField(required=False, allow_null=True)
 
     def validate_recorded_at(self, value: str):
         if not value:
@@ -238,12 +239,10 @@ class SymptomSelectionSerializer(serializers.Serializer):
                 "Invalid datetime. Use ISO-8601, e.g. 2025-09-01T08:30:00+03:00"
             )
         if timezone.is_naive(dt):
-            # Локализуем в settings.TIME_ZONE, если не указана таймзона
-            tz = timezone.get_fixed_timezone(
-                timezone.get_current_timezone().utcoffset(None).total_seconds() / 60
-            )
-            # На самом деле лучше settings.TIME_ZONE:
-            tz = timezone.get_default_timezone()  # эквивалент settings.TIME_ZONE
+            from recommendations.services.symptom_monitoring import get_user_timezone
+
+            user = self.context.get("user")
+            tz = get_user_timezone(user) if user else timezone.get_default_timezone()
             dt = timezone.make_aware(dt, tz)
         return dt
 
@@ -260,6 +259,7 @@ class SymptomSelectionSerializer(serializers.Serializer):
 
 class ChecklistItemSerializer(serializers.Serializer):
     id = serializers.IntegerField(allow_null=True)
+    code = serializers.CharField()
     name = serializers.CharField()
 
 

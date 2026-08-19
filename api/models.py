@@ -8,6 +8,7 @@ from datetime import date, timedelta
 
 from django.utils.translation import gettext_lazy as _, get_language
 from django.utils import timezone
+from django.utils.text import slugify
 
 from logging import getLogger
 
@@ -50,6 +51,22 @@ SYMPTOM_CLASS_CHOICES = [
     (SYMPTOM_CLASS_SYSTEMIC, _("Condition-Specific Systemic Indicators")),
     (SYMPTOM_CLASS_FETAL, _("Fetal Activity & Growth Markers")),
     (SYMPTOM_CLASS_LIFESTYLE, _("Lifestyle & Environmental Stressors")),
+]
+
+SYMPTOM_CHECKLIST_MOMMY = "mommy"
+SYMPTOM_CHECKLIST_BABY = "baby"
+SYMPTOM_CHECKLIST_TYPE_CHOICES = [
+    (SYMPTOM_CHECKLIST_MOMMY, _("Mommy")),
+    (SYMPTOM_CHECKLIST_BABY, _("Baby")),
+]
+
+SYMPTOM_STATUS_REPORTED = "reported"
+SYMPTOM_STATUS_NOT_REPORTED = "not_reported"
+SYMPTOM_STATUS_NOT_ANSWERED = "not_answered"
+SYMPTOM_STATUS_CHOICES = [
+    (SYMPTOM_STATUS_REPORTED, _("Reported by user")),
+    (SYMPTOM_STATUS_NOT_REPORTED, _("Not reported by user")),
+    (SYMPTOM_STATUS_NOT_ANSWERED, _("Not answered")),
 ]
 
 SYMPTOM_CLASS_METADATA = {
@@ -424,59 +441,22 @@ class User(MyUser, PermissionsMixin):
         return risks_dict, integrated_score
 
     def get_mommy_symptoms_for_checking(self):
-        """
-        Return a dictionary of mommy symptoms for each risk factor, sorted by value in descending order.
-        The keys are the risk factor names, the values are dictionaries with "value" and "symptoms" keys.
-        The "value" key stores the risk factor multiplier, and the "symptoms" key stores a list of symptom names.
+        """Backward-compatible wrapper around the symptom monitoring service."""
+        from recommendations.services.symptom_monitoring import generate_symptoms
 
-        :return: A dictionary of mommy symptoms for each risk factor
-        :rtype: dict
-        """
-        risks, integrated_risk = self.calculate_risk_factors()
-        risk_list = [(key, value) for key, value in risks.items()]
-        risk_list.sort(key=lambda x: x[1]["risk_value"], reverse=True)
-        risk_list.sort(key=lambda x: x[1]["priority"], reverse=False)
-        symptoms = []
-        seen_symptoms = set()
-        for risk_tuple in risk_list:
-            risk = RiskDefinition.objects.get(name=risk_tuple[0])
-            risk_symptoms = RiskDefinitionMommySymptom.objects.select_related(
-                "symptom"
-            ).filter(
-                risk_definition=risk
-            )
-            for risk_symptom in risk_symptoms:
-                symptom_name = risk_symptom.symptom.name
-                if symptom_name in seen_symptoms:
-                    continue
-                seen_symptoms.add(symptom_name)
-                symptoms.append(symptom_name)
-        return symptoms[0:5]
+        return [
+            symptom.name
+            for symptom in generate_symptoms(self, SYMPTOM_CHECKLIST_MOMMY)
+        ]
 
     def get_baby_symptoms_for_checking(self):
-        """
-        :return: A dictionary of baby symptoms for each risk factor
-        :rtype: dict
-        """
-        risks, integrated_risk = self.calculate_risk_factors()
-        risk_list = [(key, value) for key, value in risks.items()]
-        risk_list.sort(key=lambda x: x[1]["risk_value"], reverse=True)
-        risk_list.sort(key=lambda x: x[1]["priority"], reverse=False)
+        """Backward-compatible wrapper around the symptom monitoring service."""
+        from recommendations.services.symptom_monitoring import generate_symptoms
 
-        symptoms = []
-        seen_symptoms = set()
-        for risk_tuple in risk_list:
-            risk = RiskDefinition.objects.get(name=risk_tuple[0])
-            risk_symptoms = RiskDefinitionBabySymptom.objects.select_related(
-                "symptom"
-            ).filter(risk_definition=risk)
-            for risk_symptom in risk_symptoms:
-                symptom_name = risk_symptom.symptom.name
-                if symptom_name in seen_symptoms:
-                    continue
-                seen_symptoms.add(symptom_name)
-                symptoms.append(symptom_name)
-        return symptoms[0:5]
+        return [
+            symptom.name
+            for symptom in generate_symptoms(self, SYMPTOM_CHECKLIST_BABY)
+        ]
 
     def get_user_movements_df(
         self, start=None, end=None, hours: int = 24
@@ -797,6 +777,8 @@ class RiskDefinition(models.Model):
 
 class Symptom(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    code = models.CharField(max_length=255, unique=True)
+    code_namespace = None
 
     class Meta:
         abstract = True
@@ -805,9 +787,18 @@ class Symptom(models.Model):
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        if not self.code:
+            slug = slugify(self.name).replace("-", "_")
+            if not slug:
+                raise ValueError("A stable symptom code cannot be generated from name")
+            self.code = f"{self.code_namespace}.{slug}"
+        super().save(*args, **kwargs)
+
 
 class MommySymptom(Symptom):
     name = models.CharField(max_length=255, unique=True)
+    code_namespace = SYMPTOM_CHECKLIST_MOMMY
 
     class Meta:
         db_table = "mommy_symptoms"
@@ -815,6 +806,7 @@ class MommySymptom(Symptom):
 
 class BabySymptom(Symptom):
     name = models.CharField(max_length=255, unique=True)
+    code_namespace = SYMPTOM_CHECKLIST_BABY
 
     class Meta:
         db_table = "baby_symptoms"
@@ -879,6 +871,134 @@ class UserBabySymptoms(BaseUserSymptom):
 
     class Meta:
         db_table = "user_baby_symptoms"  # existing table name
+
+
+class GeneratedSymptomChecklist(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="generated_symptom_checklists",
+    )
+    checklist_type = models.CharField(
+        max_length=16,
+        choices=SYMPTOM_CHECKLIST_TYPE_CHOICES,
+    )
+    local_date = models.DateField()
+    generated_at = models.DateTimeField(auto_now_add=True)
+    algorithm_version = models.CharField(max_length=64)
+
+    class Meta:
+        ordering = ["-local_date", "-generated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "checklist_type", "local_date"],
+                name="unique_daily_symptom_checklist",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["user", "checklist_type", "local_date"],
+                name="symptom_checklist_lookup_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user} {self.checklist_type} {self.local_date}"
+
+
+class GeneratedSymptomChecklistItem(models.Model):
+    checklist = models.ForeignKey(
+        GeneratedSymptomChecklist,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    symptom_id_snapshot = models.PositiveBigIntegerField()
+    symptom_code = models.CharField(max_length=255)
+    display_name = models.CharField(max_length=255)
+    position = models.PositiveSmallIntegerField()
+    status = models.CharField(
+        max_length=16,
+        choices=SYMPTOM_STATUS_CHOICES,
+        default=SYMPTOM_STATUS_NOT_ANSWERED,
+    )
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["checklist", "position"],
+                name="unique_symptom_checklist_position",
+            ),
+            models.UniqueConstraint(
+                fields=["checklist", "symptom_code"],
+                name="unique_symptom_checklist_code",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.checklist_id} #{self.position} {self.symptom_code}"
+
+
+class SymptomChecklistResponse(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    checklist = models.ForeignKey(
+        GeneratedSymptomChecklist,
+        on_delete=models.PROTECT,
+        related_name="responses",
+        null=True,
+        blank=True,
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="symptom_checklist_responses",
+    )
+    checklist_type = models.CharField(
+        max_length=16,
+        choices=SYMPTOM_CHECKLIST_TYPE_CHOICES,
+    )
+    local_date = models.DateField()
+    recorded_at = models.DateTimeField()
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reported_symptom_ids = models.JSONField(default=list)
+    reported_symptom_codes = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        indexes = [
+            models.Index(
+                fields=["user", "checklist_type", "local_date"],
+                name="symptom_response_lookup_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user} {self.checklist_type} {self.local_date}"
+
+
+class SymptomChecklistResponseItem(models.Model):
+    response = models.ForeignKey(
+        SymptomChecklistResponse,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    symptom_code = models.CharField(max_length=255)
+    display_name = models.CharField(max_length=255)
+    position = models.PositiveSmallIntegerField()
+    status = models.CharField(max_length=16, choices=SYMPTOM_STATUS_CHOICES)
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["response", "symptom_code"],
+                name="unique_symptom_response_code",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.response_id} {self.symptom_code}={self.status}"
 
 
 class Movement(models.Model):
