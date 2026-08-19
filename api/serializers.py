@@ -17,6 +17,7 @@ from .models import (
     DailyTask,
     UserDailyTaskCompletion,
     UserWellbeingLog,
+    EXPOSURE_LEVEL_CHOICES,
 )
 
 
@@ -307,9 +308,42 @@ class ErrorResponseSerializer(serializers.Serializer):
     error = serializers.CharField()
 
 
-class WeeklyExposureSerializer(serializers.Serializer):
-    pregnancy_week = serializers.IntegerField()
-    exposure_level = serializers.CharField()
+WEEKLY_EXPOSURE_LEVEL_VALUES = [
+    value for value, _label in EXPOSURE_LEVEL_CHOICES
+]
+
+
+class WeeklyExposureLevelSerializer(serializers.Serializer):
+    level = serializers.ChoiceField(
+        choices=WEEKLY_EXPOSURE_LEVEL_VALUES,
+        help_text="Exposure classification for the pregnancy week.",
+    )
+
+
+class WeeklyExposureResponseSerializer(serializers.DictField):
+    """Validate the existing dynamic pregnancy-week response map."""
+
+    child = WeeklyExposureLevelSerializer()
+
+
+WEEKLY_EXPOSURE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Map of decimal pregnancy-week keys to weekly exposure classifications."
+    ),
+    "additionalProperties": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["level"],
+        "properties": {
+            "level": {
+                "type": "string",
+                "enum": WEEKLY_EXPOSURE_LEVEL_VALUES,
+                "description": "Exposure classification for the pregnancy week.",
+            }
+        },
+    },
+}
 
 
 class PollutantSerializer(serializers.Serializer):
@@ -452,15 +486,21 @@ class TaskCompletionDaySerializer(serializers.Serializer):
     counts = TaskCompletionCountsSerializer()
 
 
+class WeekInfoSerializer(serializers.Serializer):
+    week = serializers.IntegerField(min_value=1, max_value=40)
+    locale = serializers.CharField()
+    text = serializers.CharField()
+    source = serializers.ChoiceField(choices=["db"])
+
+
+class SummaryWaterSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    amount = serializers.FloatField(min_value=0)
+    unit = serializers.CharField()
+
+
 class SummaryResponseSerializer(serializers.Serializer):
-    """
-    Гибкий ответ для /summary:
-    - aq_weather_uv: что вернёт update_air_exposure_log_with_weather (dict) — принимаем как JSON.
-    - mom_exposure: последняя экспозиция (может быть None).
-    - risks_delta: изменение уровня риска (float | null).
-    - recommendations: что вернёт snapshot.recommendations (list|dict) — принимаем как JSON.
-    - today_journey: структура маршрута/дня — тоже JSON (dict|list).
-    """
+    """Existing mobile dashboard response contract."""
 
     aq_weather_uv = AirExposureLogSerializer()
     mom_exposure = SimpleExposureSerializer(allow_null=True)
@@ -470,10 +510,13 @@ class SummaryResponseSerializer(serializers.Serializer):
 
     today_journey = TodayJourneySerializer()
     risks_delta = RiskDeltaSerializer()
-    week_info = serializers.JSONField()
-    daily_exposure_level = serializers.CharField(allow_null=True)
+    week_info = WeekInfoSerializer(allow_null=True)
+    daily_exposure_level = serializers.ChoiceField(
+        choices=WEEKLY_EXPOSURE_LEVEL_VALUES,
+        allow_null=True,
+    )
     daily_checkins = serializers.ListField(child=serializers.DateField())
-    water = serializers.JSONField()
+    water = SummaryWaterSerializer()
     task_completions = TaskCompletionDaySerializer(many=True)
     exposure_history = ExposureHistoryResponseSerializer()
     pollutant_compliance = PollutantComplianceSerializer()
