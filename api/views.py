@@ -1562,7 +1562,7 @@ class HealthInsightView(APIView):
         logger.info("HealthInsightView GET, user=%s", request.user)
 
         snapshot = get_or_create_fresh_snapshot(
-            request.user, fresh_for_hours=6, trigger_event="login"
+            request.user, fresh_for_hours=settings.HEALTH_INSIGHT_SNAPSHOT_FRESH_HOURS, trigger_event="login"
         )
         return Response(HealthInsightSerializer(snapshot).data)
 
@@ -1902,7 +1902,7 @@ class SummaryView(APIView):
         from recommendations.evaluator import get_or_create_fresh_snapshot
 
         snapshot = get_or_create_fresh_snapshot(
-            request.user, fresh_for_hours=6, trigger_event="login"
+            request.user, fresh_for_hours=settings.HEALTH_INSIGHT_SNAPSHOT_FRESH_HOURS, trigger_event="login"
         )
         recommendations = snapshot.recommendations
 
