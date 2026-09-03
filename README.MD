@@ -219,6 +219,21 @@ curl "$BASE_URL/api/summary/" \
   -H "Authorization: Bearer $ACCESS"
 ```
 
+## Local Django Tests
+
+Movement ingestion tests need the coordinate encryption key that CI creates automatically. For a local full-suite run in PowerShell, set a temporary test key first:
+
+```powershell
+$env:MOVEMENT_COORDINATE_KEYS='{"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
+.\venv\Scripts\python.exe manage.py test -v 1
+```
+
+For Git Bash or Linux/macOS shells:
+
+```bash
+MOVEMENT_COORDINATE_KEYS='{"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}' python manage.py test -v 1
+```
+
 ## E2E API Checks
 
 Run the Django server locally:
