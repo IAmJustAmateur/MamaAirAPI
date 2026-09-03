@@ -255,7 +255,8 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
-    "PREPROCESSING_HOOKS": ["api.schema_hooks.hide_legacy_auth_endpoints"],
+    "SCHEMA_PATH_PREFIX": r"/api/",
+    "PREPROCESSING_HOOKS": ["api.schema_hooks.hide_non_mobile_endpoints"],
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
 }

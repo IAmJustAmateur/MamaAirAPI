@@ -87,5 +87,14 @@ jobs:
       - name: Check for missing migrations
         run: python manage.py makemigrations --check --dry-run
 
+      - name: Check OpenAPI schema snapshot
+        run: |
+          python scripts/update_openapi_schema_snapshot.py
+          if [ -n "$(git status --porcelain -- docs/openapi/schema.json)" ]; then
+            git diff -- docs/openapi/schema.json
+            git status --short -- docs/openapi/schema.json
+            exit 1
+          fi
+
       - name: Run test suite
         run: python manage.py test --verbosity=2
