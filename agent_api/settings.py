@@ -85,6 +85,10 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1").split(",")
 
 REGISTRATION_API_KEY = os.getenv("REGISTRATION_API_KEY")
 
+HEALTH_INSIGHT_SNAPSHOT_FRESH_HOURS = int(
+    os.getenv("HEALTH_INSIGHT_SNAPSHOT_FRESH_HOURS", "6")
+)
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
