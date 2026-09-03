@@ -26,6 +26,8 @@ Production Swagger URL:
 https://api.mamaair.app/api/docs/
 ```
 
+The E2E scripts also support explicit deployment targets with `--base-url`.
+
 Regenerate the committed OpenAPI snapshot after an intentional mobile API
 contract change:
 
@@ -35,10 +37,11 @@ python scripts/update_openapi_schema_snapshot.py
 
 ## Requirements
 
-- Python 3.9+
-- Django + Django REST Framework
-- SQLite for local development or PostgreSQL for deployed environments
-- OpenWeather API key for air quality and weather data
+- Python 3.12, matching CI
+- Django 5.2 + Django REST Framework
+- SQLite for local development when `DJANGO_ENV=development`
+- PostgreSQL for CI, staging, and production
+- OpenWeather API key in `OWM_API_KEY` for live air quality/weather lookup
 
 Install Python dependencies:
 
@@ -57,21 +60,37 @@ Common settings:
 SECRET_KEY=your_django_secret_key_here
 DEBUG=True
 DJANGO_ENV=development
+ALLOWED_HOSTS=127.0.0.1,localhost
 
-OPENWEATHER_API_KEY=your_openweather_api_key_here
+OWM_API_KEY=your_openweather_api_key_here
+REGISTRATION_API_KEY=your-registration-api-key
 
-POSTGRES_DB=air_quality_db
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
+DB_NAME=agent_api_db
+DB_USER=agent_api_user
+DB_PASSWORD=your-db-password
+DB_HOST=localhost
+DB_PORT=5432
+
+# Optional, only when Firebase auth is enabled in the environment.
+# FIREBASE_CREDENTIALS=/path/to/firebase_service_account.json
+
+MOVEMENT_H3_RESOLUTION=8
+MOVEMENT_COORDINATE_ACTIVE_KEY_VERSION=1
+# Local development/E2E example key only. Use a real secret outside local dev.
+MOVEMENT_COORDINATE_KEYS={"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}
+
+HEALTH_INSIGHT_SNAPSHOT_FRESH_HOURS=6
 ```
+
+`ALLOWED_HOSTS` is comma-separated. `MOVEMENT_COORDINATE_KEYS` is a JSON object mapping key versions to base64-encoded 32-byte AES keys; keep real deployment keys in the secret store, never in Git. Leave `FIREBASE_CREDENTIALS` unset locally unless you have a service account file.
 
 ## Local Setup
 
-```bash
+PowerShell:
+
+```powershell
 python -m venv venv
-venv\Scripts\activate
+.\venv\Scripts\activate
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py runserver
@@ -162,7 +181,7 @@ Exposure and dashboard:
 Use placeholders for secrets and tokens. Do not commit real JWTs or API keys.
 
 ```bash
-BASE_URL="https://api.mamaair.app"
+BASE_URL="<deployment-base-url>"
 ACCESS="<access_token>"
 REFRESH="<refresh_token>"
 GOOGLE_ID_TOKEN="<google_id_token>"
@@ -234,6 +253,14 @@ For Git Bash or Linux/macOS shells:
 MOVEMENT_COORDINATE_KEYS='{"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}' python manage.py test -v 1
 ```
 
+Other useful local checks:
+
+```bash
+python manage.py check
+python manage.py makemigrations --check --dry-run
+python scripts/update_openapi_schema_snapshot.py
+```
+
 ## E2E API Checks
 
 Run the Django server locally:
@@ -248,6 +275,12 @@ Run the current-contract E2E script:
 python scripts/test_server_api.py --env local
 ```
 
+For local E2E, the server's `REGISTRATION_API_KEY` must match the script's `--reg-api-key` value. The script defaults to `super-secret-mobile-key`, so either use that locally or pass an explicit key:
+
+```bash
+python scripts/test_server_api.py --env local --reg-api-key your-registration-api-key
+```
+
 Run the legacy-contract E2E script to verify older mobile builds still work:
 
 ```bash
@@ -260,6 +293,7 @@ Useful overrides:
 python scripts/test_server_api.py --env production
 python scripts/test_server_api_legacy.py --env production
 python scripts/test_server_api.py --base-url https://api.mamaair.app/
+python scripts/test_server_api.py --base-url https://api.mamaair.work/
 ```
 
 The E2E scripts exercise the mobile integration flow: auth, profile, lifestyle, wellbeing, symptoms, movement upload, exposure, summary, and recommendation completion. The legacy script keeps older response assertions for backwards compatibility, while the main script validates the latest API contract.
