@@ -8,6 +8,7 @@ This guide describes the API surface used by the mobile app and follows the E2E 
 - Production: `https://api.mamaair.app/`
 - Swagger UI: `/api/docs/`
 - OpenAPI schema: `/api/schema/`
+- Committed OpenAPI snapshot: `docs/openapi/schema.json`
 
 All API endpoints below are prefixed with `/api/`.
 

@@ -17,12 +17,20 @@ Django REST Framework backend for the MamaAir mobile app. The API stores user pr
 
 - Swagger UI: `/api/docs/`
 - OpenAPI schema: `/api/schema/`
+- Committed OpenAPI snapshot: `docs/openapi/schema.json`
 - Mobile developer guide: `docs/mobile_api_guide.md`
 
 Production Swagger URL:
 
 ```text
 https://api.mamaair.app/api/docs/
+```
+
+Regenerate the committed OpenAPI snapshot after an intentional mobile API
+contract change:
+
+```bash
+python scripts/update_openapi_schema_snapshot.py
 ```
 
 ## Requirements

@@ -1,0 +1,4743 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "MamaAir API",
+        "version": "1.0.0",
+        "description": "Backend API for the MamaAir mobile app. Use Google sign-in to obtain JWT Bearer tokens for protected endpoints. OpenAPI examples follow the mobile E2E flow in scripts/test_server_api.py."
+    },
+    "paths": {
+        "/api/advice/": {
+            "get": {
+                "operationId": "advice_retrieve",
+                "description": "Returns the latest generated health insight snapshot for the authenticated user. Includes risk levels for both the mother and the baby, as well as personalized recommendations. This endpoint is typically used to populate the user's dashboard.",
+                "summary": "Get health risks and recommendations",
+                "tags": [
+                    "advice"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HealthInsightResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "204": {
+                        "description": "No health insight data available for the user."
+                    }
+                }
+            }
+        },
+        "/api/air-exposure/": {
+            "get": {
+                "operationId": "air_exposure_retrieve",
+                "description": "Returns the most recent air quality and weather data based on the user's recorded exposure logs.",
+                "summary": "Get current air quality and weather data",
+                "tags": [
+                    "air-exposure"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AirExposureLog"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "204": {
+                        "description": "No air exposure data available."
+                    }
+                }
+            }
+        },
+        "/api/auth/delete-account/": {
+            "delete": {
+                "operationId": "auth_delete_account_destroy",
+                "description": "Deletes the authenticated user's account from the system. This action is irreversible.",
+                "summary": "Delete current user account",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Account deleted successfully."
+                    }
+                }
+            }
+        },
+        "/api/auth/google/": {
+            "post": {
+                "operationId": "auth_google_create",
+                "description": "Accept Google **ID token** from Android app, verify it on the server,create or link user, and issue your JWTs (access/refresh).",
+                "summary": "Sign in with Google (Android)",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GoogleAuthRequest"
+                            },
+                            "examples": {
+                                "RequestSuccessful": {
+                                    "value": {
+                                        "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                    },
+                                    "summary": "Request successful"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GoogleAuthRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GoogleAuthRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GoogleAuthResponse"
+                                },
+                                "examples": {
+                                    "УспешныйОтвет": {
+                                        "value": {
+                                            "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+                                            "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+                                            "user": {
+                                                "id": 123,
+                                                "email": "user@example.com",
+                                                "name": "Jane Doe",
+                                                "avatar_url": "https://lh3.googleusercontent.com/...",
+                                                "provider": "google"
+                                            }
+                                        },
+                                        "summary": "Успешный ответ"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Authentication successful"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "Incorrect request (missing id_token)"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                },
+                                "examples": {
+                                    "Error:InvalidAudience": {
+                                        "value": {
+                                            "detail": "Invalid audience"
+                                        },
+                                        "summary": "Error: Invalid audience"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Token validation failed (aud/iss/expired/email_verified)"
+                    }
+                }
+            }
+        },
+        "/api/auth/logout/": {
+            "post": {
+                "operationId": "auth_logout_create",
+                "description": "Logs out the authenticated user by blacklisting the provided refresh token.",
+                "summary": "Log out user and blacklist refresh token",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Logout"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Logout"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Logout"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "205": {
+                        "description": "Successfully logged out."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/token/refresh/": {
+            "post": {
+                "operationId": "auth_token_refresh_create",
+                "description": "Takes a refresh type JSON web token and returns an access type JSON web\ntoken if the refresh token is valid.",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoggingTokenRefresh"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoggingTokenRefresh"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoggingTokenRefresh"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoggingTokenRefresh"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/daily-checkin/": {
+            "get": {
+                "operationId": "daily_checkin_retrieve",
+                "description": "Returns whether the user has already checked in on the requested calendar date.",
+                "summary": "Check whether daily checkin exists for date",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Date in YYYY-MM-DD",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Wellbeing"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DailyCheckinExistsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DailyCheckinExistsBadRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "daily_checkin_create",
+                "description": "Creates a daily check-in marker for one calendar date. Posting the same date twice returns a validation error because the marker is unique per user and date.",
+                "summary": "Create daily checkin for date",
+                "tags": [
+                    "Wellbeing"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DailyCheckinCreateRequest"
+                            },
+                            "examples": {
+                                "CreateDailyCheckinRequest": {
+                                    "value": {
+                                        "date": "2026-04-21"
+                                    },
+                                    "summary": "Create daily checkin request"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DailyCheckinCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DailyCheckinCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DailyCheckin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DailyCheckinCreateBadRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/daily-tasks/": {
+            "get": {
+                "operationId": "daily_tasks_list",
+                "description": "Returns active task definitions ordered by `sort_order` and title. Use `code` values in task completion requests.",
+                "summary": "Get active daily tasks",
+                "tags": [
+                    "Wellbeing"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/DailyTask"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/exposure-per-weeks/": {
+            "get": {
+                "operationId": "exposure_per_weeks_retrieve",
+                "description": "Returns weekly air quality exposure levels for the current user.",
+                "summary": "Get exposure levels per pregnancy week",
+                "tags": [
+                    "exposure-per-weeks"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "description": "Map of decimal pregnancy-week keys to weekly exposure classifications.",
+                                    "additionalProperties": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                            "level"
+                                        ],
+                                        "properties": {
+                                            "level": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "Clean",
+                                                    "Very Good",
+                                                    "Moderate",
+                                                    "Acceptable",
+                                                    "Unhealthy",
+                                                    "High",
+                                                    "Hazardous",
+                                                    "Extreme"
+                                                ],
+                                                "description": "Exposure classification for the pregnancy week."
+                                            }
+                                        }
+                                    }
+                                },
+                                "examples": {
+                                    "PopulatedResult": {
+                                        "value": {
+                                            "12": {
+                                                "level": "Moderate"
+                                            },
+                                            "13": {
+                                                "level": "Unhealthy"
+                                            }
+                                        },
+                                        "summary": "Populated result"
+                                    },
+                                    "PartialResult": {
+                                        "value": {
+                                            "13": {
+                                                "level": "Unhealthy"
+                                            }
+                                        },
+                                        "summary": "Partial result"
+                                    },
+                                    "EmptyResult": {
+                                        "value": {},
+                                        "summary": "Empty result"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Object keyed by decimal pregnancy-week strings. Each present week contains a non-null exposure level. Missing weeks are omitted; users without weekly exposure records receive an empty object."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                },
+                                "examples": {
+                                    "AuthenticationRequired": {
+                                        "value": {
+                                            "detail": "Authentication credentials were not provided."
+                                        },
+                                        "summary": "Authentication required"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Authentication credentials were not provided or are invalid."
+                    }
+                }
+            }
+        },
+        "/api/exposure/history/": {
+            "get": {
+                "operationId": "exposure_history_retrieve",
+                "description": "Returns the user's integrated exposure score history for the last N calendar days (default 7, up to 90). Missing days are simply absent from the list.",
+                "summary": "Exposure history (integrated score)",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "days",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Number of calendar days to return (default 7, min 1, max 90)."
+                    }
+                ],
+                "tags": [
+                    "Exposure"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ExposureHistoryResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/info/current/": {
+            "get": {
+                "operationId": "info_current_list",
+                "description": "Returns advice templates for the current user. If `week` is provided, advice can be filtered for that pregnancy week; invalid or missing values fall back to the user's current context.",
+                "summary": "Get current static advice templates",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "week",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Optional pregnancy week."
+                    }
+                ],
+                "tags": [
+                    "Advice"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AdviceTemplate"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/lifestyle/": {
+            "get": {
+                "operationId": "lifestyle_retrieve",
+                "description": "Returns the user's lifestyle profile. If it does not exist yet, the backend creates an empty one. Mobile clients can safely call this before showing lifestyle onboarding fields.",
+                "summary": "Get current user lifestyle (auto-created if missing)",
+                "tags": [
+                    "Lifestyle"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserLifeStyle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "lifestyle_update",
+                "tags": [
+                    "lifestyle"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserLifeStyle"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserLifeStyle"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserLifeStyle"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserLifeStyle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "lifestyle_partial_update",
+                "description": "Partially updates lifestyle inputs used by risk calculations and recommendations. Choice values should be read from `GET /api/meta/choices/`.",
+                "summary": "Update current user lifestyle",
+                "tags": [
+                    "Lifestyle"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserLifeStyle"
+                            },
+                            "examples": {
+                                "LifestyleUpdate": {
+                                    "value": {
+                                        "average_sleep_hours": 7.5,
+                                        "work_type": "Desk",
+                                        "diet_type": "omnivore",
+                                        "cooking_method": "gas",
+                                        "activity_duration_minutes": 30,
+                                        "standing_hours_per_day": 3,
+                                        "area": "urban",
+                                        "time_spent": "mostly_outdoors",
+                                        "time_of_day": "morning_hours",
+                                        "commute_mode": "car",
+                                        "hydration_target_ml_per_day": 2200,
+                                        "cooking_venue": "indoor",
+                                        "ventilation_level": "medium"
+                                    },
+                                    "summary": "Lifestyle update"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserLifeStyle"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserLifeStyle"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserLifeStyle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/meta/choices/": {
+            "get": {
+                "operationId": "meta_choices_retrieve",
+                "summary": "Meta choices for dropdowns",
+                "tags": [
+                    "Meta"
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MetaChoicesResponseSchema"
+                                },
+                                "examples": {
+                                    "Example": {
+                                        "value": {
+                                            "languages": [
+                                                {
+                                                    "value": "en",
+                                                    "label": "English"
+                                                }
+                                            ],
+                                            "races": [
+                                                {
+                                                    "value": "caucasian",
+                                                    "label": "Caucasian"
+                                                }
+                                            ],
+                                            "countries": [
+                                                {
+                                                    "value": "nigeria",
+                                                    "label": "Nigeria"
+                                                }
+                                            ],
+                                            "work_types": [
+                                                {
+                                                    "value": "Desk",
+                                                    "label": "Desk"
+                                                }
+                                            ],
+                                            "diet_types": [
+                                                {
+                                                    "value": "carnivore",
+                                                    "label": "Carnivore"
+                                                }
+                                            ],
+                                            "cooking_methods": [
+                                                {
+                                                    "value": "gas",
+                                                    "label": "Gas"
+                                                }
+                                            ],
+                                            "lifestyle_areas": [
+                                                {
+                                                    "value": "urban",
+                                                    "label": "Urban"
+                                                }
+                                            ],
+                                            "lifestyle_time_spent": [
+                                                {
+                                                    "value": "mostly_indoors",
+                                                    "label": "Mostly indoors"
+                                                }
+                                            ],
+                                            "lifestyle_time_of_day": [
+                                                {
+                                                    "value": "morning_hours",
+                                                    "label": "Morning hours"
+                                                }
+                                            ],
+                                            "exposure_levels": [
+                                                {
+                                                    "value": "Clean",
+                                                    "label": "Clean"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/movements/upload/": {
+            "post": {
+                "operationId": "movements_upload_create",
+                "description": "Uploads a batch of timestamped location points for the authenticated user. The endpoint accepts `multipart/form-data` with a `file` field. CSV columns must be `latitude`, `longitude`, and `timestamp`; `timestamp` should be ISO-8601 and include a timezone when available. After import, daily exposure is recomputed for each affected calendar date.",
+                "summary": "Upload user movements via CSV",
+                "tags": [
+                    "movements"
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "file": {
+                                        "type": "string",
+                                        "format": "binary",
+                                        "description": "CSV file with columns: latitude, longitude, timestamp"
+                                    }
+                                },
+                                "required": [
+                                    "file"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Movements uploaded successfully."
+                    },
+                    "400": {
+                        "description": "Invalid or missing CSV data."
+                    }
+                }
+            }
+        },
+        "/api/movements/upload/json/": {
+            "post": {
+                "operationId": "movements_upload_json_create",
+                "description": "Uploads a batch of timestamped location points for the authenticated user as JSON. Each item in `movements` must include `latitude`, `longitude`, and ISO-8601 `timestamp`; `indoor` is optional. After import, daily exposure is recomputed for each affected calendar date. This is the preferred movement upload format for mobile clients.",
+                "summary": "Upload user movements via JSON",
+                "tags": [
+                    "movements"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MovementJSONUploadRequestSchema"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Movements uploaded successfully."
+                    },
+                    "400": {
+                        "description": "Invalid or missing JSON data."
+                    }
+                }
+            }
+        },
+        "/api/profile/": {
+            "get": {
+                "operationId": "profile_retrieve",
+                "description": "Returns the authenticated user's profile and pregnancy settings. Use this after authentication to hydrate the mobile profile/onboarding state. `bmi` is calculated from `height` and `weight_pre_pregnancy` when both are present.",
+                "summary": "Get current user profile",
+                "tags": [
+                    "User"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserProfile"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "profile_update",
+                "description": "Partially updates the authenticated user's profile. When `week_of_pregnancy` is changed the backend recalculates `pregnancy_start_date`. Choice values for `language`, `race`, `country`, and `preferred_share_channel` must match the API choices.",
+                "summary": "Update current user profile",
+                "tags": [
+                    "User"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserProfile"
+                            },
+                            "examples": {
+                                "ProfileUpdate": {
+                                    "value": {
+                                        "name": "Jane Doe",
+                                        "date_of_birth": "1994-06-20",
+                                        "height": 168,
+                                        "weight_pre_pregnancy": 64,
+                                        "race": "african",
+                                        "country": "NG",
+                                        "is_first_pregnancy": true,
+                                        "pregnancy_number": 1,
+                                        "week_of_pregnancy": 24,
+                                        "tracking_enabled": true,
+                                        "notifications_enabled": true,
+                                        "notification_window_from": "09:00",
+                                        "notification_window_to": "21:00",
+                                        "timezone": "Africa/Lagos",
+                                        "consent": true,
+                                        "preferred_share_channel": "whatsapp"
+                                    },
+                                    "summary": "Profile update"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserProfile"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserProfile"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserProfile"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "profile_partial_update",
+                "description": "Partially updates the authenticated user's profile. When `week_of_pregnancy` is changed the backend recalculates `pregnancy_start_date`. Choice values for `language`, `race`, `country`, and `preferred_share_channel` must match the API choices.",
+                "summary": "Update current user profile",
+                "tags": [
+                    "User"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserProfile"
+                            },
+                            "examples": {
+                                "ProfileUpdate": {
+                                    "value": {
+                                        "name": "Jane Doe",
+                                        "date_of_birth": "1994-06-20",
+                                        "height": 168,
+                                        "weight_pre_pregnancy": 64,
+                                        "race": "african",
+                                        "country": "NG",
+                                        "is_first_pregnancy": true,
+                                        "pregnancy_number": 1,
+                                        "week_of_pregnancy": 24,
+                                        "tracking_enabled": true,
+                                        "notifications_enabled": true,
+                                        "notification_window_from": "09:00",
+                                        "notification_window_to": "21:00",
+                                        "timezone": "Africa/Lagos",
+                                        "consent": true,
+                                        "preferred_share_channel": "whatsapp"
+                                    },
+                                    "summary": "Profile update"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserProfile"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserProfile"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserProfile"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/profile/avatar/": {
+            "post": {
+                "operationId": "profile_avatar_create",
+                "description": "Uploads a profile avatar image for the authenticated user. Send multipart/form-data with an `avatar` file. Supported image types are JPEG, PNG, and WebP up to 5 MB.",
+                "summary": "Upload current user avatar",
+                "tags": [
+                    "User"
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserAvatarUpload"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserAvatarUpload"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserProfile"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "profile_avatar_destroy",
+                "description": "Deletes the uploaded avatar image for the authenticated user. If a legacy social avatar_url exists, profile responses will fall back to it.",
+                "summary": "Delete current user uploaded avatar",
+                "tags": [
+                    "User"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserProfile"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/recommendation-completion/": {
+            "get": {
+                "operationId": "recommendation_completion_list",
+                "description": "Returns recommendation completion records for the authenticated user. Optional filtering by snapshot_id.",
+                "summary": "List recommendation completions",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "snapshot_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter completions by snapshot ID"
+                    }
+                ],
+                "tags": [
+                    "Recommendations"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/RecommendationCompletion"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "recommendation_completion_create",
+                "description": "Marks one recommendation dimension as completed for a specific generated summary snapshot. The upsert key is `snapshot_id`, `rule_id`, `rule_version`, and `dimension`; posting the same key again updates `status`.",
+                "summary": "Upsert a recommendation completion",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "snapshot_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter completions by snapshot ID"
+                    }
+                ],
+                "tags": [
+                    "Recommendations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecommendationCompletionUpsert"
+                            },
+                            "examples": {
+                                "CompletionRequest": {
+                                    "value": {
+                                        "snapshot_id": 123,
+                                        "rule_id": "alert.pm25.daily",
+                                        "rule_version": 1,
+                                        "dimension": "behavior",
+                                        "status": "done"
+                                    },
+                                    "summary": "Completion request"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecommendationCompletionUpsert"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecommendationCompletionUpsert"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RecommendationCompletion"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RecommendationCompletion"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RecommendationCompletionValidationError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/set-language/": {
+            "post": {
+                "operationId": "set_language_create",
+                "description": "Allows the user to update their preferred interface language. This language will be used by the backend to localize responses like advice, messages, etc.",
+                "summary": "Set preferred language for current user",
+                "tags": [
+                    "set-language"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "language": {
+                                        "type": "string",
+                                        "enum": [
+                                            "en",
+                                            "fr",
+                                            "sw",
+                                            "pl"
+                                        ],
+                                        "description": "Language code, e.g., 'en', 'fr', 'sw', 'ig'"
+                                    }
+                                },
+                                "required": [
+                                    "language"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SetLanguageSuccessResponse"
+                                },
+                                "examples": {
+                                    "Success": {
+                                        "value": {
+                                            "message": "Language updated",
+                                            "language": "fr"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SetLanguageErrorResponse"
+                                },
+                                "examples": {
+                                    "InvalidLanguage": {
+                                        "value": {
+                                            "error": "Invalid language code"
+                                        },
+                                        "summary": "Invalid language"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/summary/": {
+            "get": {
+                "operationId": "summary_retrieve",
+                "description": "Main dashboard payload for the mobile app. Returns the latest air quality/weather/UV values, current exposure, 7-day exposure history, risk delta, weekly check-in/task/water state, WHO pollutant compliance, and generated recommendations. `snapshot_id` should be stored by the client when marking a recommendation as completed.",
+                "summary": "Get integrated summary",
+                "tags": [
+                    "Dashboard"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SummaryResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "204": {
+                        "description": "No air exposure data available for this user yet."
+                    }
+                }
+            }
+        },
+        "/api/symptoms/baby/checklist/": {
+            "get": {
+                "operationId": "symptoms_baby_checklist_retrieve",
+                "description": "Return the stable baby checklist for the user's current local day.",
+                "summary": "Persistent baby symptoms checklist",
+                "tags": [
+                    "Symptoms – Baby"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChecklistResponseSchema"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/symptoms/baby/selection/": {
+            "get": {
+                "operationId": "symptoms_baby_selection_retrieve",
+                "summary": "Get baby selection for a date",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Calendar date (YYYY-MM-DD). Overrides recorded_at if both provided."
+                    },
+                    {
+                        "in": "query",
+                        "name": "recorded_at",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "ISO-8601 datetime. If timezone omitted, interpreted in server TIME_ZONE."
+                    }
+                ],
+                "tags": [
+                    "Symptoms – Baby"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SymptomSelectionResponseSchema"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "symptoms_baby_selection_create",
+                "summary": "Replace baby selection for recorded_at day",
+                "tags": [
+                    "Symptoms – Baby"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SymptomSelectionRequestSchema"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SymptomSelectionRequestSchema"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SymptomSelectionRequestSchema"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SymptomSelectionResponseSchema"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/symptoms/baby/statistics/classes/": {
+            "get": {
+                "operationId": "symptoms_baby_statistics_classes_retrieve",
+                "summary": "Get baby symptoms statistics by symptom class for a period",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Calendar date (YYYY-MM-DD). Overrides start_date/end_date if both are provided."
+                    },
+                    {
+                        "in": "query",
+                        "name": "end_date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Period end date (YYYY-MM-DD), inclusive."
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Period start date (YYYY-MM-DD), inclusive."
+                    }
+                ],
+                "tags": [
+                    "Symptoms Statistics - Baby"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SymptomClassStatisticsResponseSchema"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/symptoms/mommy/checklist/": {
+            "get": {
+                "operationId": "symptoms_mommy_checklist_retrieve",
+                "description": "Return the stable mommy checklist for the user's current local day.",
+                "summary": "Persistent mommy symptoms checklist",
+                "tags": [
+                    "Symptoms – Mommy"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChecklistResponseSchema"
+                                },
+                                "examples": {
+                                    "Checklist": {
+                                        "value": {
+                                            "checklist_id": "67d6ca17-8fca-4739-865f-3d4d3f4b6945",
+                                            "symptoms": [
+                                                {
+                                                    "id": 10,
+                                                    "code": "mommy.headache",
+                                                    "name": "Headache"
+                                                },
+                                                {
+                                                    "id": 12,
+                                                    "code": "mommy.nausea",
+                                                    "name": "Nausea"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/symptoms/mommy/selection/": {
+            "get": {
+                "operationId": "symptoms_mommy_selection_retrieve",
+                "description": "Replace-all за день, определяемый:\n- либо ?date=YYYY-MM-DD,\n- либо recorded_at (из body/query),\n- иначе сегодня в settings.TIME_ZONE.",
+                "summary": "Get mommy selection for a date",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Calendar date (YYYY-MM-DD). Overrides recorded_at if both provided."
+                    },
+                    {
+                        "in": "query",
+                        "name": "recorded_at",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "ISO-8601 datetime. If timezone omitted, interpreted in server TIME_ZONE."
+                    }
+                ],
+                "tags": [
+                    "Symptoms – Mommy"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SymptomSelectionResponseSchema"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "symptoms_mommy_selection_create",
+                "description": "Replace-all за день, определяемый:\n- либо ?date=YYYY-MM-DD,\n- либо recorded_at (из body/query),\n- иначе сегодня в settings.TIME_ZONE.",
+                "summary": "Replace mommy selection for recorded_at day",
+                "tags": [
+                    "Symptoms – Mommy"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SymptomSelectionRequestSchema"
+                            },
+                            "examples": {
+                                "Request": {
+                                    "value": {
+                                        "symptom_ids": [
+                                            10,
+                                            12
+                                        ],
+                                        "recorded_at": "2025-09-01T08:30:00+03:00",
+                                        "checklist_id": "67d6ca17-8fca-4739-865f-3d4d3f4b6945"
+                                    }
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SymptomSelectionRequestSchema"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SymptomSelectionRequestSchema"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SymptomSelectionResponseSchema"
+                                },
+                                "examples": {
+                                    "Response": {
+                                        "value": {
+                                            "date": "2025-09-01",
+                                            "recorded_at": "2025-09-01T08:30:00+03:00",
+                                            "symptom_ids": [
+                                                10,
+                                                12
+                                            ],
+                                            "checklist_id": "67d6ca17-8fca-4739-865f-3d4d3f4b6945"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/symptoms/mommy/statistics/": {
+            "get": {
+                "operationId": "symptoms_mommy_statistics_list",
+                "summary": "Get mommy symptoms statistics by risk for a period",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Calendar date (YYYY-MM-DD). Overrides start_date/end_date if both are provided."
+                    },
+                    {
+                        "in": "query",
+                        "name": "end_date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Period end date (YYYY-MM-DD), inclusive."
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Period start date (YYYY-MM-DD), inclusive."
+                    }
+                ],
+                "tags": [
+                    "Symptoms Statistics Mommy"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/MommySymptomStatisticItemSchema"
+                                    }
+                                },
+                                "examples": {
+                                    "Statistics": {
+                                        "value": [
+                                            [
+                                                {
+                                                    "symptom_name": "Headache",
+                                                    "symptom_id": 10,
+                                                    "quantity": 3,
+                                                    "risk_name": "Air pollution sensitivity",
+                                                    "risk_id": 5
+                                                }
+                                            ]
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/symptoms/mommy/statistics/classes/": {
+            "get": {
+                "operationId": "symptoms_mommy_statistics_classes_retrieve",
+                "summary": "Get mommy symptoms statistics by symptom class for a period",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Calendar date (YYYY-MM-DD). Overrides start_date/end_date if both are provided."
+                    },
+                    {
+                        "in": "query",
+                        "name": "end_date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Period end date (YYYY-MM-DD), inclusive."
+                    },
+                    {
+                        "in": "query",
+                        "name": "start_date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Period start date (YYYY-MM-DD), inclusive."
+                    }
+                ],
+                "tags": [
+                    "Symptoms Statistics - Mommy"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SymptomClassStatisticsResponseSchema"
+                                },
+                                "examples": {
+                                    "StatisticsByClass": {
+                                        "value": {
+                                            "start_date": "2026-03-01",
+                                            "end_date": "2026-03-07",
+                                            "classes": [
+                                                {
+                                                    "symptom_class": 1,
+                                                    "class_name": "Acute & Emergency Indicators",
+                                                    "color_flag": "critical_red",
+                                                    "quantity": 2,
+                                                    "symptoms": [
+                                                        {
+                                                            "symptom_name": "vaginal bleeding",
+                                                            "symptom_id": 10,
+                                                            "quantity": 2,
+                                                            "risks": [
+                                                                {
+                                                                    "risk_name": "Preterm birth",
+                                                                    "risk_id": 2,
+                                                                    "source_phrase": "Vaginal bleeding"
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Statistics by class"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/task-completion/": {
+            "get": {
+                "operationId": "task_completion_retrieve",
+                "description": "Returns the list of active task codes completed by the user on the requested calendar date, plus per-category done/total counts for active tasks.",
+                "summary": "Get completed daily tasks for date",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Date in YYYY-MM-DD",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Wellbeing"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskCompletionDay"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskCompletionBadRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "task_completion_create",
+                "description": "Replaces the completed task set for one calendar date. Send the full desired list of task `code` values; sending an empty list clears completions for that date. The response includes per-category done/total counts for active tasks.",
+                "summary": "Replace completed daily tasks for date",
+                "tags": [
+                    "Wellbeing"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskCompletionUpsertRequest"
+                            },
+                            "examples": {
+                                "TaskCompletionRequest": {
+                                    "value": {
+                                        "date": "2026-04-30",
+                                        "tasks": [
+                                            "cooking_smoke",
+                                            "drink_water"
+                                        ]
+                                    },
+                                    "summary": "Task completion request"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskCompletionUpsertRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskCompletionUpsertRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskCompletionDay"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskCompletionUpsertBadRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/wellbeing/": {
+            "get": {
+                "operationId": "wellbeing_retrieve",
+                "description": "Returns the selectable wellbeing catalog for the current user: water goal, mood chips, and feeling chips. Use the returned `id` values in `POST /api/wellbeing/log/`.",
+                "summary": "Wellbeing catalog (water goal + mood chips + feeling chips)",
+                "tags": [
+                    "Wellbeing"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WellbeingCatalogResponse"
+                                },
+                                "examples": {
+                                    "CatalogExample": {
+                                        "value": {
+                                            "water_goal": {
+                                                "value": 2130,
+                                                "unit": "ml"
+                                            },
+                                            "moods": [
+                                                {
+                                                    "id": 1,
+                                                    "kind": "mood",
+                                                    "code": "feel_sick",
+                                                    "title": "Feel sick",
+                                                    "emoji": "🤒",
+                                                    "sort_order": 10,
+                                                    "number_value": null,
+                                                    "unit": "",
+                                                    "is_active": true
+                                                }
+                                            ],
+                                            "feelings": [
+                                                {
+                                                    "id": 10,
+                                                    "kind": "feeling",
+                                                    "code": "headache",
+                                                    "title": "Headache",
+                                                    "emoji": "🤕",
+                                                    "sort_order": 10,
+                                                    "number_value": null,
+                                                    "unit": "",
+                                                    "is_active": true
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Catalog example"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/wellbeing/log/": {
+            "get": {
+                "operationId": "wellbeing_log_retrieve",
+                "description": "Returns wellbeing state for one calendar date. If no log exists yet, the endpoint returns an empty state with `water_amount: 0`, `moods: []`, and `feelings: []`.",
+                "summary": "Get wellbeing log for date",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Date in YYYY-MM-DD",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Wellbeing"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserWellbeingLogResponse"
+                                },
+                                "examples": {
+                                    "EmptyLogExample": {
+                                        "value": {
+                                            "date": "2026-02-28",
+                                            "water_amount": 0,
+                                            "water_unit": "ml",
+                                            "moods": [],
+                                            "feelings": []
+                                        },
+                                        "summary": "Empty log example"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserWellbeingLogBadRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "wellbeing_log_create",
+                "description": "Updates wellbeing state for one calendar date. `water_amount` is additive: posting `250` increases the stored daily amount by 250. `mood_ids` and `feeling_ids` replace the selected chips when provided; omit a field to keep its previous selection.",
+                "summary": "Upsert wellbeing log for date",
+                "tags": [
+                    "Wellbeing"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserWellbeingLogUpsertRequest"
+                            },
+                            "examples": {
+                                "UpsertRequestExample": {
+                                    "value": {
+                                        "date": "2026-02-28",
+                                        "water_amount": 250,
+                                        "water_unit": "ml",
+                                        "mood_ids": [
+                                            1,
+                                            2
+                                        ],
+                                        "feeling_ids": [
+                                            10
+                                        ]
+                                    },
+                                    "summary": "Upsert request example"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserWellbeingLogUpsertRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserWellbeingLogUpsertRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserWellbeingLogUpsertResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserWellbeingLogUpsertBadRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AdviceTemplate": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "text": {
+                        "type": "string"
+                    },
+                    "category": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 100
+                    }
+                },
+                "required": [
+                    "id",
+                    "text",
+                    "title"
+                ]
+            },
+            "AirExposureLog": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "latitude": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "longitude": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "h3_cell": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "pm25": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "pm10": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "no2": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "so2": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "co": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "o3": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "aqi": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "nullable": true
+                    },
+                    "temperature": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "humidity": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "pressure": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "uvi": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "uvi_level": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 32
+                    },
+                    "wind_speed": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "exposure_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648
+                    },
+                    "activity_level": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 32
+                    },
+                    "indoor": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "h3_cell",
+                    "id",
+                    "latitude",
+                    "longitude",
+                    "timestamp"
+                ]
+            },
+            "AreaEnum": {
+                "enum": [
+                    "urban",
+                    "peri_urban",
+                    "rural"
+                ],
+                "type": "string",
+                "description": "* `urban` - Urban\n* `peri_urban` - Peri-Urban\n* `rural` - Rural"
+            },
+            "BlankEnum": {
+                "enum": [
+                    ""
+                ]
+            },
+            "CategoryEnum": {
+                "enum": [
+                    "diet",
+                    "activity",
+                    "behavior",
+                    "mental"
+                ],
+                "type": "string",
+                "description": "* `diet` - Diet\n* `activity` - Activity\n* `behavior` - Behavior\n* `mental` - Mental"
+            },
+            "ChecklistItemSchema": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "code": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "id",
+                    "name"
+                ]
+            },
+            "ChecklistResponseSchema": {
+                "type": "object",
+                "properties": {
+                    "checklist_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "symptoms": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChecklistItemSchema"
+                        }
+                    }
+                },
+                "required": [
+                    "checklist_id",
+                    "symptoms"
+                ]
+            },
+            "ChoiceSchema": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "label",
+                    "value"
+                ]
+            },
+            "CommuteModeEnum": {
+                "enum": [
+                    "walk",
+                    "matatu-bus",
+                    "bike",
+                    "car",
+                    "mixed"
+                ],
+                "type": "string",
+                "description": "* `walk` - Walk\n* `matatu-bus` - Matatu/Bus\n* `bike` - Bike\n* `car` - Car\n* `mixed` - Mixed"
+            },
+            "CookingMethodEnum": {
+                "enum": [
+                    "wood",
+                    "charcoal",
+                    "gas",
+                    "electric"
+                ],
+                "type": "string",
+                "description": "* `wood` - Wood\n* `charcoal` - Charcoal\n* `gas` - Gas\n* `electric` - Electric"
+            },
+            "CookingVenueEnum": {
+                "enum": [
+                    "indoor",
+                    "veranda",
+                    "outdoor"
+                ],
+                "type": "string",
+                "description": "* `indoor` - Indoor\n* `veranda` - Veranda\n* `outdoor` - Outdoor"
+            },
+            "CountryEnum": {
+                "enum": [
+                    "NG",
+                    "GH",
+                    "KE",
+                    "other"
+                ],
+                "type": "string",
+                "description": "* `NG` - Nigeria\n* `GH` - Ghana\n* `KE` - Kenya\n* `other` - Other"
+            },
+            "DailyCheckin": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "date",
+                    "id"
+                ]
+            },
+            "DailyCheckinCreateBadRequest": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "DailyCheckinCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "date"
+                ]
+            },
+            "DailyCheckinExistsBadRequest": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "DailyCheckinExistsResponse": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "exists": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "date",
+                    "exists"
+                ]
+            },
+            "DailyExposureLevelEnum": {
+                "enum": [
+                    "Clean",
+                    "Very Good",
+                    "Moderate",
+                    "Acceptable",
+                    "Unhealthy",
+                    "High",
+                    "Hazardous",
+                    "Extreme"
+                ],
+                "type": "string",
+                "description": "* `Clean` - Clean\n* `Very Good` - Very Good\n* `Moderate` - Moderate\n* `Acceptable` - Acceptable\n* `Unhealthy` - Unhealthy\n* `High` - High\n* `Hazardous` - Hazardous\n* `Extreme` - Extreme"
+            },
+            "DailyTask": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "category": {
+                        "$ref": "#/components/schemas/CategoryEnum"
+                    },
+                    "sort_order": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "code",
+                    "title"
+                ]
+            },
+            "DietTypeEnum": {
+                "enum": [
+                    "carnivore",
+                    "vegetarian"
+                ],
+                "type": "string",
+                "description": "* `carnivore` - Carnivore\n* `vegetarian` - Vegetarian"
+            },
+            "Error": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "ErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "ExposureHistoryItem": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "integrated_score": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "required": [
+                    "date",
+                    "integrated_score"
+                ]
+            },
+            "ExposureHistoryResponse": {
+                "type": "object",
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "days_requested": {
+                        "type": "integer"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ExposureHistoryItem"
+                        }
+                    }
+                },
+                "required": [
+                    "days_requested",
+                    "end_date",
+                    "items",
+                    "start_date"
+                ]
+            },
+            "GoogleAuthRequest": {
+                "type": "object",
+                "properties": {
+                    "id_token": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "description": "Google ID token from Android app"
+                    }
+                },
+                "required": [
+                    "id_token"
+                ]
+            },
+            "GoogleAuthResponse": {
+                "type": "object",
+                "properties": {
+                    "access": {
+                        "type": "string"
+                    },
+                    "refresh": {
+                        "type": "string"
+                    },
+                    "user": {
+                        "$ref": "#/components/schemas/GoogleAuthUser"
+                    }
+                },
+                "required": [
+                    "access",
+                    "refresh",
+                    "user"
+                ]
+            },
+            "GoogleAuthUser": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "avatar_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "provider": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "email",
+                    "id",
+                    "name",
+                    "provider"
+                ]
+            },
+            "HealthInsightResponse": {
+                "type": "object",
+                "description": "OpenAPI-only contract for the existing health insight response.",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "recommendations": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Recommendation"
+                        }
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "source": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "trigger_event": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 64
+                    },
+                    "engine_version": {
+                        "type": "string",
+                        "maxLength": 32
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "recommendations"
+                ]
+            },
+            "KindEnum": {
+                "enum": [
+                    "mood",
+                    "feeling",
+                    "water_goal"
+                ],
+                "type": "string",
+                "description": "* `mood` - Mood (chips)\n* `feeling` - Feeling (chips)\n* `water_goal` - Water goal/setting"
+            },
+            "LoggingTokenRefresh": {
+                "type": "object",
+                "description": "Сериализатор, который логирует payload refresh-токена\nи аккуратно обрабатывает ситуацию, когда пользователь не найден.",
+                "properties": {
+                    "refresh": {
+                        "type": "string"
+                    },
+                    "access": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "access",
+                    "refresh"
+                ]
+            },
+            "Logout": {
+                "type": "object",
+                "properties": {
+                    "refresh": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "refresh"
+                ]
+            },
+            "MetaChoicesResponseSchema": {
+                "type": "object",
+                "properties": {
+                    "languages": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    },
+                    "races": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    },
+                    "countries": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    },
+                    "work_types": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    },
+                    "diet_types": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    },
+                    "cooking_methods": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    },
+                    "lifestyle_areas": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    },
+                    "lifestyle_time_spent": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    },
+                    "lifestyle_time_of_day": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    },
+                    "exposure_levels": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChoiceSchema"
+                        }
+                    }
+                },
+                "required": [
+                    "cooking_methods",
+                    "countries",
+                    "diet_types",
+                    "exposure_levels",
+                    "languages",
+                    "lifestyle_areas",
+                    "lifestyle_time_of_day",
+                    "lifestyle_time_spent",
+                    "races",
+                    "work_types"
+                ]
+            },
+            "MommySymptomStatisticItemSchema": {
+                "type": "object",
+                "properties": {
+                    "symptom_name": {
+                        "type": "string"
+                    },
+                    "symptom_id": {
+                        "type": "integer"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    },
+                    "risk_name": {
+                        "type": "string"
+                    },
+                    "risk_id": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "quantity",
+                    "risk_id",
+                    "risk_name",
+                    "symptom_id",
+                    "symptom_name"
+                ]
+            },
+            "MovementJSONItemSchema": {
+                "type": "object",
+                "properties": {
+                    "latitude": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "longitude": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "indoor": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "latitude",
+                    "longitude",
+                    "timestamp"
+                ]
+            },
+            "MovementJSONUploadRequestSchema": {
+                "type": "object",
+                "properties": {
+                    "movements": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MovementJSONItemSchema"
+                        }
+                    }
+                },
+                "required": [
+                    "movements"
+                ]
+            },
+            "NullEnum": {
+                "enum": [
+                    null
+                ]
+            },
+            "PatchedUserLifeStyle": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "user": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "average_sleep_hours": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "work_type": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkTypeEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "diet_type": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/DietTypeEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "cooking_method": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CookingMethodEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "activity_duration_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "nullable": true
+                    },
+                    "work_schedule_pattern": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkSchedulePatternEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "standing_hours_per_day": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "area": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/AreaEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "time_spent": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/TimeSpentEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "time_of_day": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/TimeOfDayEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "commute_mode": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CommuteModeEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "hydration_target_ml_per_day": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "nullable": true
+                    },
+                    "sleep_target_window": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 32
+                    },
+                    "rest_microbreak_preference": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/RestMicrobreakPreferenceEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "supplement_preferences": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cooking_venue": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CookingVenueEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "ventilation_level": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/VentilationLevelEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    }
+                }
+            },
+            "PatchedUserProfile": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "week_of_pregnancy": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "pregnancy_number": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "nullable": true
+                    },
+                    "avatar_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "bmi": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true
+                    },
+                    "last_login": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "name": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                    },
+                    "registered_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "language": {
+                        "$ref": "#/components/schemas/UserProfileLanguageEnum"
+                    },
+                    "date_of_birth": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "height": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "weight_pre_pregnancy": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "race": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/RaceEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "country": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CountryEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "is_first_pregnancy": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "pregnancy_start_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "tracking_enabled": {
+                        "type": "boolean"
+                    },
+                    "notifications_enabled": {
+                        "type": "boolean"
+                    },
+                    "notification_window_from": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "notification_window_to": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 64
+                    },
+                    "auth_provider": {
+                        "type": "string",
+                        "maxLength": 20
+                    },
+                    "google_sub": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                    },
+                    "consent": {
+                        "type": "boolean"
+                    },
+                    "consent_accepted_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "preferred_share_channel": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/PreferredShareChannelEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    }
+                }
+            },
+            "PollutantCompliance": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "string"
+                    },
+                    "per_pollutant": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/PollutantComplianceItem"
+                        }
+                    }
+                },
+                "required": [
+                    "per_pollutant",
+                    "source",
+                    "version"
+                ]
+            },
+            "PollutantComplianceItem": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "unit": {
+                        "type": "string"
+                    },
+                    "avg_period_used": {
+                        "type": "string"
+                    },
+                    "value_source": {
+                        "type": "string"
+                    },
+                    "value_datetime": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "limit": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "limit_unit": {
+                        "type": "string"
+                    },
+                    "limit_avg_period": {
+                        "type": "string"
+                    },
+                    "compliance": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "exceedance_pct": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "approximate": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "approximate",
+                    "avg_period_used",
+                    "compliance",
+                    "exceedance_pct",
+                    "label",
+                    "limit",
+                    "limit_avg_period",
+                    "limit_unit",
+                    "unit",
+                    "value",
+                    "value_datetime",
+                    "value_source"
+                ]
+            },
+            "PreferredShareChannelEnum": {
+                "enum": [
+                    "email",
+                    "whatsapp",
+                    "telegram"
+                ],
+                "type": "string",
+                "description": "* `email` - Email\n* `whatsapp` - WhatsApp\n* `telegram` - Telegram"
+            },
+            "RaceEnum": {
+                "enum": [
+                    "caucasian",
+                    "african",
+                    "asian",
+                    "hispanic",
+                    "mixed"
+                ],
+                "type": "string",
+                "description": "* `caucasian` - Caucasian\n* `african` - African\n* `asian` - Asian\n* `hispanic` - Hispanic\n* `mixed` - Mixed"
+            },
+            "Recommendation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "rule_id": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "integer"
+                    },
+                    "severity": {
+                        "type": "string"
+                    },
+                    "category": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "alert": {
+                        "type": "string"
+                    },
+                    "recommendation_diet": {
+                        "type": "string"
+                    },
+                    "recommendation_activity": {
+                        "type": "string"
+                    },
+                    "recommendation_behavior": {
+                        "type": "string"
+                    },
+                    "ttl_hours": {
+                        "type": "integer"
+                    },
+                    "expires_at": {
+                        "type": "string"
+                    },
+                    "sources": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "engine_version": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id"
+                ]
+            },
+            "RecommendationCompletion": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "snapshot_id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "rule_id": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "rule_version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "dimension": {
+                        "$ref": "#/components/schemas/RecommendationCompletionDimensionEnum"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/RecommendationCompletionStatusEnum"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "dimension",
+                    "id",
+                    "rule_id",
+                    "snapshot_id",
+                    "updated_at"
+                ]
+            },
+            "RecommendationCompletionDimensionEnum": {
+                "enum": [
+                    "diet",
+                    "activity",
+                    "behavior"
+                ],
+                "type": "string",
+                "description": "* `diet` - Diet\n* `activity` - Activity\n* `behavior` - Behavior"
+            },
+            "RecommendationCompletionStatusEnum": {
+                "enum": [
+                    "done",
+                    "skipped",
+                    "dismissed"
+                ],
+                "type": "string",
+                "description": "* `done` - Done\n* `skipped` - Skipped\n* `dismissed` - Dismissed"
+            },
+            "RecommendationCompletionUpsert": {
+                "type": "object",
+                "properties": {
+                    "snapshot_id": {
+                        "type": "integer"
+                    },
+                    "rule_id": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "rule_version": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "default": 1
+                    },
+                    "dimension": {
+                        "$ref": "#/components/schemas/RecommendationCompletionUpsertDimensionEnum"
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RecommendationCompletionUpsertStatusEnum"
+                            }
+                        ],
+                        "default": "done"
+                    }
+                },
+                "required": [
+                    "dimension",
+                    "rule_id",
+                    "snapshot_id"
+                ]
+            },
+            "RecommendationCompletionUpsertDimensionEnum": {
+                "enum": [
+                    "diet",
+                    "activity",
+                    "behavior"
+                ],
+                "type": "string",
+                "description": "* `diet` - diet\n* `activity` - activity\n* `behavior` - behavior"
+            },
+            "RecommendationCompletionUpsertStatusEnum": {
+                "enum": [
+                    "done",
+                    "skipped",
+                    "dismissed"
+                ],
+                "type": "string",
+                "description": "* `done` - done\n* `skipped` - skipped\n* `dismissed` - dismissed"
+            },
+            "RecommendationCompletionValidationError": {
+                "type": "object",
+                "description": "Field-level validation errors returned by the completion endpoint.",
+                "properties": {
+                    "snapshot_id": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "rule_id": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "rule_version": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "dimension": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "status": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "non_field_errors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "RestMicrobreakPreferenceEnum": {
+                "enum": [
+                    "5min",
+                    "10min",
+                    "15min"
+                ],
+                "type": "string",
+                "description": "* `5min` - 5 min\n* `10min` - 10 min\n* `15min` - 15 min"
+            },
+            "RiskDelta": {
+                "type": "object",
+                "properties": {
+                    "mom": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "baby": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "baby",
+                    "mom"
+                ]
+            },
+            "SetLanguageErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "SetLanguageSuccessResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "language": {
+                        "$ref": "#/components/schemas/SetLanguageSuccessResponseLanguageEnum"
+                    }
+                },
+                "required": [
+                    "language",
+                    "message"
+                ]
+            },
+            "SetLanguageSuccessResponseLanguageEnum": {
+                "enum": [
+                    "en",
+                    "fr",
+                    "sw",
+                    "pl"
+                ],
+                "type": "string",
+                "description": "* `en` - en\n* `fr` - fr\n* `sw` - sw\n* `pl` - pl"
+            },
+            "SimpleExposure": {
+                "type": "object",
+                "description": "Минимальный сериалайзер для Exposure.\nБерём только гарантированные поля, чтобы избежать расхождений со схемой.",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "exposure_level": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "risks": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    }
+                },
+                "required": [
+                    "exposure_level",
+                    "id",
+                    "risks",
+                    "timestamp"
+                ]
+            },
+            "SourceEnum": {
+                "enum": [
+                    "db"
+                ],
+                "type": "string",
+                "description": "* `db` - db"
+            },
+            "SummaryResponse": {
+                "type": "object",
+                "description": "Existing mobile dashboard response contract.",
+                "properties": {
+                    "aq_weather_uv": {
+                        "$ref": "#/components/schemas/AirExposureLog"
+                    },
+                    "mom_exposure": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SimpleExposure"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "baby_exposure": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SimpleExposure"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "recommendations": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Recommendation"
+                        }
+                    },
+                    "today_journey": {
+                        "$ref": "#/components/schemas/TodayJourney"
+                    },
+                    "risks_delta": {
+                        "$ref": "#/components/schemas/RiskDelta"
+                    },
+                    "week_info": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/WeekInfo"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "daily_exposure_level": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/DailyExposureLevelEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "daily_checkins": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    "water": {
+                        "$ref": "#/components/schemas/SummaryWater"
+                    },
+                    "task_completions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskCompletionDay"
+                        }
+                    },
+                    "exposure_history": {
+                        "$ref": "#/components/schemas/ExposureHistoryResponse"
+                    },
+                    "pollutant_compliance": {
+                        "$ref": "#/components/schemas/PollutantCompliance"
+                    },
+                    "snapshot_id": {
+                        "type": "integer"
+                    },
+                    "snapshot_created_at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "aq_weather_uv",
+                    "baby_exposure",
+                    "daily_checkins",
+                    "daily_exposure_level",
+                    "exposure_history",
+                    "mom_exposure",
+                    "pollutant_compliance",
+                    "recommendations",
+                    "risks_delta",
+                    "snapshot_created_at",
+                    "snapshot_id",
+                    "task_completions",
+                    "today_journey",
+                    "water",
+                    "week_info"
+                ]
+            },
+            "SummaryWater": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount": {
+                        "type": "number",
+                        "format": "double",
+                        "minimum": 0
+                    },
+                    "unit": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "amount",
+                    "date",
+                    "unit"
+                ]
+            },
+            "SymptomClassRiskSchema": {
+                "type": "object",
+                "properties": {
+                    "risk_id": {
+                        "type": "integer"
+                    },
+                    "risk_name": {
+                        "type": "string"
+                    },
+                    "source_phrase": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "risk_id",
+                    "risk_name",
+                    "source_phrase"
+                ]
+            },
+            "SymptomClassStatisticSchema": {
+                "type": "object",
+                "properties": {
+                    "symptom_class": {
+                        "type": "integer"
+                    },
+                    "class_name": {
+                        "type": "string"
+                    },
+                    "color_flag": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    },
+                    "symptoms": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SymptomClassSymptomStatisticSchema"
+                        }
+                    }
+                },
+                "required": [
+                    "class_name",
+                    "color_flag",
+                    "quantity",
+                    "symptom_class",
+                    "symptoms"
+                ]
+            },
+            "SymptomClassStatisticsResponseSchema": {
+                "type": "object",
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "classes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SymptomClassStatisticSchema"
+                        }
+                    }
+                },
+                "required": [
+                    "classes",
+                    "end_date",
+                    "start_date"
+                ]
+            },
+            "SymptomClassSymptomStatisticSchema": {
+                "type": "object",
+                "properties": {
+                    "symptom_name": {
+                        "type": "string"
+                    },
+                    "symptom_id": {
+                        "type": "integer"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    },
+                    "risks": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SymptomClassRiskSchema"
+                        }
+                    }
+                },
+                "required": [
+                    "quantity",
+                    "risks",
+                    "symptom_id",
+                    "symptom_name"
+                ]
+            },
+            "SymptomSelectionRequestSchema": {
+                "type": "object",
+                "properties": {
+                    "symptom_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    "recorded_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "ISO-8601. If timezone is omitted, interpreted in server TIME_ZONE."
+                    },
+                    "checklist_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "description": "Optional. Older mobile clients may omit it."
+                    }
+                },
+                "required": [
+                    "symptom_ids"
+                ]
+            },
+            "SymptomSelectionResponseSchema": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "recorded_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "symptom_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "checklist_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "date",
+                    "symptom_ids"
+                ]
+            },
+            "TaskCompletionBadRequest": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "TaskCompletionCategoryCount": {
+                "type": "object",
+                "properties": {
+                    "done": {
+                        "type": "integer"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "done",
+                    "total"
+                ]
+            },
+            "TaskCompletionCounts": {
+                "type": "object",
+                "properties": {
+                    "diet": {
+                        "$ref": "#/components/schemas/TaskCompletionCategoryCount"
+                    },
+                    "activity": {
+                        "$ref": "#/components/schemas/TaskCompletionCategoryCount"
+                    },
+                    "behavior": {
+                        "$ref": "#/components/schemas/TaskCompletionCategoryCount"
+                    },
+                    "mental": {
+                        "$ref": "#/components/schemas/TaskCompletionCategoryCount"
+                    }
+                },
+                "required": [
+                    "activity",
+                    "behavior",
+                    "diet",
+                    "mental"
+                ]
+            },
+            "TaskCompletionDay": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "tasks": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[-a-zA-Z0-9_]+$"
+                        }
+                    },
+                    "counts": {
+                        "$ref": "#/components/schemas/TaskCompletionCounts"
+                    }
+                },
+                "required": [
+                    "counts",
+                    "date",
+                    "tasks"
+                ]
+            },
+            "TaskCompletionUpsertBadRequest": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "TaskCompletionUpsertRequest": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "tasks": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[-a-zA-Z0-9_]+$"
+                        }
+                    }
+                },
+                "required": [
+                    "date",
+                    "tasks"
+                ]
+            },
+            "TimeOfDayEnum": {
+                "enum": [
+                    "morning_hours",
+                    "midday_or_afternoon",
+                    "evening",
+                    "changes_day_to_day"
+                ],
+                "type": "string",
+                "description": "* `morning_hours` - Morning hours\n* `midday_or_afternoon` - Midday or afternoon\n* `evening` - Evening\n* `changes_day_to_day` - It changes day to day"
+            },
+            "TimeSpentEnum": {
+                "enum": [
+                    "mostly_indoors",
+                    "mostly_outdoors",
+                    "both_equally"
+                ],
+                "type": "string",
+                "description": "* `mostly_indoors` - Mostly indoors\n* `mostly_outdoors` - Mostly outdoors\n* `both_equally` - Both equally"
+            },
+            "TodayJourney": {
+                "type": "object",
+                "description": "Поля, как ты указал:\n  - distance_m: округляем и возвращаем как число (float)\n  - distance_km: float\n  - points: список произвольных dict (оставляем как есть)",
+                "properties": {
+                    "distance_m": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "distance_km": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "required": [
+                    "distance_km",
+                    "distance_m"
+                ]
+            },
+            "UserAvatarUpload": {
+                "type": "object",
+                "properties": {
+                    "avatar": {
+                        "type": "string",
+                        "format": "uri",
+                        "writeOnly": true
+                    }
+                },
+                "required": [
+                    "avatar"
+                ]
+            },
+            "UserLifeStyle": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "user": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "average_sleep_hours": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "work_type": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkTypeEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "diet_type": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/DietTypeEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "cooking_method": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CookingMethodEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "activity_duration_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "nullable": true
+                    },
+                    "work_schedule_pattern": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkSchedulePatternEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "standing_hours_per_day": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "area": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/AreaEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "time_spent": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/TimeSpentEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "time_of_day": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/TimeOfDayEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "commute_mode": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CommuteModeEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "hydration_target_ml_per_day": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "nullable": true
+                    },
+                    "sleep_target_window": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 32
+                    },
+                    "rest_microbreak_preference": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/RestMicrobreakPreferenceEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "supplement_preferences": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cooking_venue": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CookingVenueEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "ventilation_level": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/VentilationLevelEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    }
+                },
+                "required": [
+                    "id",
+                    "user"
+                ]
+            },
+            "UserProfile": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "week_of_pregnancy": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "pregnancy_number": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "nullable": true
+                    },
+                    "avatar_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "bmi": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true
+                    },
+                    "last_login": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "name": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                    },
+                    "registered_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "language": {
+                        "$ref": "#/components/schemas/UserProfileLanguageEnum"
+                    },
+                    "date_of_birth": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "height": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "weight_pre_pregnancy": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "race": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/RaceEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "country": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CountryEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "is_first_pregnancy": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "pregnancy_start_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "tracking_enabled": {
+                        "type": "boolean"
+                    },
+                    "notifications_enabled": {
+                        "type": "boolean"
+                    },
+                    "notification_window_from": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "notification_window_to": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 64
+                    },
+                    "auth_provider": {
+                        "type": "string",
+                        "maxLength": 20
+                    },
+                    "google_sub": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                    },
+                    "consent": {
+                        "type": "boolean"
+                    },
+                    "consent_accepted_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "preferred_share_channel": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/PreferredShareChannelEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    }
+                },
+                "required": [
+                    "bmi",
+                    "email",
+                    "id",
+                    "registered_at"
+                ]
+            },
+            "UserProfileLanguageEnum": {
+                "enum": [
+                    "en",
+                    "fr",
+                    "sw",
+                    "pl"
+                ],
+                "type": "string",
+                "description": "* `en` - English\n* `fr` - French\n* `sw` - Swahili\n* `pl` - Polish"
+            },
+            "UserWellbeingLogBadRequest": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "UserWellbeingLogResponse": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "water_amount": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "water_unit": {
+                        "type": "string"
+                    },
+                    "moods": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WellbeingItem"
+                        }
+                    },
+                    "feelings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WellbeingItem"
+                        }
+                    }
+                },
+                "required": [
+                    "date",
+                    "feelings",
+                    "moods",
+                    "water_amount",
+                    "water_unit"
+                ]
+            },
+            "UserWellbeingLogUpsertBadRequest": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "UserWellbeingLogUpsertRequest": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "water_amount": {
+                        "type": "number",
+                        "format": "double",
+                        "minimum": 0
+                    },
+                    "water_unit": {
+                        "type": "string",
+                        "default": "ml"
+                    },
+                    "mood_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "feeling_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "required": [
+                    "date"
+                ]
+            },
+            "UserWellbeingLogUpsertResponse": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "water_amount": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "water_unit": {
+                        "type": "string"
+                    },
+                    "moods": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WellbeingItem"
+                        }
+                    },
+                    "feelings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WellbeingItem"
+                        }
+                    }
+                },
+                "required": [
+                    "date",
+                    "feelings",
+                    "moods",
+                    "water_amount",
+                    "water_unit"
+                ]
+            },
+            "VentilationLevelEnum": {
+                "enum": [
+                    "low",
+                    "medium",
+                    "high"
+                ],
+                "type": "string",
+                "description": "* `low` - Low\n* `medium` - Medium\n* `high` - High"
+            },
+            "WaterGoal": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "unit": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "unit",
+                    "value"
+                ]
+            },
+            "WeekInfo": {
+                "type": "object",
+                "properties": {
+                    "week": {
+                        "type": "integer",
+                        "maximum": 40,
+                        "minimum": 1
+                    },
+                    "locale": {
+                        "type": "string"
+                    },
+                    "text": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "$ref": "#/components/schemas/SourceEnum"
+                    }
+                },
+                "required": [
+                    "locale",
+                    "source",
+                    "text",
+                    "week"
+                ]
+            },
+            "WellbeingCatalogResponse": {
+                "type": "object",
+                "properties": {
+                    "water_goal": {
+                        "$ref": "#/components/schemas/WaterGoal"
+                    },
+                    "moods": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WellbeingItem"
+                        }
+                    },
+                    "feelings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WellbeingItem"
+                        }
+                    }
+                },
+                "required": [
+                    "feelings",
+                    "moods",
+                    "water_goal"
+                ]
+            },
+            "WellbeingItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/KindEnum"
+                    },
+                    "code": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 64,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "emoji": {
+                        "type": "string",
+                        "maxLength": 16
+                    },
+                    "sort_order": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "number_value": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "unit": {
+                        "type": "string",
+                        "maxLength": 16
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind"
+                ]
+            },
+            "WorkSchedulePatternEnum": {
+                "enum": [
+                    "day",
+                    "evening",
+                    "irregular"
+                ],
+                "type": "string",
+                "description": "* `day` - Day\n* `evening` - Evening\n* `irregular` - Irregular"
+            },
+            "WorkTypeEnum": {
+                "enum": [
+                    "Desk",
+                    "Standing",
+                    "Physical",
+                    "Care",
+                    "Field",
+                    "Domestic",
+                    "Night Shift"
+                ],
+                "type": "string",
+                "description": "* `Desk` - Desk\n* `Standing` - Standing\n* `Physical` - Physical\n* `Care` - Care\n* `Field` - Field\n* `Domestic` - Domestic\n* `Night Shift` - Night Shift"
+            }
+        },
+        "securitySchemes": {
+            "jwtAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+            }
+        }
+    }
+}
