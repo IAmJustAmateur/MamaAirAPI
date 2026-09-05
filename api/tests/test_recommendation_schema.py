@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -172,3 +173,14 @@ class RecommendationOpenAPIContractTests(APITestCase):
             schema["components"]["securitySchemes"]["jwtAuth"],
             {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
         )
+
+    def test_public_schema_contains_no_cyrillic_text(self):
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        rendered = json.dumps(schema, ensure_ascii=False)
+        self.assertNotRegex(rendered, r"[А-Яа-яЁё]")
+
+    def test_checklist_ids_are_required_non_nullable_integers(self):
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        checklist_item = schema["components"]["schemas"]["ChecklistItemSchema"]
+        self.assertIn("id", checklist_item["required"])
+        self.assertEqual(checklist_item["properties"]["id"], {"type": "integer"})

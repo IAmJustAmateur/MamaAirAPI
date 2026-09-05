@@ -195,8 +195,8 @@ def _payload_keys(payload):
 
 def _parse_recorded_at_param(request):
     """
-    Извлекает recorded_at из query (?recorded_at=) или body, приводит к aware datetime.
-    Если нет — now() в settings.TIME_ZONE.
+    Read recorded_at from the query string or body and return an aware datetime.
+    Fall back to now() in settings.TIME_ZONE.
     """
     raw = request.query_params.get("recorded_at") or request.data.get("recorded_at")
     if not raw:
@@ -215,8 +215,8 @@ def _parse_recorded_at_param(request):
 
 def _target_date_from_request(request):
     """
-    Принимает либо ?date=YYYY-MM-DD, либо recorded_at (query/body).
-    Приоритет: ?date → recorded_at → today.
+    Accept ?date=YYYY-MM-DD or recorded_at from the query string or body.
+    Resolution priority is date, recorded_at, then today.
     """
     raw_date = request.query_params.get("date")
     if raw_date:
@@ -286,7 +286,7 @@ class MetaChoicesResponseSchema(serializers.Serializer):
 
 # ---- Symptom checklists & selection ----
 class ChecklistItemSchema(serializers.Serializer):
-    id = serializers.IntegerField(allow_null=True)
+    id = serializers.IntegerField()
     code = serializers.CharField()
     name = serializers.CharField()
 
@@ -805,10 +805,9 @@ class MommySymptomsChecklistView(APIView):
 )
 class UserMommySymptomsSelectionView(APIView):
     """
-    Replace-all за день, определяемый:
-    - либо ?date=YYYY-MM-DD,
-    - либо recorded_at (из body/query),
-    - иначе сегодня в settings.TIME_ZONE.
+    Replace all selections for the day resolved from, in priority order:
+    `?date=YYYY-MM-DD`, `recorded_at` in the request body or query string,
+    or the current date in `settings.TIME_ZONE`.
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -838,14 +837,14 @@ class UserMommySymptomsSelectionView(APIView):
         recorded_at = ser.validated_data["recorded_at"]
         target_date = local_date_for_user(user, recorded_at)
 
-        # Валидация существования ID
+        # Validate that every submitted ID exists.
         selected_symptoms = list(MommySymptom.objects.filter(id__in=ids))
         existing = {symptom.pk for symptom in selected_symptoms}
         missing = sorted(set(ids) - existing)
         if missing:
             raise ValidationError({"symptom_ids": f"Unknown ids: {missing}"})
 
-        # Полная замена набора за день
+        # Replace the complete selection for the resolved day.
         day_start, day_end = local_day_bounds(user, target_date)
         UserMommySymptoms.objects.filter(
             user=user,
@@ -1362,7 +1361,7 @@ class MovementCSVUploadView(APIView):
                 recompute_daily_exposure(request.user.id, d)
                 exposures_recomputed += 1
             except Exception as e:
-                # не валим весь ответ, просто фиксируем ошибку расчёта конкретного дня
+                # Preserve the response and record calculation errors per day.
                 logger.warning(
                     "MovementCSVUploadView recompute failed, user=%s, date=%s, error=%s",
                     request.user,
@@ -1376,7 +1375,7 @@ class MovementCSVUploadView(APIView):
             **summary,  # imported, air_exposure_created, air_exposure_updated
             "exposures_recomputed": exposures_recomputed,
             "exposure_errors": exposure_errors,
-            "errors": errors,  # ошибки парсинга CSV
+            "errors": errors,  # CSV parsing errors
         }
         logger.info(
             "MovementCSVUploadView completed, user=%s, imported=%s, parse_errors=%s, recomputed=%s, recompute_errors=%s",
@@ -2142,14 +2141,14 @@ def _map_choices(choices):
     ],
 )
 class MetaChoicesView(APIView):
-    authentication_classes = []  # публично (можно включить JWT, если нужно)
+    authentication_classes = []  # Public endpoint; JWT can be enabled if needed.
     permission_classes = []
 
     def get(self, request):
-        # Можно также доставать choices через поля модели, чтобы не дублировать:
+        # Choices could also be read from model fields to avoid duplication,
         # user_model = get_user_model()
         # race_choices = user_model._meta.get_field("race").choices
-        # но ниже — напрямую из констант (эквивалентно и быстрее)
+        # but reading constants directly is equivalent and faster.
         logger.info("MetaChoicesView GET")
         data = {
             "languages": _map_choices(LANGUAGE_CHOICES),

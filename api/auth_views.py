@@ -23,7 +23,7 @@ logger = getLogger(__name__)
 
 
 def verify_id_token(token_str: str) -> dict:
-    # Реальная проверка токена подписью Google
+    # Verify the token using Google's signature.
     return id_token.verify_oauth2_token(
         token_str, google_requests.Request(), audience=None
     )
@@ -66,7 +66,7 @@ class SigninThrottle(throttling.AnonRateThrottle):
             request_only=True,
         ),
         OpenApiExample(
-            "Успешный ответ",
+            "Successful response",
             value={
                 "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
                 "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",

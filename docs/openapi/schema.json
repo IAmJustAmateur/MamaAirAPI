@@ -130,7 +130,7 @@
                                     "$ref": "#/components/schemas/GoogleAuthResponse"
                                 },
                                 "examples": {
-                                    "УспешныйОтвет": {
+                                    "SuccessfulResponse": {
                                         "value": {
                                             "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
                                             "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
@@ -142,7 +142,7 @@
                                                 "provider": "google"
                                             }
                                         },
-                                        "summary": "Успешный ответ"
+                                        "summary": "Successful response"
                                     }
                                 }
                             }
@@ -1567,7 +1567,7 @@
         "/api/symptoms/mommy/selection/": {
             "get": {
                 "operationId": "symptoms_mommy_selection_retrieve",
-                "description": "Replace-all за день, определяемый:\n- либо ?date=YYYY-MM-DD,\n- либо recorded_at (из body/query),\n- иначе сегодня в settings.TIME_ZONE.",
+                "description": "Replace all selections for the day resolved from, in priority order:\n`?date=YYYY-MM-DD`, `recorded_at` in the request body or query string,\nor the current date in `settings.TIME_ZONE`.",
                 "summary": "Get mommy selection for a date",
                 "parameters": [
                     {
@@ -1610,7 +1610,7 @@
             },
             "post": {
                 "operationId": "symptoms_mommy_selection_create",
-                "description": "Replace-all за день, определяемый:\n- либо ?date=YYYY-MM-DD,\n- либо recorded_at (из body/query),\n- иначе сегодня в settings.TIME_ZONE.",
+                "description": "Replace all selections for the day resolved from, in priority order:\n`?date=YYYY-MM-DD`, `recorded_at` in the request body or query string,\nor the current date in `settings.TIME_ZONE`.",
                 "summary": "Replace mommy selection for recorded_at day",
                 "tags": [
                     "Symptoms – Mommy"
@@ -2312,8 +2312,7 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "type": "integer",
-                        "nullable": true
+                        "type": "integer"
                     },
                     "code": {
                         "type": "string"
@@ -2701,7 +2700,7 @@
             },
             "LoggingTokenRefresh": {
                 "type": "object",
-                "description": "Сериализатор, который логирует payload refresh-токена\nи аккуратно обрабатывает ситуацию, когда пользователь не найден.",
+                "description": "Log refresh-token payloads and handle missing users safely.",
                 "properties": {
                     "refresh": {
                         "type": "string"
@@ -3617,7 +3616,7 @@
             },
             "SimpleExposure": {
                 "type": "object",
-                "description": "Минимальный сериалайзер для Exposure.\nБерём только гарантированные поля, чтобы избежать расхождений со схемой.",
+                "description": "Expose only guaranteed Exposure fields to keep the schema stable.",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -4056,7 +4055,7 @@
             },
             "TodayJourney": {
                 "type": "object",
-                "description": "Поля, как ты указал:\n  - distance_m: округляем и возвращаем как число (float)\n  - distance_km: float\n  - points: список произвольных dict (оставляем как есть)",
+                "description": "Serialize journey distance and the unmodified list of route points.",
                 "properties": {
                     "distance_m": {
                         "type": "number",

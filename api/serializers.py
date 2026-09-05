@@ -70,14 +70,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-        """
-        Мягкая логика согласия:
-        - если consent=True и consent_accepted_at не передали — ставим сейчас
-        - если consent=False — можно (по желанию) чистить consent_accepted_at
-        """
+        """Set or clear the consent timestamp consistently with consent."""
         consent = attrs.get("consent", getattr(self.instance, "consent", None))
 
-        # consent_accepted_at в attrs лежит под своим именем (не source)
+        # attrs uses the field name rather than its source.
         consent_accepted_at = attrs.get(
             "consent_accepted_at",
             getattr(self.instance, "consent_accepted_at", None),
@@ -217,11 +213,7 @@ class UserLifeStyleSerializer(serializers.ModelSerializer):
 
 
 class SymptomSelectionSerializer(serializers.Serializer):
-    """
-    Универсальный сериалайзер для selection POST:
-    - symptom_ids: список ID симптомов
-    - recorded_at: дата-время пользователя (ISO-8601), опционально
-    """
+    """Validate symptom IDs and an optional ISO-8601 user timestamp."""
 
     symptom_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
@@ -249,7 +241,7 @@ class SymptomSelectionSerializer(serializers.Serializer):
 
     def to_internal_value(self, data):
         ret = super().to_internal_value(data)
-        # Преобразуем recorded_at в aware datetime или None
+        # Convert recorded_at to an aware datetime or None.
         ra = data.get("recorded_at")
         if ra:
             ret["recorded_at"] = self.validate_recorded_at(ra)
@@ -259,7 +251,7 @@ class SymptomSelectionSerializer(serializers.Serializer):
 
 
 class ChecklistItemSerializer(serializers.Serializer):
-    id = serializers.IntegerField(allow_null=True)
+    id = serializers.IntegerField()
     code = serializers.CharField()
     name = serializers.CharField()
 
@@ -361,10 +353,7 @@ class ExposureRiskMapField(serializers.DictField):
 
 
 class SimpleExposureSerializer(serializers.ModelSerializer):
-    """
-    Минимальный сериалайзер для Exposure.
-    Берём только гарантированные поля, чтобы избежать расхождений со схемой.
-    """
+    """Expose only guaranteed Exposure fields to keep the schema stable."""
 
     risks = ExposureRiskMapField()
 
@@ -375,8 +364,8 @@ class SimpleExposureSerializer(serializers.ModelSerializer):
 
 # class RecommendationSerializer(serializers.Serializer):
 #     """
-#     Отбираем только нужные поля из recommendation-объектов.
-#     Остальные ключи игнорируются без ошибок.
+#     Select only supported fields from recommendation objects.
+#     Ignore all other keys without raising validation errors.
 #     """
 
 #     id = serializers.CharField()
@@ -393,12 +382,7 @@ class RiskDeltaSerializer(serializers.Serializer):
 
 
 class TodayJourneySerializer(serializers.Serializer):
-    """
-    Поля, как ты указал:
-      - distance_m: округляем и возвращаем как число (float)
-      - distance_km: float
-      - points: список произвольных dict (оставляем как есть)
-    """
+    """Serialize journey distance and the unmodified list of route points."""
 
     distance_m = serializers.FloatField()
     distance_km = serializers.FloatField()
@@ -554,7 +538,7 @@ class SummaryResponseSerializer(serializers.Serializer):
         recs = obj.get("recommendations", [])
         if isinstance(recs, dict):
             recs = recs.get("items", [])
-        # На выходе — список объектов согласно RecommendationSerializer
+        # Return objects that conform to RecommendationSerializer.
         return RecommendationSerializer(recs, many=True).data
 
     def get_exposure_history(self, obj):
