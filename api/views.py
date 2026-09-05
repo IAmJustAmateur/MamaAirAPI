@@ -70,6 +70,7 @@ from .models import (
     DailyCheckin,
     DailyTask,
     UserDailyTaskCompletion,
+    DailyPlan,
     UserWellbeingLog,
     SYMPTOM_CHECKLIST_MOMMY,
     SYMPTOM_CHECKLIST_BABY,
@@ -115,6 +116,7 @@ from .serializers import (
     TaskCompletionUpsertSerializer,
     UserWellbeingLogSerializer,
     UserWellbeingLogUpsertSerializer,
+    DailyPlanResponseSerializer,
 )
 
 from .services.services import (
@@ -2661,6 +2663,58 @@ class DailyCheckinView(APIView):
             daily_checkin.date,
         )
         return Response(DailyCheckinSerializer(daily_checkin).data, status=201)
+
+
+class DailyPlanView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Daily Plan"],
+        summary="Get the stable daily plan",
+        description=(
+            "Returns the authenticated user's persisted plan for their current local date, "
+            "or for an optional YYYY-MM-DD date. The plan composition is created once; "
+            "completion state is adapted read-only from legacy completion records."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="date",
+                type=OpenApiTypes.DATE,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Optional user-local date in YYYY-MM-DD format.",
+            )
+        ],
+        responses={
+            200: DailyPlanResponseSerializer,
+            400: inline_serializer(
+                name="DailyPlanBadRequest",
+                fields={"date": serializers.ListField(child=serializers.CharField())},
+            ),
+        },
+    )
+    def get(self, request):
+        from api.services.daily_plan import (
+            completion_states_for_plan,
+            get_or_create_daily_plan,
+        )
+
+        requested_date = request.query_params.get("date")
+        parsed_date = None
+        if requested_date is not None:
+            try:
+                parsed_date = serializers.DateField().run_validation(requested_date)
+            except serializers.ValidationError as exc:
+                return Response({"date": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
+
+        plan = get_or_create_daily_plan(request.user, local_date=parsed_date)
+        plan = DailyPlan.objects.prefetch_related("actions").get(pk=plan.pk)
+        completion_states = completion_states_for_plan(plan)
+        payload = DailyPlanResponseSerializer(
+            plan,
+            context={"completion_states": completion_states},
+        ).data
+        return Response(payload)
 
 
 class DailyTaskListView(APIView):

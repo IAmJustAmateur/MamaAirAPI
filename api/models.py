@@ -1388,6 +1388,123 @@ class RecommendationCompletion(models.Model):
         return f"{self.user_id} {self.rule_id}.v{self.rule_version} {self.dimension}={self.status}"
 
 
+class DailyPlan(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="daily_plans",
+    )
+    local_date = models.DateField()
+    timezone = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-local_date", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "local_date"],
+                name="uniq_daily_plan_user_local_date",
+            )
+        ]
+        indexes = [models.Index(fields=["user", "local_date"])]
+
+    def __str__(self):
+        return f"{self.user_id} {self.local_date} ({self.timezone})"
+
+
+class DailyAction(models.Model):
+    DOMAIN_CHOICES = [
+        ("nutrition", "Nutrition"),
+        ("activity", "Activity"),
+        ("behavior", "Behavior"),
+        ("mental", "Mental"),
+        ("service", "Service"),
+    ]
+    ROLE_CHOICES = [
+        ("primary", "Primary"),
+        ("additional", "Additional"),
+        ("support", "Support"),
+    ]
+    SOURCE_TYPE_CHOICES = [
+        ("recommendation", "Recommendation"),
+        ("task", "Task"),
+    ]
+    SOURCE_DIMENSION_CHOICES = RecommendationCompletion.DIMENSION_CHOICES
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    plan = models.ForeignKey(
+        DailyPlan,
+        on_delete=models.CASCADE,
+        related_name="actions",
+    )
+    stable_key = models.CharField(max_length=255)
+    domain = models.CharField(max_length=16, choices=DOMAIN_CHOICES)
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    timing = models.CharField(max_length=128, null=True, blank=True)
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    context = models.CharField(max_length=255, null=True, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    source_type = models.CharField(max_length=16, choices=SOURCE_TYPE_CHOICES)
+    source_task_id = models.PositiveBigIntegerField(null=True, blank=True)
+    source_snapshot_id = models.PositiveBigIntegerField(null=True, blank=True)
+    source_rule_id = models.CharField(max_length=128, null=True, blank=True)
+    source_rule_version = models.PositiveIntegerField(null=True, blank=True)
+    source_dimension = models.CharField(
+        max_length=16,
+        choices=SOURCE_DIMENSION_CHOICES,
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["sort_order", "stable_key"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["plan", "stable_key"],
+                name="uniq_daily_action_plan_stable_key",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        source_type="task",
+                        source_task_id__isnull=False,
+                        source_snapshot_id__isnull=True,
+                        source_rule_id__isnull=True,
+                        source_rule_version__isnull=True,
+                        source_dimension__isnull=True,
+                    )
+                    | models.Q(
+                        source_type="recommendation",
+                        source_task_id__isnull=True,
+                        source_snapshot_id__isnull=False,
+                        source_rule_id__isnull=False,
+                        source_rule_version__isnull=False,
+                        source_dimension__isnull=False,
+                    )
+                ),
+                name="valid_daily_action_source",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(role="support", domain="service")
+                    | (models.Q(role__in=["primary", "additional"]) & ~models.Q(domain="service"))
+                ),
+                name="valid_daily_action_role_domain",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["plan", "role", "sort_order"]),
+            models.Index(fields=["source_snapshot_id", "source_rule_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.plan_id} {self.role}/{self.domain}: {self.title}"
+
+
 class Wellbeing(models.Model):
     KIND_CHOICES = (
         ("mood", "Mood (chips)"),

@@ -1,6 +1,7 @@
 # api/serializers.py
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import (
     User,
     UserLifeStyle,
@@ -12,6 +13,8 @@ from .models import (
     AdviceTemplate,
     Exposure,
     RecommendationCompletion,
+    DailyAction,
+    DailyPlan,
     Wellbeing,
     DailyCheckin,
     DailyTask,
@@ -626,6 +629,81 @@ class RecommendationCompletionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class DailyActionResponseSerializer(serializers.ModelSerializer):
+    completion_state = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DailyAction
+        fields = [
+            "id",
+            "domain",
+            "title",
+            "description",
+            "timing",
+            "duration_minutes",
+            "context",
+            "completion_state",
+        ]
+
+    @extend_schema_field(
+        serializers.ChoiceField(choices=["not_done", "completed", "skipped"])
+    )
+    def get_completion_state(self, obj):
+        return self.context["completion_states"].get(str(obj.id), "not_done")
+
+
+class DailySupportActionResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DailyAction
+        fields = [
+            "id",
+            "domain",
+            "title",
+            "description",
+            "timing",
+            "duration_minutes",
+            "context",
+        ]
+
+
+class DailyPlanResponseSerializer(serializers.ModelSerializer):
+    date = serializers.DateField(source="local_date")
+    primary_actions = serializers.SerializerMethodField()
+    additional_actions = serializers.SerializerMethodField()
+    support_actions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DailyPlan
+        fields = [
+            "date",
+            "timezone",
+            "primary_actions",
+            "additional_actions",
+            "support_actions",
+        ]
+
+    def _actions_for_role(self, obj, role):
+        actions = [action for action in obj.actions.all() if action.role == role]
+        serializer_class = (
+            DailySupportActionResponseSerializer
+            if role == "support"
+            else DailyActionResponseSerializer
+        )
+        return serializer_class(actions, many=True, context=self.context).data
+
+    @extend_schema_field(DailyActionResponseSerializer(many=True))
+    def get_primary_actions(self, obj):
+        return self._actions_for_role(obj, "primary")
+
+    @extend_schema_field(DailyActionResponseSerializer(many=True))
+    def get_additional_actions(self, obj):
+        return self._actions_for_role(obj, "additional")
+
+    @extend_schema_field(DailySupportActionResponseSerializer(many=True))
+    def get_support_actions(self, obj):
+        return self._actions_for_role(obj, "support")
 
 
 class WellbeingItemSerializer(serializers.ModelSerializer):
