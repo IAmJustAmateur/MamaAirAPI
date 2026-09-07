@@ -286,6 +286,18 @@ In a second PowerShell terminal, run the current-contract E2E script:
 .\venv\Scripts\python.exe scripts\test_server_api.py --env local
 ```
 
+Run only the wellbeing-to-mental-Daily-Plan scenario with a fresh test account:
+
+```powershell
+.\venv\Scripts\python.exe scripts\test_server_api.py --env local --only mental-wellbeing
+```
+
+For this scenario, the script automatically adds a unique suffix to the email on
+every run. This is required because a Daily Plan is immutable after it is created;
+reusing the same account on the same date could otherwise test yesterday's setup
+instead of the new wellbeing answer. To choose the test email prefix explicitly,
+add `--email mental-e2e@example.com`.
+
 For local E2E, the server's `REGISTRATION_API_KEY` must match the script's `--reg-api-key` value. The script defaults to `super-secret-mobile-key`, so either use that locally or pass an explicit key:
 
 ```powershell
@@ -313,11 +325,21 @@ python scripts/test_server_api.py --base-url https://api.mamaair.work/
 
 The E2E scripts exercise the mobile integration flow: auth, profile, lifestyle, Daily Plan completion transitions, symptoms, movement upload, exposure, summary, and recommendation completion. The legacy script keeps older response assertions for backwards compatibility, while the main script validates the latest API contract.
 
+The current-contract E2E also submits the `distressed` wellbeing mood and verifies
+that Daily Plan contains a completable `mental` action. If the selected E2E user
+already has a Daily Plan for today from an older build, use a fresh `E2E_EMAIL`
+because daily plans are intentionally immutable for their date.
+
 ## Notes for Mobile Developers
 
 - Use Google sign-in as the mobile auth flow.
 - Read dropdown values from `GET /api/meta/choices/`.
 - `POST /api/wellbeing/log/` adds `water_amount` to the stored daily total.
+- Mood and feeling answers for the user's current local date can produce a
+  wellbeing-based Daily Plan action with `domain: mental`. Missing wellbeing is
+  valid and does not prevent Daily Plan from being created.
+- Prefer posting the current wellbeing answers before the first Daily Plan GET of
+  the day. An already-created plan keeps its existing IDs and content.
 - `GET /api/daily-tasks/` returns task `category` (`diet`, `activity`, `behavior`, `mental`) for UI grouping.
 - `POST /api/task-completion/` replaces the completed task set for the date and returns per-category `counts`.
 - `PATCH /api/daily-plan/actions/{action_id}/completion/` accepts `completed`, `skipped`, or `not_done`; clients only need the action UUID returned by Daily Plan.

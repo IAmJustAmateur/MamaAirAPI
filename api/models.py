@@ -1090,6 +1090,7 @@ class HealthInsightSnapshot(models.Model):
       "recommendation_diet": "",
       "recommendation_activity": "Prefer indoor activity today.",
       "recommendation_behavior": "Ventilate with filtration if possible.",
+      "recommendation_mental": "Take a short calming pause.",
       "category": "air_quality",
       "ttl_hours": 12,
       "expires_at": "2025-09-18T08:00:00Z",
@@ -1340,6 +1341,7 @@ class RecommendationCompletion(models.Model):
         ("diet", "Diet"),
         ("activity", "Activity"),
         ("behavior", "Behavior"),
+        ("mental", "Mental"),
     ]
 
     STATUS_CHOICES = [

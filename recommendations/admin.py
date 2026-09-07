@@ -13,6 +13,7 @@ CHEATSHEET_HTML = """
       <code>profile</code>, <code>lifestyle</code>, <code>aq</code>,
       <code>sym_m</code> (mom), <code>sym_b</code> (baby), <code>is_20w_plus</code>;
       helpers: <code>m(name)</code>, <code>b(name)</code>, <code>count_m(...)</code>, <code>count_b(...)</code>,
+      <code>mood(code)</code>, <code>feeling(code)</code>,
       <code>poll(key)</code>, <code>ge_poll(key, threshold)</code>,
       <code>exists(x)</code>, <code>ge(a,b)</code>, <code>le(a,b)</code>,
       <code>count_true(...)</code>, <code>any_of(...)</code>, <code>all_of(...)</code>.
@@ -49,6 +50,7 @@ class RecommendationRuleForm(forms.ModelForm):
             "recommendation_diet": "Diet recommendations (plain text; bullets/markdown allowed).",
             "recommendation_activity": "Activity recommendations (plain text; bullets/markdown allowed).",
             "recommendation_behavior": "Behavior recommendations (plain text; bullets/markdown allowed).",
+            "recommendation_mental": "Mental wellbeing recommendations (plain text; bullets/markdown allowed).",
         }
 
 
@@ -66,6 +68,7 @@ class RecommendationRuleAdmin(admin.ModelAdmin):
         "has_diet",
         "has_activity",
         "has_behavior",
+        "has_mental",
         "updated_at",
     )
     list_filter = ("enabled", "severity", "category")
@@ -77,6 +80,7 @@ class RecommendationRuleAdmin(admin.ModelAdmin):
         "recommendation_diet",
         "recommendation_activity",
         "recommendation_behavior",
+        "recommendation_mental",
     )
     ordering = ("priority", "-updated_at")
 
@@ -104,6 +108,7 @@ class RecommendationRuleAdmin(admin.ModelAdmin):
                     "recommendation_diet",
                     "recommendation_activity",
                     "recommendation_behavior",
+                    "recommendation_mental",
                 ),
                 "classes": ("collapse",),  # optional: makes the section collapsible
             },
@@ -129,6 +134,10 @@ class RecommendationRuleAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description="Behavior")
     def has_behavior(self, obj):
         return bool((obj.recommendation_behavior or "").strip())
+
+    @admin.display(boolean=True, description="Mental")
+    def has_mental(self, obj):
+        return bool((obj.recommendation_mental or "").strip())
 
 
 @admin.register(MamaAirWeeklyMessage)

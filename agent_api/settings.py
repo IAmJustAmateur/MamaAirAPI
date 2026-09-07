@@ -261,6 +261,9 @@ SPECTACULAR_SETTINGS = {
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
     "ENUM_NAME_OVERRIDES": {
         "DailyActionCompletionStateEnum": "api.serializers.DAILY_ACTION_COMPLETION_CHOICES",
+        "RecommendationDimensionEnum": (
+            "api.models.RecommendationCompletion.DIMENSION_CHOICES"
+        ),
     },
 }
 

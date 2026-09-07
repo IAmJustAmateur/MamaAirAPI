@@ -83,6 +83,7 @@ class RecommendationRule(models.Model):
     recommendation_diet = models.TextField(blank=True, default="")
     recommendation_activity = models.TextField(blank=True, default="")
     recommendation_behavior = models.TextField(blank=True, default="")
+    recommendation_mental = models.TextField(blank=True, default="")
 
     # Метаданные
     severity = models.CharField(max_length=16, choices=SEVERITY_CHOICES, default="info")

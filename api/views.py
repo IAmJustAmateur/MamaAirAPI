@@ -2510,7 +2510,9 @@ class UserWellbeingLogView(APIView):
         description=(
             "Updates wellbeing state for one calendar date. "
             "`water_amount` is additive: posting `250` increases the stored daily amount by 250. "
-            "`mood_ids` and `feeling_ids` replace the selected chips when provided; omit a field to keep its previous selection."
+            "`mood_ids` and `feeling_ids` replace the selected chips when provided; omit a field to keep its previous selection. "
+            "Answers for the user's current local date refresh recommendation inputs. "
+            "If no answers are submitted, Daily Plan remains available without wellbeing-based mental actions."
         ),
         request=inline_serializer(
             name="UserWellbeingLogUpsertRequest",
@@ -2567,6 +2569,23 @@ class UserWellbeingLogView(APIView):
         )
         s.is_valid(raise_exception=True)
         log = s.save()
+        wellbeing_answers_changed = any(
+            field in s.validated_data for field in ("mood_ids", "feeling_ids")
+        )
+        if wellbeing_answers_changed and log.date == local_date_for_user(request.user):
+            from recommendations.evaluator import generate_health_insight_snapshot
+
+            try:
+                generate_health_insight_snapshot(
+                    request.user,
+                    trigger_event="wellbeing",
+                )
+            except Exception:
+                logger.exception(
+                    "Wellbeing recommendation refresh failed, user=%s, date=%s",
+                    request.user,
+                    log.date,
+                )
         logger.info(
             "UserWellbeingLogView upserted log_id=%s, user=%s, date=%s",
             log.id,

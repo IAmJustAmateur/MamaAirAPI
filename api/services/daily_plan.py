@@ -27,6 +27,7 @@ RECOMMENDATION_FIELDS = (
     ("recommendation_diet", "nutrition", "diet"),
     ("recommendation_activity", "activity", "activity"),
     ("recommendation_behavior", "behavior", "behavior"),
+    ("recommendation_mental", "mental", "mental"),
 )
 MAIN_DOMAINS = {"nutrition", "activity", "behavior", "mental"}
 COMPLETION_STATES = {"completed", "skipped", "not_done"}

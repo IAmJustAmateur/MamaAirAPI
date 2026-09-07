@@ -40,6 +40,7 @@ def evaluate_recommendations(user) -> List[Dict[str, Any]]:
                 "recommendation_diet": r.recommendation_diet,
                 "recommendation_activity": r.recommendation_activity,
                 "recommendation_behavior": r.recommendation_behavior,
+                "recommendation_mental": r.recommendation_mental,
                 "category": r.category,
                 "ttl_hours": r.ttl_hours,
                 "sources": ["engine"],

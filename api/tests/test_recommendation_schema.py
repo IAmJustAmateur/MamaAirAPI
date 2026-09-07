@@ -37,6 +37,7 @@ class RecommendationSerializerContractTests(APITestCase):
             "recommendation_diet": "Drink enough water.",
             "recommendation_activity": "Prefer indoor activity.",
             "recommendation_behavior": "Keep windows closed during peaks.",
+            "recommendation_mental": "Take a short calming pause.",
             "ttl_hours": 12,
             "expires_at": "2026-08-20T08:00:00Z",
             "sources": ["engine"],
@@ -134,6 +135,10 @@ class RecommendationOpenAPIContractTests(APITestCase):
             recommendation["properties"]["sources"]["items"]["type"],
             "string",
         )
+        self.assertEqual(
+            recommendation["properties"]["recommendation_mental"]["type"],
+            "string",
+        )
 
     def test_completion_schema_types_list_upsert_and_validation_error(self):
         schema = SchemaGenerator().get_schema(request=None, public=True)
@@ -147,6 +152,17 @@ class RecommendationOpenAPIContractTests(APITestCase):
         self.assertEqual(
             completion["properties"]["snapshot_id"]["type"], "integer"
         )
+        completion_request = self._resolve(
+            schema,
+            operation["post"]["requestBody"]["content"]["application/json"][
+                "schema"
+            ],
+        )
+        dimension = self._resolve(
+            schema,
+            completion_request["properties"]["dimension"],
+        )
+        self.assertIn("mental", dimension["enum"])
 
         post_responses = operation["post"]["responses"]
         self.assertIn("200", post_responses)
