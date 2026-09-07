@@ -265,23 +265,36 @@ python scripts/update_openapi_schema_snapshot.py
 
 ## E2E API Checks
 
-Run the Django server locally:
+Movement upload is part of the full E2E flow, so the Django server process must
+have a coordinate encryption key. For local testing, start the server in the first
+PowerShell terminal with the temporary test key used by CI:
 
-```bash
-python manage.py runserver
+```powershell
+$env:MOVEMENT_COORDINATE_KEYS='{"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
+.\venv\Scripts\python.exe manage.py migrate
+.\venv\Scripts\python.exe manage.py runserver
 ```
 
-Run the current-contract E2E script:
+If the server was already running, stop and restart it after setting the variable.
+Setting the key only in the E2E client's terminal does not configure the server.
+The all-zero key above is for local tests only; never use it in staging or
+production.
 
-```bash
-python scripts/test_server_api.py --env local
+In a second PowerShell terminal, run the current-contract E2E script:
+
+```powershell
+.\venv\Scripts\python.exe scripts\test_server_api.py --env local
 ```
 
 For local E2E, the server's `REGISTRATION_API_KEY` must match the script's `--reg-api-key` value. The script defaults to `super-secret-mobile-key`, so either use that locally or pass an explicit key:
 
-```bash
-python scripts/test_server_api.py --env local --reg-api-key your-registration-api-key
+```powershell
+.\venv\Scripts\python.exe scripts\test_server_api.py --env local --reg-api-key your-registration-api-key
 ```
+
+Alternatively, put the local-only coordinate key in the repository `.env` as
+`MOVEMENT_COORDINATE_KEYS`, then restart Django. Environment variables already set
+in PowerShell take precedence over `.env`.
 
 Run the legacy-contract E2E script to verify older mobile builds still work:
 

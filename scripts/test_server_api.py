@@ -2415,21 +2415,38 @@ def step_daily_plan_completion_transitions(
     completable_actions = plan["primary_actions"] + plan["additional_actions"]
     if not completable_actions:
         raise AssertionError("Daily Plan must contain a completable action")
-    action_id = completable_actions[0]["id"]
+    selected_action = completable_actions[0]
+    action_id = selected_action["id"]
+    original_state = selected_action["completion_state"]
 
-    for completion_state in ("completed", "skipped", "not_done"):
-        step_daily_action_completion_patch(
-            access_token, action_id, completion_state
-        )
-        refreshed = step_daily_plan_get(access_token, target_date)
-        refreshed_actions = (
-            refreshed["primary_actions"] + refreshed["additional_actions"]
-        )
-        action = next(item for item in refreshed_actions if item["id"] == action_id)
-        if action["completion_state"] != completion_state:
-            raise AssertionError(
-                f"Daily Action state mismatch: expected {completion_state}, got {action}"
+    try:
+        for completion_state in ("completed", "skipped", "not_done"):
+            step_daily_action_completion_patch(
+                access_token, action_id, completion_state
             )
+            refreshed = step_daily_plan_get(access_token, target_date)
+            refreshed_actions = (
+                refreshed["primary_actions"] + refreshed["additional_actions"]
+            )
+            action = next(
+                item for item in refreshed_actions if item["id"] == action_id
+            )
+            if action["completion_state"] != completion_state:
+                raise AssertionError(
+                    f"Daily Action state mismatch: expected {completion_state}, got {action}"
+                )
+    finally:
+        step_daily_action_completion_patch(
+            access_token, action_id, original_state
+        )
+
+    restored = step_daily_plan_get(access_token, target_date)
+    restored_actions = restored["primary_actions"] + restored["additional_actions"]
+    action = next(item for item in restored_actions if item["id"] == action_id)
+    if action["completion_state"] != original_state:
+        raise AssertionError(
+            f"Daily Action state was not restored: expected {original_state}, got {action}"
+        )
 
 
 # ---------- main --------------------------------------------------------------
