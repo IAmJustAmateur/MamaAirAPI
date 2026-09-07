@@ -150,6 +150,8 @@ Wellbeing:
 - `GET /api/daily-tasks/`
 - `GET /api/task-completion/?date=YYYY-MM-DD`
 - `POST /api/task-completion/`
+- `GET /api/daily-plan/?date=YYYY-MM-DD`
+- `PATCH /api/daily-plan/actions/{action_id}/completion/`
 
 Symptoms:
 
@@ -296,7 +298,7 @@ python scripts/test_server_api.py --base-url https://api.mamaair.app/
 python scripts/test_server_api.py --base-url https://api.mamaair.work/
 ```
 
-The E2E scripts exercise the mobile integration flow: auth, profile, lifestyle, wellbeing, symptoms, movement upload, exposure, summary, and recommendation completion. The legacy script keeps older response assertions for backwards compatibility, while the main script validates the latest API contract.
+The E2E scripts exercise the mobile integration flow: auth, profile, lifestyle, Daily Plan completion transitions, symptoms, movement upload, exposure, summary, and recommendation completion. The legacy script keeps older response assertions for backwards compatibility, while the main script validates the latest API contract.
 
 ## Notes for Mobile Developers
 
@@ -305,6 +307,8 @@ The E2E scripts exercise the mobile integration flow: auth, profile, lifestyle, 
 - `POST /api/wellbeing/log/` adds `water_amount` to the stored daily total.
 - `GET /api/daily-tasks/` returns task `category` (`diet`, `activity`, `behavior`, `mental`) for UI grouping.
 - `POST /api/task-completion/` replaces the completed task set for the date and returns per-category `counts`.
+- `PATCH /api/daily-plan/actions/{action_id}/completion/` accepts `completed`, `skipped`, or `not_done`; clients only need the action UUID returned by Daily Plan.
+- See [Daily Plan: Mobile Integration](docs/daily_plan_mobile_guide.md) for the focused client contract.
 - `POST /api/symptoms/*/selection/` replaces the selected symptom set for the resolved date.
 - `GET /api/summary/` returns `snapshot_id`; use it for `POST /api/recommendation-completion/`.
 - `GET /api/air-exposure/` and `GET /api/summary/` may return `204` until movement/exposure data exists.

@@ -259,6 +259,9 @@ SPECTACULAR_SETTINGS = {
     "PREPROCESSING_HOOKS": ["api.schema_hooks.hide_non_mobile_endpoints"],
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "ENUM_NAME_OVERRIDES": {
+        "DailyActionCompletionStateEnum": "api.serializers.DAILY_ACTION_COMPLETION_CHOICES",
+    },
 }
 
 SIMPLE_JWT = {

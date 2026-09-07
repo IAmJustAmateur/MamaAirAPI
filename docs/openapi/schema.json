@@ -430,6 +430,86 @@
                 }
             }
         },
+        "/api/daily-plan/actions/{action_id}/completion/": {
+            "patch": {
+                "operationId": "daily_plan_actions_completion_partial_update",
+                "description": "Updates one action from the authenticated user's persisted Daily Plan. The backend maps the action UUID to its legacy task or recommendation completion record. Support actions are read-only.",
+                "summary": "Update a Daily Plan action completion state",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "action_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Daily Plan"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "completion_state": {
+                                        "type": "string",
+                                        "enum": [
+                                            "completed",
+                                            "skipped",
+                                            "not_done"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "completion_state"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DailyActionCompletionResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/daily-tasks/": {
             "get": {
                 "operationId": "daily_tasks_list",
@@ -2420,15 +2500,6 @@
                 "type": "string",
                 "description": "* `walk` - Walk\n* `matatu-bus` - Matatu/Bus\n* `bike` - Bike\n* `car` - Car\n* `mixed` - Mixed"
             },
-            "CompletionStateEnum": {
-                "enum": [
-                    "not_done",
-                    "completed",
-                    "skipped"
-                ],
-                "type": "string",
-                "description": "* `not_done` - not_done\n* `completed` - completed\n* `skipped` - skipped"
-            },
             "CookingMethodEnum": {
                 "enum": [
                     "wood",
@@ -2457,6 +2528,31 @@
                 ],
                 "type": "string",
                 "description": "* `NG` - Nigeria\n* `GH` - Ghana\n* `KE` - Kenya\n* `other` - Other"
+            },
+            "DailyActionCompletionResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "completion_state": {
+                        "$ref": "#/components/schemas/DailyActionCompletionStateEnum"
+                    }
+                },
+                "required": [
+                    "completion_state",
+                    "id"
+                ]
+            },
+            "DailyActionCompletionStateEnum": {
+                "enum": [
+                    "completed",
+                    "skipped",
+                    "not_done"
+                ],
+                "type": "string",
+                "description": "* `completed` - Completed\n* `skipped` - Skipped\n* `not_done` - Not done"
             },
             "DailyActionResponse": {
                 "type": "object",
@@ -2495,7 +2591,7 @@
                     "completion_state": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/CompletionStateEnum"
+                                "$ref": "#/components/schemas/DailyActionCompletionStateEnum"
                             }
                         ],
                         "readOnly": true

@@ -30,6 +30,13 @@ from django.db import transaction
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
+DAILY_ACTION_COMPLETION_CHOICES = [
+    ("completed", "Completed"),
+    ("skipped", "Skipped"),
+    ("not_done", "Not done"),
+]
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
 
@@ -648,10 +655,23 @@ class DailyActionResponseSerializer(serializers.ModelSerializer):
         ]
 
     @extend_schema_field(
-        serializers.ChoiceField(choices=["not_done", "completed", "skipped"])
+        serializers.ChoiceField(choices=DAILY_ACTION_COMPLETION_CHOICES)
     )
     def get_completion_state(self, obj):
         return self.context["completion_states"].get(str(obj.id), "not_done")
+
+
+class DailyActionCompletionUpdateSerializer(serializers.Serializer):
+    completion_state = serializers.ChoiceField(
+        choices=DAILY_ACTION_COMPLETION_CHOICES
+    )
+
+
+class DailyActionCompletionResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    completion_state = serializers.ChoiceField(
+        choices=DAILY_ACTION_COMPLETION_CHOICES
+    )
 
 
 class DailySupportActionResponseSerializer(serializers.ModelSerializer):
@@ -848,7 +868,7 @@ class TaskCompletionUpsertSerializer(serializers.Serializer):
                     user=user,
                     task=tasks_by_code[code],
                     date=date,
-                    defaults={"completed": True},
+                    defaults={"completed": True, "skipped": False},
                 )
 
         return {"date": date, "tasks": task_codes}

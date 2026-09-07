@@ -11,21 +11,26 @@ recommendation, or completion models and endpoints.
 
 - `api/models.py` — added `DailyPlan` and `DailyAction`.
 - `api/services/daily_plan.py` — stable plan creation, source composition,
-  deterministic classification, user-local date handling, and read-only completion
-  adapter.
+  deterministic classification, user-local date handling, and completion adapter.
 - `api/serializers.py` — explicit mobile response serializers.
 - `api/views.py` — authenticated Daily Plan GET view.
 - `api/urls.py` — Daily Plan route.
 - `api/admin.py` — useful admin list, filter, and search configuration.
 - `api/migrations/0049_dailyplan_dailyaction_and_more.py` — schema migration.
+- `api/migrations/0050_userdailytaskcompletion_skipped.py` — adds compatible
+  skipped-state storage for legacy daily tasks.
 - `api/tests/test_daily_plan.py` — model, service, source mapping,
   classification, completion, API, legacy compatibility, and OpenAPI tests.
 - `docs/openapi/schema.json` — regenerated committed API contract snapshot.
+- `docs/daily_plan_mobile_guide.md` — focused integration instructions for the
+  mobile client.
 - `DAILY_PLAN_V1_REPORT.md` — this report.
 
 ## 3. Migration
 
 Added `api/migrations/0049_dailyplan_dailyaction_and_more.py`.
+Added `api/migrations/0050_userdailytaskcompletion_skipped.py` for the unified
+completion contract.
 
 It creates:
 
@@ -58,7 +63,15 @@ Added authenticated `GET /api/daily-plan/`.
 - The first creation and all action inserts run in one transaction.
 - Later GETs return the same plan and actions without recomposition, even when a
   newer `HealthInsightSnapshot` exists.
-- Completion rows are only read; this endpoint performs no completion mutation.
+- The GET endpoint performs no completion mutation. Completion changes use the
+  action UUID endpoint described below.
+
+### Completion update
+
+`PATCH /api/daily-plan/actions/{action_id}/completion/` accepts `completed`,
+`skipped`, or `not_done`. The endpoint resolves the opaque action UUID to the
+existing task or recommendation completion storage, is idempotent, and rejects
+actions owned by another user. Support actions remain read-only.
 
 ## 5. Source mapping
 

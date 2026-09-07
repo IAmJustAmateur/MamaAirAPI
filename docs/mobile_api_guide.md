@@ -347,6 +347,39 @@ Response is an ordered list:
 Important behavior: this is replace-all for the date. Send the full desired list. Send an empty list to clear completions.
 `counts` contains done/total counts by task category for active tasks.
 
+### Daily Plan
+
+`GET /api/daily-plan/?date=YYYY-MM-DD`
+
+The optional date is interpreted as the user's local calendar date. The response
+contains `primary_actions`, `additional_actions`, and read-only `support_actions`.
+Every primary and additional action includes an opaque `id` and a
+`completion_state`: `completed`, `skipped`, or `not_done`.
+
+Update an action with the ID returned by Daily Plan:
+
+`PATCH /api/daily-plan/actions/{action_id}/completion/`
+
+```json
+{
+  "completion_state": "skipped"
+}
+```
+
+Response:
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "completion_state": "skipped"
+}
+```
+
+The update is idempotent. Send `not_done` to clear a previous completed or skipped
+state. The backend resolves whether the action came from a legacy task or a
+recommendation; the client must not call the legacy completion endpoints for a
+Daily Plan action. Support actions are read-only and return `400` if updated.
+
 ## Symptoms
 
 ### Mommy Symptoms

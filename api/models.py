@@ -1615,6 +1615,7 @@ class UserDailyTaskCompletion(models.Model):
     )
     date = models.DateField()
     completed = models.BooleanField(default=True)
+    skipped = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1623,7 +1624,11 @@ class UserDailyTaskCompletion(models.Model):
             models.UniqueConstraint(
                 fields=["user", "task", "date"],
                 name="uniq_user_task_completion_date",
-            )
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(completed=True, skipped=True),
+                name="task_completion_not_completed_and_skipped",
+            ),
         ]
         indexes = [
             models.Index(
@@ -1638,4 +1643,9 @@ class UserDailyTaskCompletion(models.Model):
         ordering = ["-date", "task__sort_order", "task__title"]
 
     def __str__(self):
-        return f"{self.user_id} {self.date} {self.task.code}={self.completed}"
+        state = (
+            "skipped"
+            if self.skipped
+            else ("completed" if self.completed else "not_done")
+        )
+        return f"{self.user_id} {self.date} {self.task.code}={state}"

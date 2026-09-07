@@ -29,6 +29,11 @@ RECOMMENDATION_FIELDS = (
     ("recommendation_behavior", "behavior", "behavior"),
 )
 MAIN_DOMAINS = {"nutrition", "activity", "behavior", "mental"}
+COMPLETION_STATES = {"completed", "skipped", "not_done"}
+
+
+class DailyActionCompletionNotAllowed(ValueError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -146,7 +151,11 @@ def _classify(candidates: list[ActionCandidate]) -> list[ActionCandidate]:
 def _compose_plan(plan: DailyPlan) -> None:
     from recommendations.evaluator import get_or_create_fresh_snapshot
 
-    snapshot = get_or_create_fresh_snapshot(plan.user, trigger_event="daily_plan")
+    snapshot = get_or_create_fresh_snapshot(
+        plan.user,
+        fresh_for_hours=settings.HEALTH_INSIGHT_SNAPSHOT_FRESH_HOURS,
+        trigger_event="daily_plan",
+    )
     candidates = _classify(_task_candidates() + _recommendation_candidates(snapshot))
     DailyAction.objects.bulk_create(
         [
@@ -199,7 +208,7 @@ def completion_states_for_plan(plan: DailyPlan) -> dict[str, str]:
     actions = list(plan.actions.all())
     task_ids = [a.source_task_id for a in actions if a.source_type == "task"]
     task_completions = {
-        row.task_id: row.completed
+        row.task_id: (row.completed, row.skipped)
         for row in UserDailyTaskCompletion.objects.filter(
             user=plan.user,
             date=plan.local_date,
@@ -221,8 +230,11 @@ def completion_states_for_plan(plan: DailyPlan) -> dict[str, str]:
     states = {}
     for action in actions:
         if action.source_type == "task":
+            completed, skipped = task_completions.get(
+                action.source_task_id, (False, False)
+            )
             states[str(action.id)] = (
-                "completed" if task_completions.get(action.source_task_id) else "not_done"
+                "skipped" if skipped else ("completed" if completed else "not_done")
             )
             continue
         status = recommendation_completions.get(
@@ -239,3 +251,41 @@ def completion_states_for_plan(plan: DailyPlan) -> dict[str, str]:
             "dismissed": "skipped",
         }.get(status, "not_done")
     return states
+
+
+def set_daily_action_completion(action: DailyAction, state: str) -> str:
+    if state not in COMPLETION_STATES:
+        raise ValueError(f"Unsupported completion state: {state}")
+    if action.role == "support":
+        raise DailyActionCompletionNotAllowed(
+            "Support actions do not support completion updates."
+        )
+
+    with transaction.atomic():
+        if action.source_type == "task":
+            UserDailyTaskCompletion.objects.update_or_create(
+                user=action.plan.user,
+                task_id=action.source_task_id,
+                date=action.plan.local_date,
+                defaults={
+                    "completed": state == "completed",
+                    "skipped": state == "skipped",
+                },
+            )
+            return state
+
+        lookup = {
+            "user": action.plan.user,
+            "snapshot_id": action.source_snapshot_id,
+            "rule_id": action.source_rule_id,
+            "rule_version": action.source_rule_version,
+            "dimension": action.source_dimension,
+        }
+        if state == "not_done":
+            RecommendationCompletion.objects.filter(**lookup).delete()
+        else:
+            RecommendationCompletion.objects.update_or_create(
+                **lookup,
+                defaults={"status": "done" if state == "completed" else "skipped"},
+            )
+    return state

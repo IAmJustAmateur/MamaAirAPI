@@ -537,10 +537,11 @@ class UserDailyTaskCompletionAdmin(admin.ModelAdmin):
         "task",
         "date",
         "completed",
+        "skipped",
         "created_at",
         "updated_at",
     )
-    list_filter = ("completed", "task", "date")
+    list_filter = ("completed", "skipped", "task", "date")
     search_fields = (
         "user__email",
         "user__name",
