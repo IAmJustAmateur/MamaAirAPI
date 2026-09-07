@@ -31,6 +31,8 @@ from .models import (
     DailyCheckin,
     DailyTask,
     UserDailyTaskCompletion,
+    DailyPlan,
+    DailyAction,
     GeneratedSymptomChecklist,
     GeneratedSymptomChecklistItem,
     SymptomChecklistResponse,
@@ -535,10 +537,11 @@ class UserDailyTaskCompletionAdmin(admin.ModelAdmin):
         "task",
         "date",
         "completed",
+        "skipped",
         "created_at",
         "updated_at",
     )
-    list_filter = ("completed", "task", "date")
+    list_filter = ("completed", "skipped", "task", "date")
     search_fields = (
         "user__email",
         "user__name",
@@ -549,3 +552,36 @@ class UserDailyTaskCompletionAdmin(admin.ModelAdmin):
     date_hierarchy = "date"
     ordering = ("-date", "task__sort_order", "task__title")
     raw_id_fields = ("user", "task")
+
+
+@admin.register(DailyPlan)
+class DailyPlanAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "local_date", "timezone", "created_at", "updated_at")
+    list_filter = ("timezone", "local_date")
+    search_fields = ("user__email", "user__name")
+    date_hierarchy = "local_date"
+    ordering = ("-local_date", "-created_at")
+    raw_id_fields = ("user",)
+
+
+@admin.register(DailyAction)
+class DailyActionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "plan",
+        "role",
+        "domain",
+        "title",
+        "source_type",
+        "sort_order",
+    )
+    list_filter = ("role", "domain", "source_type")
+    search_fields = (
+        "title",
+        "description",
+        "stable_key",
+        "source_rule_id",
+        "plan__user__email",
+    )
+    ordering = ("plan", "sort_order", "stable_key")
+    raw_id_fields = ("plan",)

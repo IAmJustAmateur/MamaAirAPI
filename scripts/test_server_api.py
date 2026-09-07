@@ -137,6 +137,7 @@ WELLBEING_LOG_URL = urljoin(BASE_URL, "api/wellbeing/log/")
 DAILY_CHECKIN_URL = urljoin(BASE_URL, "api/daily-checkin/")
 DAILY_TASKS_URL = urljoin(BASE_URL, "api/daily-tasks/")
 TASK_COMPLETION_URL = urljoin(BASE_URL, "api/task-completion/")
+DAILY_PLAN_URL = urljoin(BASE_URL, "api/daily-plan/")
 
 
 PNG_1X1 = (
@@ -2357,6 +2358,97 @@ def step_task_completion_replace_and_verify(
     _assert_task_completion_schema(after, target_date, expected_tasks=tasks)
 
 
+def step_daily_plan_get(access_token: str, target_date: str) -> dict:
+    r = requests.get(
+        DAILY_PLAN_URL,
+        params={"date": target_date},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Daily Plan GET failed")
+    body = safe_json(r)
+    pp("Daily Plan GET", body)
+    if body.get("date") != target_date:
+        raise AssertionError(f"Daily Plan date mismatch: {body}")
+    for field in ("timezone", "primary_actions", "additional_actions", "support_actions"):
+        if field not in body:
+            raise AssertionError(f"Daily Plan missing '{field}'")
+    for section in ("primary_actions", "additional_actions", "support_actions"):
+        if not isinstance(body[section], list):
+            raise AssertionError(f"Daily Plan {section} must be a list")
+    for action in body["primary_actions"] + body["additional_actions"]:
+        if action.get("completion_state") not in {
+            "completed",
+            "skipped",
+            "not_done",
+        }:
+            raise AssertionError(f"Invalid Daily Plan completion state: {action}")
+    return body
+
+
+def step_daily_action_completion_patch(
+    access_token: str, action_id: str, completion_state: str
+) -> dict:
+    url = urljoin(
+        BASE_URL, f"api/daily-plan/actions/{action_id}/completion/"
+    )
+    r = requests.patch(
+        url,
+        json={"completion_state": completion_state},
+        headers=auth_headers(access_token),
+        timeout=TIMEOUT,
+        verify=VERIFY_SSL,
+    )
+    assert_status(r, 200, "Daily Action completion PATCH failed")
+    body = safe_json(r)
+    pp(f"Daily Action completion PATCH ({completion_state})", body)
+    if body != {"id": action_id, "completion_state": completion_state}:
+        raise AssertionError(f"Unexpected Daily Action completion response: {body}")
+    return body
+
+
+def step_daily_plan_completion_transitions(
+    access_token: str, target_date: str
+) -> None:
+    plan = step_daily_plan_get(access_token, target_date)
+    completable_actions = plan["primary_actions"] + plan["additional_actions"]
+    if not completable_actions:
+        raise AssertionError("Daily Plan must contain a completable action")
+    selected_action = completable_actions[0]
+    action_id = selected_action["id"]
+    original_state = selected_action["completion_state"]
+
+    try:
+        for completion_state in ("completed", "skipped", "not_done"):
+            step_daily_action_completion_patch(
+                access_token, action_id, completion_state
+            )
+            refreshed = step_daily_plan_get(access_token, target_date)
+            refreshed_actions = (
+                refreshed["primary_actions"] + refreshed["additional_actions"]
+            )
+            action = next(
+                item for item in refreshed_actions if item["id"] == action_id
+            )
+            if action["completion_state"] != completion_state:
+                raise AssertionError(
+                    f"Daily Action state mismatch: expected {completion_state}, got {action}"
+                )
+    finally:
+        step_daily_action_completion_patch(
+            access_token, action_id, original_state
+        )
+
+    restored = step_daily_plan_get(access_token, target_date)
+    restored_actions = restored["primary_actions"] + restored["additional_actions"]
+    action = next(item for item in restored_actions if item["id"] == action_id)
+    if action["completion_state"] != original_state:
+        raise AssertionError(
+            f"Daily Action state was not restored: expected {original_state}, got {action}"
+        )
+
+
 # ---------- main --------------------------------------------------------------
 
 
@@ -2704,6 +2796,7 @@ def main():
     print(f"LIFESTYLE_URL: {LIFESTYLE_URL}")
     print(f"CHECKLIST_URL: {CHECKLIST_URL}")
     print(f"DAILY_TASKS_URL: {DAILY_TASKS_URL}")
+    print(f"DAILY_PLAN_URL: {DAILY_PLAN_URL}")
 
     # 0) Публичный эндпойнт
     step_meta_choices_public()
@@ -2771,6 +2864,7 @@ def main():
         raise AssertionError("Daily tasks catalog must have at least 2 active tasks")
     task_completion_tasks = [task["code"] for task in daily_tasks[:2]]
     step_task_completion_replace_and_verify(token, today, task_completion_tasks)
+    step_daily_plan_completion_transitions(token, today)
     checklist = step_5_check_mommy_checklist(token)
 
     # 6) GET selection for today

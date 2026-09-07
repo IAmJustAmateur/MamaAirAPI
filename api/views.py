@@ -43,7 +43,7 @@ from .serializers import (
 
 from django.contrib.auth import authenticate, login
 
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.db import transaction
 from django.db.models import Count
 from django.conf import settings
@@ -70,6 +70,8 @@ from .models import (
     DailyCheckin,
     DailyTask,
     UserDailyTaskCompletion,
+    DailyAction,
+    DailyPlan,
     UserWellbeingLog,
     SYMPTOM_CHECKLIST_MOMMY,
     SYMPTOM_CHECKLIST_BABY,
@@ -115,6 +117,9 @@ from .serializers import (
     TaskCompletionUpsertSerializer,
     UserWellbeingLogSerializer,
     UserWellbeingLogUpsertSerializer,
+    DailyPlanResponseSerializer,
+    DailyActionCompletionUpdateSerializer,
+    DailyActionCompletionResponseSerializer,
 )
 
 from .services.services import (
@@ -2661,6 +2666,115 @@ class DailyCheckinView(APIView):
             daily_checkin.date,
         )
         return Response(DailyCheckinSerializer(daily_checkin).data, status=201)
+
+
+class DailyPlanView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Daily Plan"],
+        summary="Get the stable daily plan",
+        description=(
+            "Returns the authenticated user's persisted plan for their current local date, "
+            "or for an optional YYYY-MM-DD date. The plan composition is created once; "
+            "completion state is adapted read-only from legacy completion records."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="date",
+                type=OpenApiTypes.DATE,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Optional user-local date in YYYY-MM-DD format.",
+            )
+        ],
+        responses={
+            200: DailyPlanResponseSerializer,
+            400: inline_serializer(
+                name="DailyPlanBadRequest",
+                fields={"date": serializers.ListField(child=serializers.CharField())},
+            ),
+        },
+    )
+    def get(self, request):
+        from api.services.daily_plan import (
+            completion_states_for_plan,
+            get_or_create_daily_plan,
+        )
+
+        requested_date = request.query_params.get("date")
+        parsed_date = None
+        if requested_date is not None:
+            try:
+                parsed_date = serializers.DateField().run_validation(requested_date)
+            except serializers.ValidationError as exc:
+                return Response({"date": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
+
+        plan = get_or_create_daily_plan(request.user, local_date=parsed_date)
+        plan = DailyPlan.objects.prefetch_related("actions").get(pk=plan.pk)
+        completion_states = completion_states_for_plan(plan)
+        payload = DailyPlanResponseSerializer(
+            plan,
+            context={"completion_states": completion_states},
+        ).data
+        return Response(payload)
+
+
+class DailyActionCompletionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Daily Plan"],
+        summary="Update a Daily Plan action completion state",
+        description=(
+            "Updates one action from the authenticated user's persisted Daily Plan. "
+            "The backend maps the action UUID to its legacy task or recommendation "
+            "completion record. Support actions are read-only."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "completion_state": {
+                        "type": "string",
+                        "enum": ["completed", "skipped", "not_done"],
+                    }
+                },
+                "required": ["completion_state"],
+            }
+        },
+        responses={
+            200: DailyActionCompletionResponseSerializer,
+            400: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+    )
+    def patch(self, request, action_id):
+        from api.services.daily_plan import (
+            DailyActionCompletionNotAllowed,
+            set_daily_action_completion,
+        )
+
+        serializer = DailyActionCompletionUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        action = get_object_or_404(
+            DailyAction.objects.select_related("plan"),
+            id=action_id,
+            plan__user=request.user,
+        )
+        try:
+            completion_state = set_daily_action_completion(
+                action, serializer.validated_data["completion_state"]
+            )
+        except DailyActionCompletionNotAllowed as exc:
+            return Response(
+                {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        payload = DailyActionCompletionResponseSerializer(
+            {"id": action.id, "completion_state": completion_state}
+        ).data
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class DailyTaskListView(APIView):

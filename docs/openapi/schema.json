@@ -382,6 +382,134 @@
                 }
             }
         },
+        "/api/daily-plan/": {
+            "get": {
+                "operationId": "daily_plan_retrieve",
+                "description": "Returns the authenticated user's persisted plan for their current local date, or for an optional YYYY-MM-DD date. The plan composition is created once; completion state is adapted read-only from legacy completion records.",
+                "summary": "Get the stable daily plan",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "description": "Optional user-local date in YYYY-MM-DD format."
+                    }
+                ],
+                "tags": [
+                    "Daily Plan"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DailyPlanResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DailyPlanBadRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/daily-plan/actions/{action_id}/completion/": {
+            "patch": {
+                "operationId": "daily_plan_actions_completion_partial_update",
+                "description": "Updates one action from the authenticated user's persisted Daily Plan. The backend maps the action UUID to its legacy task or recommendation completion record. Support actions are read-only.",
+                "summary": "Update a Daily Plan action completion state",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "action_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Daily Plan"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "completion_state": {
+                                        "type": "string",
+                                        "enum": [
+                                            "completed",
+                                            "skipped",
+                                            "not_done"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "completion_state"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DailyActionCompletionResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/daily-tasks/": {
             "get": {
                 "operationId": "daily_tasks_list",
@@ -2401,6 +2529,82 @@
                 "type": "string",
                 "description": "* `NG` - Nigeria\n* `GH` - Ghana\n* `KE` - Kenya\n* `other` - Other"
             },
+            "DailyActionCompletionResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "completion_state": {
+                        "$ref": "#/components/schemas/DailyActionCompletionStateEnum"
+                    }
+                },
+                "required": [
+                    "completion_state",
+                    "id"
+                ]
+            },
+            "DailyActionCompletionStateEnum": {
+                "enum": [
+                    "completed",
+                    "skipped",
+                    "not_done"
+                ],
+                "type": "string",
+                "description": "* `completed` - Completed\n* `skipped` - Skipped\n* `not_done` - Not done"
+            },
+            "DailyActionResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "domain": {
+                        "$ref": "#/components/schemas/DomainEnum"
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "timing": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "nullable": true
+                    },
+                    "context": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                    },
+                    "completion_state": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DailyActionCompletionStateEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "completion_state",
+                    "description",
+                    "domain",
+                    "id",
+                    "title"
+                ]
+            },
             "DailyCheckin": {
                 "type": "object",
                 "properties": {
@@ -2488,6 +2692,103 @@
                 "type": "string",
                 "description": "* `Clean` - Clean\n* `Very Good` - Very Good\n* `Moderate` - Moderate\n* `Acceptable` - Acceptable\n* `Unhealthy` - Unhealthy\n* `High` - High\n* `Hazardous` - Hazardous\n* `Extreme` - Extreme"
             },
+            "DailyPlanBadRequest": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "date"
+                ]
+            },
+            "DailyPlanResponse": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "primary_actions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DailyActionResponse"
+                        },
+                        "readOnly": true
+                    },
+                    "additional_actions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DailyActionResponse"
+                        },
+                        "readOnly": true
+                    },
+                    "support_actions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DailySupportActionResponse"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "additional_actions",
+                    "date",
+                    "primary_actions",
+                    "support_actions",
+                    "timezone"
+                ]
+            },
+            "DailySupportActionResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "domain": {
+                        "$ref": "#/components/schemas/DomainEnum"
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "timing": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "nullable": true
+                    },
+                    "context": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                    }
+                },
+                "required": [
+                    "description",
+                    "domain",
+                    "id",
+                    "title"
+                ]
+            },
             "DailyTask": {
                 "type": "object",
                 "properties": {
@@ -2521,6 +2822,17 @@
                 ],
                 "type": "string",
                 "description": "* `carnivore` - Carnivore\n* `vegetarian` - Vegetarian"
+            },
+            "DomainEnum": {
+                "enum": [
+                    "nutrition",
+                    "activity",
+                    "behavior",
+                    "mental",
+                    "service"
+                ],
+                "type": "string",
+                "description": "* `nutrition` - Nutrition\n* `activity` - Activity\n* `behavior` - Behavior\n* `mental` - Mental\n* `service` - Service"
             },
             "Error": {
                 "type": "object",

@@ -150,6 +150,8 @@ Wellbeing:
 - `GET /api/daily-tasks/`
 - `GET /api/task-completion/?date=YYYY-MM-DD`
 - `POST /api/task-completion/`
+- `GET /api/daily-plan/?date=YYYY-MM-DD`
+- `PATCH /api/daily-plan/actions/{action_id}/completion/`
 
 Symptoms:
 
@@ -263,23 +265,36 @@ python scripts/update_openapi_schema_snapshot.py
 
 ## E2E API Checks
 
-Run the Django server locally:
+Movement upload is part of the full E2E flow, so the Django server process must
+have a coordinate encryption key. For local testing, start the server in the first
+PowerShell terminal with the temporary test key used by CI:
 
-```bash
-python manage.py runserver
+```powershell
+$env:MOVEMENT_COORDINATE_KEYS='{"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
+.\venv\Scripts\python.exe manage.py migrate
+.\venv\Scripts\python.exe manage.py runserver
 ```
 
-Run the current-contract E2E script:
+If the server was already running, stop and restart it after setting the variable.
+Setting the key only in the E2E client's terminal does not configure the server.
+The all-zero key above is for local tests only; never use it in staging or
+production.
 
-```bash
-python scripts/test_server_api.py --env local
+In a second PowerShell terminal, run the current-contract E2E script:
+
+```powershell
+.\venv\Scripts\python.exe scripts\test_server_api.py --env local
 ```
 
 For local E2E, the server's `REGISTRATION_API_KEY` must match the script's `--reg-api-key` value. The script defaults to `super-secret-mobile-key`, so either use that locally or pass an explicit key:
 
-```bash
-python scripts/test_server_api.py --env local --reg-api-key your-registration-api-key
+```powershell
+.\venv\Scripts\python.exe scripts\test_server_api.py --env local --reg-api-key your-registration-api-key
 ```
+
+Alternatively, put the local-only coordinate key in the repository `.env` as
+`MOVEMENT_COORDINATE_KEYS`, then restart Django. Environment variables already set
+in PowerShell take precedence over `.env`.
 
 Run the legacy-contract E2E script to verify older mobile builds still work:
 
@@ -296,7 +311,7 @@ python scripts/test_server_api.py --base-url https://api.mamaair.app/
 python scripts/test_server_api.py --base-url https://api.mamaair.work/
 ```
 
-The E2E scripts exercise the mobile integration flow: auth, profile, lifestyle, wellbeing, symptoms, movement upload, exposure, summary, and recommendation completion. The legacy script keeps older response assertions for backwards compatibility, while the main script validates the latest API contract.
+The E2E scripts exercise the mobile integration flow: auth, profile, lifestyle, Daily Plan completion transitions, symptoms, movement upload, exposure, summary, and recommendation completion. The legacy script keeps older response assertions for backwards compatibility, while the main script validates the latest API contract.
 
 ## Notes for Mobile Developers
 
@@ -305,6 +320,8 @@ The E2E scripts exercise the mobile integration flow: auth, profile, lifestyle, 
 - `POST /api/wellbeing/log/` adds `water_amount` to the stored daily total.
 - `GET /api/daily-tasks/` returns task `category` (`diet`, `activity`, `behavior`, `mental`) for UI grouping.
 - `POST /api/task-completion/` replaces the completed task set for the date and returns per-category `counts`.
+- `PATCH /api/daily-plan/actions/{action_id}/completion/` accepts `completed`, `skipped`, or `not_done`; clients only need the action UUID returned by Daily Plan.
+- See [Daily Plan: Mobile Integration](docs/daily_plan_mobile_guide.md) for the focused client contract.
 - `POST /api/symptoms/*/selection/` replaces the selected symptom set for the resolved date.
 - `GET /api/summary/` returns `snapshot_id`; use it for `POST /api/recommendation-completion/`.
 - `GET /api/air-exposure/` and `GET /api/summary/` may return `204` until movement/exposure data exists.

@@ -1,6 +1,7 @@
 # api/serializers.py
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import (
     User,
     UserLifeStyle,
@@ -12,6 +13,8 @@ from .models import (
     AdviceTemplate,
     Exposure,
     RecommendationCompletion,
+    DailyAction,
+    DailyPlan,
     Wellbeing,
     DailyCheckin,
     DailyTask,
@@ -25,6 +28,13 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.db import transaction
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+
+DAILY_ACTION_COMPLETION_CHOICES = [
+    ("completed", "Completed"),
+    ("skipped", "Skipped"),
+    ("not_done", "Not done"),
+]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -628,6 +638,94 @@ class RecommendationCompletionSerializer(serializers.ModelSerializer):
         ]
 
 
+class DailyActionResponseSerializer(serializers.ModelSerializer):
+    completion_state = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DailyAction
+        fields = [
+            "id",
+            "domain",
+            "title",
+            "description",
+            "timing",
+            "duration_minutes",
+            "context",
+            "completion_state",
+        ]
+
+    @extend_schema_field(
+        serializers.ChoiceField(choices=DAILY_ACTION_COMPLETION_CHOICES)
+    )
+    def get_completion_state(self, obj):
+        return self.context["completion_states"].get(str(obj.id), "not_done")
+
+
+class DailyActionCompletionUpdateSerializer(serializers.Serializer):
+    completion_state = serializers.ChoiceField(
+        choices=DAILY_ACTION_COMPLETION_CHOICES
+    )
+
+
+class DailyActionCompletionResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    completion_state = serializers.ChoiceField(
+        choices=DAILY_ACTION_COMPLETION_CHOICES
+    )
+
+
+class DailySupportActionResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DailyAction
+        fields = [
+            "id",
+            "domain",
+            "title",
+            "description",
+            "timing",
+            "duration_minutes",
+            "context",
+        ]
+
+
+class DailyPlanResponseSerializer(serializers.ModelSerializer):
+    date = serializers.DateField(source="local_date")
+    primary_actions = serializers.SerializerMethodField()
+    additional_actions = serializers.SerializerMethodField()
+    support_actions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DailyPlan
+        fields = [
+            "date",
+            "timezone",
+            "primary_actions",
+            "additional_actions",
+            "support_actions",
+        ]
+
+    def _actions_for_role(self, obj, role):
+        actions = [action for action in obj.actions.all() if action.role == role]
+        serializer_class = (
+            DailySupportActionResponseSerializer
+            if role == "support"
+            else DailyActionResponseSerializer
+        )
+        return serializer_class(actions, many=True, context=self.context).data
+
+    @extend_schema_field(DailyActionResponseSerializer(many=True))
+    def get_primary_actions(self, obj):
+        return self._actions_for_role(obj, "primary")
+
+    @extend_schema_field(DailyActionResponseSerializer(many=True))
+    def get_additional_actions(self, obj):
+        return self._actions_for_role(obj, "additional")
+
+    @extend_schema_field(DailySupportActionResponseSerializer(many=True))
+    def get_support_actions(self, obj):
+        return self._actions_for_role(obj, "support")
+
+
 class WellbeingItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wellbeing
@@ -770,7 +868,7 @@ class TaskCompletionUpsertSerializer(serializers.Serializer):
                     user=user,
                     task=tasks_by_code[code],
                     date=date,
-                    defaults={"completed": True},
+                    defaults={"completed": True, "skipped": False},
                 )
 
         return {"date": date, "tasks": task_codes}
