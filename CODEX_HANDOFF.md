@@ -4,33 +4,103 @@
 
 - Project: MamaAir API / `aq_agent_api`
 - GitHub: `https://github.com/IAmJustAmateur/aq_agent_api.git`
-- Main development branch after the latest PR: `master`
-- Last completed feature branch: `codex/recommendation-engine-level3`
-- Latest completed PR: `#15 Add level 3 recommendation rules`
-- PR URL: `https://github.com/IAmJustAmateur/aq_agent_api/pull/15`
-- PR state: merged into `master`
-- Merge commit: `53fc1f54400c79ee834bd9f1e0bfa71419880ed9`
-- Feature commit: `23be9fc Add level 3 recommendation rules`
+- Current main branch: `master`
+- Latest completed feature branch: `codex/mental-wellbeing-recommendations`
+- Latest completed PR: `#26 feat: add mental wellbeing recommendations to daily plan`
+- PR URL: `https://github.com/IAmJustAmateur/aq_agent_api/pull/26`
+- Merge commit: `1dea995`
+- Feature commits: `f46125d`, `b6c7320`
 
-When continuing on a new machine, start from the current remote `master` unless the user explicitly asks to inspect or extend the old feature branch.
+Start new work from the current remote `master` unless the user explicitly asks
+to inspect an older branch.
 
 ## Project Overview
 
-This is a Django REST Framework backend for the MamaAir mobile app. It stores user profile, pregnancy, lifestyle, wellbeing, symptom, movement, air quality, weather, and exposure data. It exposes mobile API endpoints for authentication, profile setup, lifestyle, symptoms, movement upload, air exposure, dashboard summary, advice, and recommendation completion.
-
-The recommendation engine lives mainly in the `recommendations` app and is used by summary/advice flows to produce pregnancy health risk awareness recommendations.
+This is a Django REST Framework backend for the MamaAir mobile app. It stores user
+profile, pregnancy, lifestyle, wellbeing, symptom, movement, air-quality, weather,
+exposure, recommendation, and Daily Plan data.
 
 Important areas:
 
-- `api/`: main mobile API models, serializers, views, auth, exposure, air quality, weather, wellbeing, and dashboard logic.
-- `recommendations/`: recommendation rules, evaluator, context builder, fallbacks, migrations, and recommendation-specific tests.
-- `scripts/test_server_api.py`: local/server e2e API smoke test script.
-- `docs/mobile_api_guide.md`: mobile API guide.
-- `README.MD`: project setup and endpoint overview.
+- `api/`: mobile API models, serializers, views, authentication, exposure,
+  wellbeing, dashboard, and Daily Plan logic.
+- `recommendations/`: recommendation rules, evaluator, context builder, fallbacks,
+  migrations, and tests.
+- `api/services/daily_plan.py`: immutable Daily Plan composition and completion
+  adapters.
+- `scripts/test_server_api.py`: current-contract local/server e2e API test.
+- `docs/mobile_api_guide.md`: general mobile API integration guide.
+- `docs/daily_plan_mobile_guide.md`: focused Daily Plan integration guide.
+- `DAILY_PLAN_V1_REPORT.md`: implementation decisions and known limitations.
 
-## Local Development Notes
+## Current Development Stage
 
-Typical local setup:
+Daily Plan v1 was merged in PR #25. Mental wellbeing recommendations were then
+added and merged in PR #26. Existing endpoints remain compatible; no separate
+mental or wellbeing endpoint was introduced.
+
+Current flow:
+
+1. The mobile client submits the current day's wellbeing selections through
+   `POST /api/wellbeing/log/`.
+2. A change to mood or feeling selections for the user's current local date
+   generates a fresh recommendation snapshot synchronously.
+3. `GET /api/daily-plan/` creates the user's immutable plan for that local date.
+4. Matching wellbeing rules can add one `mental` action to the plan.
+5. If wellbeing is absent, Daily Plan still returns HTTP 200 with a valid plan and
+   simply has no wellbeing-derived mental action.
+
+The implemented MVP mental signals are:
+
+- mood `distressed`;
+- mood `nervous` when `distressed` is absent;
+- feeling `poor_sleep` when neither mental mood above is selected.
+
+This gives the precedence `distressed` -> `nervous` -> `poor_sleep` and prevents
+multiple wellbeing-derived mental actions from these rules.
+
+Daily Plans are snapshots. Submitting wellbeing after a plan has already been
+created does not modify that plan. The new recommendation can affect a plan created
+for a later local date.
+
+## Latest Completed Work
+
+PR #26 added:
+
+- `recommendation_mental` to recommendation rules, snapshots, API schema, and
+  Daily Plan source mapping;
+- `mental` as a recommendation completion dimension;
+- current-local-day wellbeing data and `mood(code)` / `feeling(code)` helpers in
+  the recommendation context;
+- migrations `recommendations/0009_recommendationrule_recommendation_mental.py`
+  and `api/0051_mental_recommendation_dimension.py`;
+- safe degradation when wellbeing is missing or snapshot refresh fails;
+- API, integration, schema, evaluator, and e2e coverage;
+- updated README, mobile guides, and committed OpenAPI schema.
+
+The standalone mental e2e scenario automatically derives a unique address from
+the supplied email on each run. This prevents an immutable plan from an earlier
+run from leaking into the next run.
+
+## Recommendation Engine Notes
+
+- Active rules are evaluated in explicit `priority` order; lower values are more
+  important.
+- `severity` is client-facing urgency metadata and does not determine ordering.
+- `ttl_hours` is used to calculate `expires_at`. Snapshot freshness is controlled
+  separately by `HEALTH_INSIGHT_SNAPSHOT_FRESH_HOURS`.
+- `cooldown_hours` is stored as policy metadata but is not currently enforced by
+  the evaluator.
+- Evaluation errors are treated as a rule non-match.
+- Medical recommendation actions are exposed by Daily Plan as read-only
+  service/support actions.
+
+Earlier Level 3 medical, air-quality, heat, cooking, and outdoor-activity rules
+were merged in PR #15 and remain part of the engine.
+
+## Local Development
+
+Typical setup:
 
 ```powershell
 python -m venv venv
@@ -40,169 +110,71 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-The project uses a `.env` next to `manage.py`. Start from `env.dist` if needed. Common local settings include:
+The project uses a `.env` next to `manage.py`; use `env.dist` as the starting
+point. Swagger endpoints:
 
-- `SECRET_KEY`
-- `DEBUG=True`
-- `DJANGO_ENV=development`
-- `OPENWEATHER_API_KEY`
-- PostgreSQL settings for deployed-style environments, or SQLite for local development.
+- Local UI: `http://127.0.0.1:8000/api/docs/`
+- Local schema: `http://127.0.0.1:8000/api/schema/`
+- Production UI: `https://api.mamaair.work/api/docs/`
 
-Swagger/OpenAPI:
-
-- Local Swagger: `/api/docs/`
-- Local schema: `/api/schema/`
-- Production Swagger: `https://api.mamaair.app/api/docs/`
-
-## Current Development Stage
-
-The latest completed work updated the recommendation engine to support Level 3 recommendation rules derived from the uploaded document `recomendations_engine.odt` from the previous workstation.
-
-The original document path on the previous machine was:
-
-```text
-C:\Users\ighiz\OneDrive\D\BSI\MamaAir\recomendations_engine.odt
-```
-
-Do not assume this file exists on a new machine. The implemented rules are already captured in the merged code and migration.
-
-## Latest Completed Work
-
-PR #15 added and tested Level 3 recommendation rules.
-
-Changed files:
-
-- `recommendations/context.py`
-- `recommendations/migrations/0008_level3_recommendation_engine_rules.py`
-- `recommendations/tests/test_context.py`
-- `recommendations/tests/test_rules_medical.py`
-- `recommendations/tests/test_advice_recommendations.py`
-- `scripts/test_server_api.py`
-
-Main implementation details:
-
-- Added new recommendation migration `0008_level3_recommendation_engine_rules.py`.
-- Expanded recommendation context with additional lifestyle fields.
-- Added symptom aliases used by the rules.
-- Added latest `AirExposureLog` weather/AQ data into recommendation context.
-- Added or updated Level 3 medical, air quality, heat, cooking, and outdoor activity rules.
-- Updated unit/API tests for context and recommendation rule behavior.
-- Updated `scripts/test_server_api.py` to validate new Level 3 recommendations through `/api/summary/`.
-
-New or newly validated rule IDs:
-
-- `alert.prom`
-- `alert.fetal_hypoxia`
-- `alert.hyperemesis`
-- `alert.anemia`
-- `alert.cardiovascular`
-- `alert.heat.high`
-- `alert.cooking.indoor_solid_fuel`
-- `alert.outdoor.midday`
-- `alert.pm25.daily`
-- `alert.cooking.solid_fuel`
-
-Also updated existing rule behavior for:
-
-- placental abruption
-- preeclampsia
-- preterm labor
-- gestational diabetes mellitus
-- low birth weight risk
-- PM2.5
-- solid fuel cooking
-- gas cooking with high NO2
-
-Important logic fixes from the latest work:
-
-- Preterm labor no longer double-counts contraction symptoms through both alias and canonical names.
-- Preeclampsia uses `20w+` as a gate and then requires enough clinical indicators, instead of counting gestational age itself as one of the symptoms.
-- `scripts/test_server_api.py` now validates the new recommendations explicitly, not just the old PM2.5 debug exposure path.
-
-## Verification Already Performed
-
-These checks passed on the previous workstation before PR #15 was merged:
+Movement tests and the full local e2e require a configured coordinate encryption
+key. For local-only testing in PowerShell:
 
 ```powershell
-.\venv\Scripts\python.exe manage.py test recommendations.tests -v 1
+$env:MOVEMENT_COORDINATE_KEYS='{"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
+.\venv\Scripts\python.exe manage.py test -v 1
 ```
 
-Result:
+For the full e2e, configure the same variable in the terminal that starts Django,
+then restart the server. The all-zero key is for local tests only.
 
-```text
-Ran 31 tests
-OK
-```
-
-Local e2e/API check:
+Run the focused mental scenario:
 
 ```powershell
-.\venv\Scripts\python.exe .\scripts\test_server_api.py --env local
+.\venv\Scripts\python.exe scripts\test_server_api.py --env local --only mental-wellbeing
 ```
 
-Result:
+Run the complete current-contract scenario:
 
-```text
-EXIT_CODE=0
-E2E flow passed.
+```powershell
+.\venv\Scripts\python.exe scripts\test_server_api.py --env local
 ```
 
-The e2e script validated these expected recommendation `rule_id` values in `/api/summary/`:
+The server's `REGISTRATION_API_KEY` must match the script's `--reg-api-key` value.
 
-- `alert.anemia`
-- `alert.cardiovascular`
-- `alert.cooking.indoor_solid_fuel`
-- `alert.cooking.solid_fuel`
-- `alert.fetal_hypoxia`
-- `alert.heat.high`
-- `alert.hyperemesis`
-- `alert.outdoor.midday`
-- `alert.pm25.daily`
-- `alert.prom`
+## Verification For PR #26
 
-## Recommended Start For The Next Codex Session
+The following checks passed during feature development before merge:
 
-1. Fetch the latest repository state.
-2. Work from updated `master`, because PR #15 is already merged.
-3. Run migrations.
-4. Run the focused recommendation test suite.
-5. Run `scripts/test_server_api.py --env local` when changing API, summary, advice, exposure, lifestyle, symptoms, or recommendations.
-6. Create a new `codex/...` branch for the next task.
+- full Django regression suite: 255/255;
+- standalone mental wellbeing e2e: passed twice consecutively with the same base
+  email, using a fresh generated address each time;
+- `python manage.py makemigrations --check --dry-run`: no model drift;
+- OpenAPI schema regeneration: no warnings;
+- `git diff --check`: no whitespace errors.
 
-Useful commands:
+## Recommended Start For The Next Session
 
 ```powershell
 git fetch origin
 git checkout master
 git pull origin master
-python manage.py migrate
-python manage.py test recommendations.tests -v 1
+.\venv\Scripts\python.exe manage.py migrate
+.\venv\Scripts\python.exe manage.py check
 ```
 
-For local e2e:
-
-```powershell
-python manage.py runserver 127.0.0.1:8000
-python scripts/test_server_api.py --env local
-```
+Create a new `codex/...` branch for implementation work. CI runs on pushes to any
+branch and on pull requests targeting `master`.
 
 ## Things To Watch
 
-- Local `db.sqlite3`, `.env`, logs, and media/debug artifacts may differ between machines and should not be treated as source of truth.
-- `scripts/test_server_api.py` mutates local data during e2e checks.
-- Recommendation migrations use rule IDs and `update_or_create`; preserve stable `rule_id` and version behavior when extending existing rules.
-- If changing symptoms, check both public checklist behavior and local test data setup in `scripts/test_server_api.py`.
-- If changing air quality or weather context, check both `recommendations/context.py` and API summary/advice tests.
-- If changing recommendation text, update snippet assertions in tests and e2e script if needed.
-
-## Suggested Additions For Future Handoffs
-
-If the next task introduces new behavior, append a short section with:
-
-- branch name
-- PR number and URL
-- main files changed
-- migrations added
-- tests run and exact results
-- known local-only setup assumptions
-- any user decisions or product constraints that are not obvious from code
+- Local `db.sqlite3`, `.env`, logs, and generated media are not source of truth.
+- E2E scripts create and mutate test users and related data.
+- Run migrations before testing recommendation or Daily Plan behavior; migration
+  `0009` seeds the mental rules.
+- Preserve stable recommendation `rule_id` and version semantics when changing
+  rules referenced by snapshots or completion records.
+- Submit wellbeing before the first Daily Plan GET when testing mental actions.
+- A plan already created for a local date is intentionally not recomposed.
+- If recommendation response fields change, update serializers, the committed
+  OpenAPI snapshot, mobile guides, and e2e schema assertions together.
