@@ -1,5 +1,19 @@
 # Daily Plan: Mobile Integration
 
+## Wellbeing order and graceful fallback
+
+When possible, submit the user's current-day mood and feeling selections through
+`POST /api/wellbeing/log/` before the first Daily Plan request. The answers
+`distressed`, `nervous`, and `poor_sleep` can add an action whose `domain` is
+`mental`.
+
+Wellbeing is optional. If it has not been submitted, Daily Plan still returns
+normally with the available tasks and recommendations. Do not treat the absence
+of a mental action as an error.
+
+The plan is immutable for its date. Wellbeing submitted after a plan has already
+been created is saved, but the existing action IDs and content are not replaced.
+
 ## Load the plan
 
 ```http

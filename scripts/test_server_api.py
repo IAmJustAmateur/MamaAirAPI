@@ -4,6 +4,7 @@ import os
 import sys
 import argparse
 from datetime import datetime, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 import json
 import requests
 from urllib.parse import urljoin
@@ -72,7 +73,7 @@ def parse_args():
     )
     parser.add_argument(
         "--only",
-        choices=("all", "large-movements-json"),
+        choices=("all", "large-movements-json", "mental-wellbeing"),
         default=os.getenv("E2E_ONLY", "all"),
         help="Run only one E2E scenario. Defaults to the full suite.",
     )
@@ -166,6 +167,15 @@ def pp(title, obj):
 def now_iso_with_tz():
     # ISO-8601 с локальной таймзоной машины запуска (включая оффсет)
     return datetime.now(dt_timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def fresh_scenario_email(base_email: str, scenario: str) -> str:
+    """Return a unique address so date-scoped immutable data cannot leak between runs."""
+    local_part, separator, domain = base_email.partition("@")
+    if not separator or not local_part or not domain:
+        raise AssertionError(f"Invalid E2E email: {base_email}")
+    timestamp = datetime.now(dt_timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    return f"{local_part}+{scenario}-{timestamp}@{domain}"
 
 
 def date_str_from_iso(iso_dt: str) -> str:
@@ -605,6 +615,7 @@ def _assert_recommendation_item(it: dict):
         "recommendation_diet",
         "recommendation_activity",
         "recommendation_behavior",
+        "recommendation_mental",
     ):
         if k in it and it[k] is not None and not isinstance(it[k], str):
             raise AssertionError(f"{k} must be str (or absent/null)")
@@ -709,6 +720,14 @@ def _assert_recommendation_item(it: dict):
         raise AssertionError("ttl_hours must be int")
     if not isinstance(it["priority"], int):
         raise AssertionError("priority must be int")
+    for key in (
+        "recommendation_diet",
+        "recommendation_activity",
+        "recommendation_behavior",
+        "recommendation_mental",
+    ):
+        if key in it and it[key] is not None and not isinstance(it[key], str):
+            raise AssertionError(f"{key} must be str (or absent/null)")
 
 
 def _assert_today_journey(obj: dict):
@@ -2387,6 +2406,15 @@ def step_daily_plan_get(access_token: str, target_date: str) -> dict:
     return body
 
 
+def assert_daily_plan_has_mental_action(plan: dict) -> None:
+    actions = plan["primary_actions"] + plan["additional_actions"]
+    mental_actions = [action for action in actions if action.get("domain") == "mental"]
+    if not mental_actions:
+        raise AssertionError(
+            "Daily Plan must contain a mental action after a mental wellbeing answer"
+        )
+
+
 def step_daily_action_completion_patch(
     access_token: str, action_id: str, completion_state: str
 ) -> dict:
@@ -2772,10 +2800,81 @@ def run_large_movements_json_e2e():
     )
 
 
+def run_mental_wellbeing_e2e():
+    global EMAIL
+    EMAIL = fresh_scenario_email(EMAIL, "mental")
+
+    print(f"E2E_ENV: {ARGS.env}")
+    print(f"BASE_URL: {BASE_URL}")
+    print(f"VERIFY_SSL: {VERIFY_SSL}")
+    print(f"E2E_USER: {EMAIL}")
+
+    step_meta_choices_public()
+    step_1_register()
+    token = step_2_token()
+    step_3_fill_profile(token)
+
+    catalog = step_wellbeing_catalog(token)
+    distressed = next(
+        (
+            item
+            for item in catalog.get("moods", [])
+            if item.get("code") == "distressed"
+        ),
+        None,
+    )
+    if not distressed:
+        raise AssertionError("Wellbeing catalog must contain the distressed mood")
+
+    today = datetime.now(ZoneInfo("Africa/Lagos")).date().isoformat()
+    current_log = step_wellbeing_log_get(token, today)
+    step_wellbeing_log_post_upsert(
+        token,
+        target_date=today,
+        water_amount=0,
+        water_unit=current_log.get("water_unit") or "ml",
+        mood_ids=[distressed["id"]],
+        feeling_ids=[],
+        expected_water_amount=current_log["water_amount"],
+    )
+
+    plan = step_daily_plan_get(token, today)
+    assert_daily_plan_has_mental_action(plan)
+    mental_action = next(
+        action
+        for action in plan["primary_actions"] + plan["additional_actions"]
+        if action.get("domain") == "mental"
+    )
+    action_id = mental_action["id"]
+    original_state = mental_action["completion_state"]
+    try:
+        for completion_state in ("completed", "skipped", "not_done"):
+            step_daily_action_completion_patch(token, action_id, completion_state)
+            refreshed = step_daily_plan_get(token, today)
+            refreshed_action = next(
+                action
+                for action in refreshed["primary_actions"]
+                + refreshed["additional_actions"]
+                if action["id"] == action_id
+            )
+            if refreshed_action["completion_state"] != completion_state:
+                raise AssertionError(
+                    "Mental action state mismatch: "
+                    f"expected {completion_state}, got {refreshed_action}"
+                )
+    finally:
+        step_daily_action_completion_patch(token, action_id, original_state)
+
+    print("Mental wellbeing Daily Plan E2E passed.")
+
+
 def main():
     # sanity
     if ARGS.only == "large-movements-json":
         run_large_movements_json_e2e()
+        return
+    if ARGS.only == "mental-wellbeing":
+        run_mental_wellbeing_e2e()
         return
 
     if REG_API_KEY == "REPLACE_ME":
@@ -2810,7 +2909,21 @@ def main():
 
     # --- Wellbeing (Water + Mood + Feeling) ---
     catalog = step_wellbeing_catalog(token)
-    moods_ids = _pick_ids(catalog.get("moods", []), max_n=2)
+    distressed = next(
+        (
+            item
+            for item in catalog.get("moods", [])
+            if item.get("code") == "distressed"
+        ),
+        None,
+    )
+    if not distressed:
+        raise AssertionError("Wellbeing catalog must contain the distressed mood")
+    moods_ids = list(
+        dict.fromkeys(
+            [distressed["id"], *_pick_ids(catalog.get("moods", []), max_n=2)]
+        )
+    )[:2]
     feelings_ids = _pick_ids(catalog.get("feelings", []), max_n=2)
 
     today = datetime.now().date().isoformat()
@@ -2864,6 +2977,8 @@ def main():
         raise AssertionError("Daily tasks catalog must have at least 2 active tasks")
     task_completion_tasks = [task["code"] for task in daily_tasks[:2]]
     step_task_completion_replace_and_verify(token, today, task_completion_tasks)
+    daily_plan = step_daily_plan_get(token, today)
+    assert_daily_plan_has_mental_action(daily_plan)
     step_daily_plan_completion_transitions(token, today)
     checklist = step_5_check_mommy_checklist(token)
 

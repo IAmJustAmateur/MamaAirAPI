@@ -2,7 +2,9 @@
 from __future__ import annotations
 from datetime import timedelta, timezone as dt_timezone
 from typing import Dict, Set, Any, Iterable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from django.conf import settings
 from django.utils import timezone
 from django.db.models import QuerySet
 
@@ -16,6 +18,7 @@ from api.models import (
     Exposure,
     AirExposureLog,
     UserLifeStyle,  # модель с RISK_FIELDS
+    UserWellbeingLog,
 )
 
 
@@ -25,6 +28,7 @@ class EvalContextBuilder:
       - profile: bmi, full_year, race, week_of_pregnancy, is_20w_plus
       - lifestyle: поля из UserLifeStyle.RISK_FIELDS (последняя запись)
       - aq: pollutants из последнего Exposure + exposure_level
+      - wellbeing: mood/feeling codes за текущую локальную дату пользователя
       - sym_m, sym_b: словари {симптом: True} за последние N часов
       - helpers: функции для удобных проверок в condition
     """
@@ -72,6 +76,7 @@ class EvalContextBuilder:
         self._aq: Dict[str, Any] = {}
         self._profile: Dict[str, Any] = {}
         self._lifestyle: Dict[str, Any] = {}
+        self._wellbeing: Dict[str, Any] = {}
 
     # ---------- публичный метод ----------
 
@@ -79,6 +84,7 @@ class EvalContextBuilder:
         self._profile = self._build_profile()
         self._lifestyle = self._build_lifestyle()
         self._aq = self._build_aq()
+        self._wellbeing = self._build_wellbeing()
         sym_m = self._build_symptom_map(UserMommySymptoms)
         sym_b = self._build_symptom_map(UserBabySymptoms)
 
@@ -122,6 +128,15 @@ class EvalContextBuilder:
         def count_b(*names: str) -> int:
             return sum(1 for nb in names if b(nb))
 
+        def _wellbeing_code(value: str) -> str:
+            return (value or "").strip().lower()
+
+        def mood(code: str) -> bool:
+            return _wellbeing_code(code) in self._wellbeing["moods"]
+
+        def feeling(code: str) -> bool:
+            return _wellbeing_code(code) in self._wellbeing["feelings"]
+
         # Поллютанты из Exposure
         def poll(key: str, default=None):
             return self._aq.get("pollutants", {}).get(key, default)
@@ -135,6 +150,7 @@ class EvalContextBuilder:
             "profile": self._profile,
             "lifestyle": self._lifestyle,
             "aq": self._aq,  # {"pollutants": {...}, "exposure_level": x, "date": "YYYY-MM-DD"}
+            "wellbeing": self._wellbeing,
             "sym_m": sym_m,  # {"headache": True, "upper abdominal pain": True, ...}
             "sym_b": sym_b,  # {"reduced fetal movement": True, ...}
             # сокращённые булевы из профиля
@@ -152,6 +168,8 @@ class EvalContextBuilder:
             "b": b,
             "count_m": count_m,
             "count_b": count_b,
+            "mood": mood,
+            "feeling": feeling,
             "poll": poll,
             "ge_poll": ge_poll,
             "now": timezone.now,  # функция
@@ -222,6 +240,36 @@ class EvalContextBuilder:
             "exposure_level": exp.exposure_level,
             "date": exp.timestamp.isoformat(),
             **weather,
+        }
+
+    def _build_wellbeing(self) -> Dict[str, Any]:
+        empty = {"date": None, "moods": set(), "feelings": set()}
+        timezone_name = (getattr(self.user, "timezone", None) or settings.TIME_ZONE).strip()
+        try:
+            user_timezone = ZoneInfo(timezone_name)
+        except (ZoneInfoNotFoundError, ValueError):
+            try:
+                user_timezone = ZoneInfo(settings.TIME_ZONE)
+            except (ZoneInfoNotFoundError, ValueError):
+                user_timezone = dt_timezone.utc
+
+        local_date = timezone.localtime(timezone.now(), user_timezone).date()
+        log = (
+            UserWellbeingLog.objects.filter(user=self.user, date=local_date)
+            .prefetch_related("moods", "feelings")
+            .first()
+        )
+        if not log:
+            return empty
+
+        return {
+            "date": log.date.isoformat(),
+            "moods": set(
+                log.moods.exclude(code__isnull=True).values_list("code", flat=True)
+            ),
+            "feelings": set(
+                log.feelings.exclude(code__isnull=True).values_list("code", flat=True)
+            ),
         }
 
     def _build_symptom_map(self, model_cls) -> Dict[str, bool]:

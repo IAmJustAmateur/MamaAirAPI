@@ -270,6 +270,11 @@ Important behavior:
 - `mood_ids` replaces selected moods when provided.
 - `feeling_ids` replaces selected feelings when provided.
 - Omit `mood_ids` or `feeling_ids` to keep previous selections unchanged.
+- Current-day `distressed`, `nervous`, and `poor_sleep` answers can produce a
+  mental wellbeing action in Daily Plan. Other answers are not interpreted as
+  mental signals in the MVP.
+- Missing wellbeing answers are valid. Daily Plan still returns normally, without
+  a wellbeing-based mental action.
 
 ### Daily Check-In
 
@@ -355,6 +360,12 @@ The optional date is interpreted as the user's local calendar date. The response
 contains `primary_actions`, `additional_actions`, and read-only `support_actions`.
 Every primary and additional action includes an opaque `id` and a
 `completion_state`: `completed`, `skipped`, or `not_done`.
+
+For personalized mental actions, submit the current-day wellbeing answers before
+the first Daily Plan request when possible. A mental action uses the same response
+shape and completion endpoint as other actions, with `domain` set to `mental`.
+Daily Plans are immutable for their date: wellbeing submitted after the plan was
+created is stored successfully, but does not replace that day's existing actions.
 
 Update an action with the ID returned by Daily Plan:
 

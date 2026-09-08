@@ -2200,7 +2200,7 @@
             },
             "post": {
                 "operationId": "wellbeing_log_create",
-                "description": "Updates wellbeing state for one calendar date. `water_amount` is additive: posting `250` increases the stored daily amount by 250. `mood_ids` and `feeling_ids` replace the selected chips when provided; omit a field to keep its previous selection.",
+                "description": "Updates wellbeing state for one calendar date. `water_amount` is additive: posting `250` increases the stored daily amount by 250. `mood_ids` and `feeling_ids` replace the selected chips when provided; omit a field to keep its previous selection. Answers for the user's current local date refresh recommendation inputs. If no answers are submitted, Daily Plan remains available without wellbeing-based mental actions.",
                 "summary": "Upsert wellbeing log for date",
                 "tags": [
                     "Wellbeing"
@@ -2425,16 +2425,6 @@
                 "enum": [
                     ""
                 ]
-            },
-            "CategoryEnum": {
-                "enum": [
-                    "diet",
-                    "activity",
-                    "behavior",
-                    "mental"
-                ],
-                "type": "string",
-                "description": "* `diet` - Diet\n* `activity` - Activity\n* `behavior` - Behavior\n* `mental` - Mental"
             },
             "ChecklistItemSchema": {
                 "type": "object",
@@ -2802,7 +2792,7 @@
                         "maxLength": 255
                     },
                     "category": {
-                        "$ref": "#/components/schemas/CategoryEnum"
+                        "$ref": "#/components/schemas/RecommendationDimensionEnum"
                     },
                     "sort_order": {
                         "type": "integer",
@@ -3682,6 +3672,9 @@
                     "recommendation_behavior": {
                         "type": "string"
                     },
+                    "recommendation_mental": {
+                        "type": "string"
+                    },
                     "ttl_hours": {
                         "type": "integer"
                     },
@@ -3726,7 +3719,7 @@
                         "minimum": 0
                     },
                     "dimension": {
-                        "$ref": "#/components/schemas/RecommendationCompletionDimensionEnum"
+                        "$ref": "#/components/schemas/RecommendationDimensionEnum"
                     },
                     "status": {
                         "$ref": "#/components/schemas/RecommendationCompletionStatusEnum"
@@ -3750,15 +3743,6 @@
                     "snapshot_id",
                     "updated_at"
                 ]
-            },
-            "RecommendationCompletionDimensionEnum": {
-                "enum": [
-                    "diet",
-                    "activity",
-                    "behavior"
-                ],
-                "type": "string",
-                "description": "* `diet` - Diet\n* `activity` - Activity\n* `behavior` - Behavior"
             },
             "RecommendationCompletionStatusEnum": {
                 "enum": [
@@ -3806,10 +3790,11 @@
                 "enum": [
                     "diet",
                     "activity",
-                    "behavior"
+                    "behavior",
+                    "mental"
                 ],
                 "type": "string",
-                "description": "* `diet` - diet\n* `activity` - activity\n* `behavior` - behavior"
+                "description": "* `diet` - diet\n* `activity` - activity\n* `behavior` - behavior\n* `mental` - mental"
             },
             "RecommendationCompletionUpsertStatusEnum": {
                 "enum": [
@@ -3861,6 +3846,16 @@
                         }
                     }
                 }
+            },
+            "RecommendationDimensionEnum": {
+                "enum": [
+                    "diet",
+                    "activity",
+                    "behavior",
+                    "mental"
+                ],
+                "type": "string",
+                "description": "* `diet` - Diet\n* `activity` - Activity\n* `behavior` - Behavior\n* `mental` - Mental"
             },
             "RestMicrobreakPreferenceEnum": {
                 "enum": [

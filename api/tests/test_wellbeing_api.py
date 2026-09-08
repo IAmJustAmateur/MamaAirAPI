@@ -1,6 +1,8 @@
 from datetime import date
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -204,6 +206,62 @@ class WellbeingApiTests(APITestCase):
         assert log.water_amount == 750
         assert set(log.moods.values_list("id", flat=True)) == {self.mood_1.id}
         assert set(log.feelings.values_list("id", flat=True)) == {self.feel_1.id}
+
+    @patch("recommendations.evaluator.generate_health_insight_snapshot")
+    def test_current_day_answers_refresh_recommendations(self, generate_snapshot):
+        response = self.client.post(
+            reverse("wellbeing-log"),
+            {
+                "date": timezone.localdate().isoformat(),
+                "mood_ids": [self.mood_2.id],
+                "feeling_ids": [],
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        generate_snapshot.assert_called_once_with(
+            self.user,
+            trigger_event="wellbeing",
+        )
+
+    @patch("recommendations.evaluator.generate_health_insight_snapshot")
+    def test_water_only_update_does_not_refresh_recommendations(
+        self, generate_snapshot
+    ):
+        response = self.client.post(
+            reverse("wellbeing-log"),
+            {
+                "date": timezone.localdate().isoformat(),
+                "water_amount": 250,
+                "water_unit": "ml",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        generate_snapshot.assert_not_called()
+
+    @patch(
+        "recommendations.evaluator.generate_health_insight_snapshot",
+        side_effect=RuntimeError("recommendation engine unavailable"),
+    )
+    def test_recommendation_refresh_failure_does_not_break_wellbeing_save(
+        self, generate_snapshot
+    ):
+        response = self.client.post(
+            reverse("wellbeing-log"),
+            {
+                "date": timezone.localdate().isoformat(),
+                "mood_ids": [self.mood_2.id],
+                "feeling_ids": [],
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert [item["id"] for item in response.data["moods"]] == [self.mood_2.id]
+        generate_snapshot.assert_called_once()
 
     def test_log_post_rejects_wrong_kind_in_mood_ids(self):
         # Passing a FEELING id in mood_ids should be rejected

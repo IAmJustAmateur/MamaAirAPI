@@ -1,5 +1,6 @@
-from django.db import models
+from typing import ClassVar
 
+from django.db import models
 from django.db.models import Q, UniqueConstraint
 
 
@@ -11,70 +12,80 @@ class RecommendationRuleQuerySet(models.QuerySet):
 # RecommendationRule fields (MVP engine):
 #
 # - rule_id (str) + version (int)
-#     Стабильный идентификатор и версия правила. Позволяют обновлять логику без потери истории.
+#     Stable rule identifier and version. A new version can change rule logic while
+#     preserving references stored in existing snapshots and completion records.
 #
 # - condition (str)
-#     Python-выражение, которое исполняется через eval в песочнице.
-#     Доступные переменные и хелперы приходят из EvalContextBuilder:
-#       profile, lifestyle, aq, sym_m, sym_b, is_20w_plus,
+#     A Python expression evaluated with empty built-ins and a context supplied by
+#     EvalContextBuilder. Available data and helpers include:
+#       profile, lifestyle, aq, wellbeing, sym_m, sym_b, is_20w_plus,
 #       m(name), b(name), count_m(...), count_b(...),
+#       mood(code), feeling(code),
 #       poll(key), ge_poll(key, threshold),
 #       exists(x), ge(a, b), le(a, b), count_true(...), any_of(...), all_of(...), now().
-#     Должно вернуть True/False.
+#     The expression must produce a truthy or falsy value. Evaluation errors are
+#     treated as a non-match by the current evaluator.
+#
+# - alert and recommendation_* (str)
+#     User-facing card content. Recommendation dimensions currently supported by
+#     snapshots and Daily Plan are diet, activity, behavior, and mental wellbeing.
 #
 # - severity (enum: critical | high | moderate | info)
-#     Влияет на приоритет и UX (цвет/иконки).
+#     Urgency metadata exposed to API clients. It may drive client presentation,
+#     but it does not affect server-side ordering by itself.
 #
-# - priority (int, "меньше = важнее")
-#     Единая шкала ранжирования карточек. Рекомендуемая сетка:
-#       0–9   : критические медицинские (неотложные)
-#       10–29 : высокий риск (важно, но не экстренно)
-#       30–49 : средний приоритет (в т.ч. AQ-алерты)
-#       50–69 : лайфстайл/профиль (поведенческие советы)
-#       70+   : информационные / nice-to-have
-#     Внутри диапазона использовать шаг 1–2 как тай-брейкер (срочность, специфичность, конкретика действия).
+# - priority (int, lower = more important)
+#     The explicit server-side ordering value. Recommended bands:
+#       0-9   : critical medical alerts
+#       10-29 : high risk, important but not immediately urgent
+#       30-49 : moderate priority, including air-quality alerts
+#       50-69 : lifestyle, profile, and wellbeing guidance
+#       70+   : informational or nice-to-have content
+#     Within a band, use increments of 1-2 to break ties by urgency, specificity,
+#     and actionability.
 #
 # - cooldown_hours (int)
-#     Минимальный интервал между ПОВТОРНЫМИ срабатываниями одного и того же правила для одного пользователя.
-#     Помогает не "спамить". Примеры дефолтов:
-#       critical: 24–48ч, high: 24ч, AQ: 12ч, lifestyle/profile: 7дней (168ч).
+#     Reserved delivery-policy metadata. The current evaluator does not enforce a
+#     per-user cooldown, so matching rules may appear in every newly generated
+#     snapshot regardless of this value.
 #
 # - ttl_hours (int)
-#     "Время жизни" рекомендации — сколько она считается актуальной/видимой после генерации снапшота.
-#     Примеры: critical/high: 24ч; AQ: 12–24ч; lifestyle/profile: 7дней.
+#     Used when a snapshot is generated to calculate the card's expires_at value.
+#     Snapshot reuse is controlled separately by the configured freshness window;
+#     the server does not currently remove expired cards from stored snapshots.
 #
 # - category (enum: medical | air_quality | lifestyle | general)
-#     Для группировки/фильтров в UI.
+#     Classification metadata for clients and admin filtering. Daily Plan also maps
+#     medical recommendation actions to the service/support group.
 #
 # - enabled (bool)
-#     Флаг включения правила (для быстрых откатов/тестов).
-
-
+#     Controls whether the evaluator includes the rule in its active queryset.
 class RecommendationRule(models.Model):
     """
-    Простая модель правила для eval-движка.
-    condition — это Python-выражение, которое получает контекст из EvalContextBuilder и
-    ДОЛЖНО вернуть True/False.
+    Database-backed rule used by the MVP recommendation evaluator.
+
+    ``condition`` is a Python expression evaluated against the context produced by
+    ``EvalContextBuilder``. It must produce a truthy or falsy value.
     """
 
-    SEVERITY_CHOICES = [
+    SEVERITY_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
         ("critical", "Critical"),
         ("high", "High"),
         ("moderate", "Moderate"),
         ("info", "Info"),
-    ]
-    CATEGORY_CHOICES = [
+    )
+    CATEGORY_CHOICES: ClassVar[list[tuple[str, str]]] = [
         ("medical", "Medical"),
         ("air_quality", "Air Quality"),
         ("lifestyle", "Lifestyle"),
         ("general", "General"),
     ]
 
-    # Идентификация/версионирование
-    rule_id = models.CharField(max_length=128)  # например: "alert.pm25.daily"
+    # Identification and versioning
+    rule_id = models.CharField(max_length=128)  # Example: "alert.pm25.daily"
     version = models.PositiveIntegerField(default=1)
 
-    # Контент
+    # User-facing content and matching condition
     title = models.CharField(max_length=255)
     condition = models.TextField(
         help_text="Python expression, returns True/False against eval context."
@@ -83,8 +94,9 @@ class RecommendationRule(models.Model):
     recommendation_diet = models.TextField(blank=True, default="")
     recommendation_activity = models.TextField(blank=True, default="")
     recommendation_behavior = models.TextField(blank=True, default="")
+    recommendation_mental = models.TextField(blank=True, default="")
 
-    # Метаданные
+    # Classification and delivery metadata
     severity = models.CharField(max_length=16, choices=SEVERITY_CHOICES, default="info")
     category = models.CharField(
         max_length=32, choices=CATEGORY_CHOICES, default="general"
@@ -96,7 +108,7 @@ class RecommendationRule(models.Model):
     cooldown_hours = models.PositiveIntegerField(default=24)
     ttl_hours = models.PositiveIntegerField(default=24)
 
-    # Служебные поля
+    # Audit timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -120,11 +132,11 @@ class RecommendationRule(models.Model):
 
 
 class MamaAirWeeklyMessage(models.Model):
-    week = models.PositiveSmallIntegerField()  # 1..40
-    locale = models.CharField(max_length=10, default="en")  # "en", "en-US", "ru"
+    week = models.PositiveSmallIntegerField()  # Pregnancy week, normally 1-40
+    locale = models.CharField(max_length=10, default="en")  # Examples: "en", "en-US"
     text = models.TextField()
     is_active = models.BooleanField(default=True)
-    version = models.PositiveIntegerField(default=1)  # для вашего контроля
+    version = models.PositiveIntegerField(default=1)  # Content revision number
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

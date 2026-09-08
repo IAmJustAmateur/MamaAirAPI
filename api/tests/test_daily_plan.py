@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from drf_spectacular.generators import SchemaGenerator
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -16,11 +17,13 @@ from api.models import (
     HealthInsightSnapshot,
     RecommendationCompletion,
     UserDailyTaskCompletion,
+    Wellbeing,
 )
 from api.services.daily_plan import (
     completion_states_for_plan,
     get_or_create_daily_plan,
     local_date_for_daily_plan,
+    set_daily_action_completion,
 )
 
 
@@ -35,6 +38,7 @@ def recommendation_card(
     diet="Drink water.",
     activity="Walk indoors.",
     behavior="Close windows.",
+    mental="",
 ):
     return {
         "rule_id": rule_id,
@@ -45,6 +49,7 @@ def recommendation_card(
         "recommendation_diet": diet,
         "recommendation_activity": activity,
         "recommendation_behavior": behavior,
+        "recommendation_mental": mental,
     }
 
 
@@ -129,6 +134,37 @@ class DailyPlanServiceTests(TestCase):
             self.assertEqual(action.source_snapshot_id, self.snapshot.id)
             self.assertEqual(action.source_rule_id, "rule.air")
             self.assertEqual(action.source_rule_version, 2)
+
+    def test_mental_recommendation_maps_to_completable_mental_action(self):
+        self.snapshot.recommendations = [
+            recommendation_card(
+                diet="",
+                activity="",
+                behavior="",
+                mental="Take a calming pause.",
+            )
+        ]
+        self.snapshot.save(update_fields=["recommendations"])
+
+        plan, _ = self._create_plan()
+        action = plan.actions.get(source_type="recommendation")
+
+        self.assertEqual(action.domain, "mental")
+        self.assertEqual(action.source_dimension, "mental")
+        self.assertEqual(action.role, "primary")
+        self.assertEqual(
+            completion_states_for_plan(plan)[str(action.id)], "not_done"
+        )
+
+        self.assertEqual(set_daily_action_completion(action, "completed"), "completed")
+        completion = RecommendationCompletion.objects.get(
+            user=self.user,
+            snapshot=self.snapshot,
+            rule_id="rule.air",
+            rule_version=2,
+            dimension="mental",
+        )
+        self.assertEqual(completion.status, "done")
 
     def test_classification_is_deterministic_and_limited_by_domain(self):
         for index in range(2):
@@ -356,6 +392,81 @@ class DailyPlanApiTests(APITestCase):
         self.assertIn(
             "completion_state",
             schema["components"]["schemas"][primary_component]["properties"],
+        )
+
+
+class DailyPlanWellbeingIntegrationTests(APITestCase):
+    def setUp(self):
+        DailyTask.objects.all().delete()
+        self.user = User.objects.create_user(
+            email="daily-plan-wellbeing@example.com",
+            password="testpass123",
+            timezone="UTC",
+        )
+        DailyTask.objects.create(
+            code="wellbeing-fallback-task",
+            title="Fallback task",
+            category="behavior",
+        )
+        self.nervous = Wellbeing.objects.get(code="nervous")
+        self.today = timezone.localdate().isoformat()
+        self.client.force_authenticate(self.user)
+
+    @staticmethod
+    def _actions(response):
+        return response.data["primary_actions"] + response.data["additional_actions"]
+
+    def _post_nervous(self):
+        return self.client.post(
+            reverse("wellbeing-log"),
+            {
+                "date": self.today,
+                "mood_ids": [self.nervous.id],
+                "feeling_ids": [],
+            },
+            format="json",
+        )
+
+    def test_missing_wellbeing_returns_a_valid_plan_without_mental_action(self):
+        response = self.client.get(reverse("daily-plan"), {"date": self.today})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(self._actions(response))
+        self.assertFalse(
+            any(action["domain"] == "mental" for action in self._actions(response))
+        )
+
+    def test_wellbeing_before_plan_adds_a_mental_action(self):
+        wellbeing_response = self._post_nervous()
+        self.assertEqual(
+            wellbeing_response.status_code,
+            status.HTTP_201_CREATED,
+            wellbeing_response.data,
+        )
+
+        response = self.client.get(reverse("daily-plan"), {"date": self.today})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        mental_actions = [
+            action for action in self._actions(response) if action["domain"] == "mental"
+        ]
+        self.assertEqual(len(mental_actions), 1)
+        self.assertEqual(mental_actions[0]["completion_state"], "not_done")
+
+    def test_wellbeing_after_plan_does_not_mutate_the_existing_plan(self):
+        first = self.client.get(reverse("daily-plan"), {"date": self.today})
+        first_actions = self._actions(first)
+        first_ids = [action["id"] for action in first_actions]
+        self.assertFalse(any(action["domain"] == "mental" for action in first_actions))
+
+        wellbeing_response = self._post_nervous()
+        self.assertEqual(wellbeing_response.status_code, status.HTTP_201_CREATED)
+        second = self.client.get(reverse("daily-plan"), {"date": self.today})
+
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.data)
+        self.assertEqual([action["id"] for action in self._actions(second)], first_ids)
+        self.assertFalse(
+            any(action["domain"] == "mental" for action in self._actions(second))
         )
 
 

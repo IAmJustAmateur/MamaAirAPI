@@ -447,6 +447,7 @@ class RecommendationSerializer(serializers.Serializer):
     recommendation_diet = serializers.CharField(required=False, allow_blank=True)
     recommendation_activity = serializers.CharField(required=False, allow_blank=True)
     recommendation_behavior = serializers.CharField(required=False, allow_blank=True)
+    recommendation_mental = serializers.CharField(required=False, allow_blank=True)
 
     ttl_hours = serializers.IntegerField(required=False)
 
