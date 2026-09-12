@@ -98,12 +98,6 @@ EMAIL_FILE_PATH = os.getenv("EMAIL_FILE_PATH", str(intermediate_base_dir / ".e2e
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "MamaAir <noreply.mamaair@gmail.com>")
 SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "service@mamaair.work")
 AUTH_PUBLIC_URL = os.getenv("AUTH_PUBLIC_URL", "https://api.mamaair.work").rstrip("/")
-CSRF_TRUSTED_ORIGINS = [AUTH_PUBLIC_URL]
-if DJANGO_ENV in {"staging", "production"}:
-    # Only Caddy may reach the private web port in deployment.
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SESSION_COOKIE_SECURE = AUTH_PUBLIC_URL.startswith("https://")
-    CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
 PASSWORD_RESET_TIMEOUT = 48 * 60 * 60
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
 CELERY_TASK_DEFAULT_QUEUE = "email"
@@ -389,16 +383,17 @@ LOGGING = {
 logger = logging.getLogger(__name__)
 logger.info("Logging initialized")
 
-# http
-# ! TODO: remove this for https
+# Keep cookie and proxy configuration in one place. Production requires HTTPS;
+# the isolated staging E2E stack uses HTTP on its private container network.
+CSRF_TRUSTED_ORIGINS = [AUTH_PUBLIC_URL]
 if DJANGO_ENV in {"production", "staging"}:
-    SESSION_COOKIE_SECURE = True  # если HTTPS
-    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = DJANGO_ENV == "production" or AUTH_PUBLIC_URL.startswith("https://")
+    CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
     SECURE_SSL_REDIRECT = False
-    CSRF_TRUSTED_ORIGINS = ["https://app.mamaair.com"]
+    # Only Caddy may reach the private web port in deployment.
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 else:
-    SESSION_COOKIE_SECURE = False  # если HTTP
+    SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
 SESSION_COOKIE_SAMESITE = "Lax"
 
