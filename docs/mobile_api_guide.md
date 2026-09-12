@@ -1,11 +1,11 @@
 # MamaAir Mobile API Guide
 
-This guide describes the API surface used by the mobile app and follows the E2E flow in `scripts/test_server_api.py`, with Google sign-in as the documented mobile authentication entry point.
+This guide describes the API surface used by the mobile app. Google sign-in and verified email/password sign-in are supported.
 
 ## Base URLs
 
 - Local: `http://127.0.0.1:8000/`
-- Production: `https://api.mamaair.app/`
+- Production: `https://api.mamaair.work/`
 - Swagger UI: `/api/docs/`
 - OpenAPI schema: `/api/schema/`
 - Committed OpenAPI snapshot: `docs/openapi/schema.json`
@@ -20,9 +20,9 @@ Protected endpoints require:
 Authorization: Bearer <access_token>
 ```
 
-Access tokens are issued by Google sign-in. Refresh tokens are long-lived and can be exchanged for a new access token.
+Access tokens are issued by Google sign-in or email/password login. Refresh tokens are long-lived and can be exchanged for a new access token.
 
-Google is the only authentication flow documented for the mobile app.
+For registration, confirmation, password reset, and request examples, see [Email authentication](email_auth_guide.md). Email login uses `POST /api/auth/email/login/`; the JWT response format matches Google login. Password changes invalidate old access and refresh tokens. The initial deployment of this change requires existing sessions to sign in again.
 
 JWT API calls do not require `X-CSRFTOKEN`. Swagger UI may show a CSRF header when it runs in a browser session, but mobile clients should use the Bearer token header.
 
@@ -89,7 +89,7 @@ Success response: `205 Reset Content`
 
 The E2E script exercises this sequence:
 
-1. Sign in with Google and receive MamaAir `access` and `refresh` JWT tokens.
+1. Sign in with Google or verified email/password and receive MamaAir `access` and `refresh` JWT tokens.
 2. Store `access` and `refresh` tokens securely.
 3. `PATCH /api/profile/` with onboarding profile fields.
 4. Optionally upload an avatar with `POST /api/profile/avatar/`.
@@ -161,7 +161,7 @@ Response is the updated profile. `avatar_url` points to the uploaded file when o
 {
   "id": 123,
   "email": "user@example.com",
-  "avatar_url": "https://api.mamaair.app/media/avatars/user_123/abc123.png"
+  "avatar_url": "https://api.mamaair.work/media/avatars/user_123/abc123.png"
 }
 ```
 
@@ -657,5 +657,5 @@ Useful overrides:
 
 ```bash
 python scripts/test_server_api.py --env production
-python scripts/test_server_api.py --base-url https://api.mamaair.app/
+python scripts/test_server_api.py --base-url https://api.mamaair.work/
 ```

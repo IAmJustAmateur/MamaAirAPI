@@ -1,5 +1,31 @@
 # Codex Handoff: MamaAir API
 
+## Email authentication work (2026-09-12)
+
+Branch `codex/email-auth-celery` adds public email registration/login, web email
+confirmation and password reset, Celery delivery, and deployment configuration.
+See `docs/email_auth_guide.md` for the mobile contract, Gmail setup, rollout and
+rollback instructions. Migration `api/migrations/0052_user_email_verification_pending.py`
+adds a pending flag to User; there are no new tables. Pending status is separate
+from administrative account blocking.
+
+The password fingerprint check invalidates pre-release JWT sessions once and
+rejects old access/refresh tokens after password changes. Google audience checks
+are enforced; verify GOOGLE_ALLOWED_AUDS before deployment. Auth-related profile
+fields are now read-only.
+
+Local process E2E uses separate API and Celery processes with a temporary
+filesystem broker. The isolated Docker/CI E2E uses Redis and PostgreSQL.
+Docker was unavailable on the workstation (virtualization/WSL issue), and the user
+asked to defer Docker repair. Do not describe the Redis/Docker E2E as locally
+verified until it has actually run. Never put Gmail secrets in tests or Git.
+
+Local verification: 276 Django tests passed, separate-process email E2E passed,
+OpenAPI regeneration/validation, system checks and migration drift checks passed.
+Real Gmail delivery is pending server credentials and a manual inbox check.
+
+The repository metadata below describes the last merged feature, not this branch.
+
 ## Repository
 
 - Project: MamaAir API / `aq_agent_api`

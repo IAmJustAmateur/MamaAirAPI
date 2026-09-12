@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MamaAir account</title>
+<style>body{font:18px system-ui;background:#f2f8f6;color:#163c34;margin:0}main{max-width:420px;margin:8vh auto;padding:32px;background:white;border-radius:16px}label{display:block;margin-top:20px}input,button{box-sizing:border-box;width:100%;padding:12px;margin-top:8px;font:inherit}button{background:#216957;color:white;border:0;border-radius:8px;margin-top:24px}.errors{color:#8b2424}</style>
+</head><body><main><p>MamaAir</p>
+{% if success %}<h1>Password saved</h1><p>You can return to the app and sign in with your email and new password.</p>
+{% else %}<h1>{% if verify %}Confirm your email{% else %}Reset password{% endif %}</h1>
+<p>Choose a password for your account. Use at least 8 characters and avoid common passwords.</p>
+{% if errors %}<div class="errors" role="alert">{% for field, messages in errors.items %}<p>{{ field }}: {{ messages }}</p>{% endfor %}</div>{% endif %}
+<form method="post">{% csrf_token %}
+<label>New password<input type="password" name="new_password" required minlength="8" maxlength="128" autocomplete="new-password"></label>
+<label>Confirm password<input type="password" name="password_confirm" required maxlength="128" autocomplete="new-password"></label>
+<button type="submit">Save password</button></form>{% endif %}
+</main></body></html>

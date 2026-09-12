@@ -19,7 +19,6 @@ def hide_non_mobile_endpoints(endpoints):
         "/api/auth/register/",
         "/api/auth/token/",
         "/api/auth/firebase/",
-        "/api/auth/password-change/",
     }
     hidden_prefixes = (
         "/api/debug/",

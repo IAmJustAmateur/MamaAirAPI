@@ -1,0 +1,78 @@
+name: mamaair-email-e2e
+
+x-app: &app
+  build:
+    context: ..
+    dockerfile: deployment/Dockerfile
+  environment: &environment
+    DJANGO_ENV: staging
+    DEBUG: "False"
+    SECRET_KEY: isolated-email-e2e-secret-not-for-production
+    ALLOWED_HOSTS: web,localhost,127.0.0.1
+    DB_HOST: db
+    DB_PORT: "5432"
+    DB_NAME: email_e2e
+    DB_USER: email_e2e
+    DB_PASSWORD: email_e2e
+    REGISTRATION_API_KEY: email-e2e-key
+    FIREBASE_CREDENTIALS: ""
+    CELERY_BROKER_URL: redis://redis:6379/0
+    AUTH_REDIS_CACHE_URL: redis://redis:6379/1
+    EMAIL_BACKEND: django.core.mail.backends.filebased.EmailBackend
+    EMAIL_FILE_PATH: /mail
+    AUTH_PUBLIC_URL: http://web:8000
+    EMAIL_HOST_PASSWORD: ""
+    MOVEMENT_COORDINATE_KEYS: '{"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
+  volumes:
+    - email_messages:/mail
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: email_e2e
+      POSTGRES_USER: email_e2e
+      POSTGRES_PASSWORD: email_e2e
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U email_e2e -d email_e2e"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  web:
+    <<: *app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/meta/choices/')"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  worker:
+    <<: *app
+    command: ["celery", "-A", "agent_api", "worker", "--loglevel=INFO", "--concurrency=1", "-Q", "email"]
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A agent_api inspect ping --destination celery@$$HOSTNAME --timeout 5"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+  tests:
+    <<: *app
+    command: ["python", "scripts/test_email_auth_e2e.py", "--base-url", "http://web:8000", "--mail-dir", "/mail"]
+    depends_on:
+      worker:
+        condition: service_healthy
+volumes:
+  email_messages:

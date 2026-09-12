@@ -49,8 +49,17 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class PasswordChangeSerializer(serializers.Serializer):
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True)
+    old_password = serializers.CharField(required=True, write_only=True, trim_whitespace=False, max_length=128)
+    new_password = serializers.CharField(required=True, write_only=True, trim_whitespace=False, max_length=128)
+
+    def validate_new_password(self, value):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        try:
+            validate_password(value, self.context["request"].user)
+        except ValidationError as exc:
+            raise serializers.ValidationError(exc.messages)
+        return value
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -73,6 +82,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "avatar",
         ]
         read_only_fields = (
+            "email", "is_active", "auth_provider", "google_sub", "email_verification_pending",
             "registered_at",
             # "current_pregnancy_week",
             # "pregnancy_start_date",

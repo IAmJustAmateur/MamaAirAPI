@@ -106,7 +106,7 @@ class GoogleAuthView(APIView):
         aud = info.get("aud")
         if aud not in get_allowed_auds():
             logger.info(f"Invalid audience: {aud}")
-            # return Response({"detail": "Invalid audience"}, status=401)
+            return Response({"detail": "Invalid audience"}, status=401)
 
         if info.get("iss") not in [
             "https://accounts.google.com",
@@ -121,6 +121,8 @@ class GoogleAuthView(APIView):
             return Response({"detail": "Email not verified"}, status=401)
 
         google_sub = info.get("sub")
+        if not google_sub:
+            return Response({"detail": "Google subject missing"}, status=401)
         email = info["email"].lower()
         name = info.get("name") or ""
         picture = info.get("picture")
@@ -132,8 +134,16 @@ class GoogleAuthView(APIView):
             logger.debug(f"User found by google_sub: {user}")
         if not user:
             logger.debug(f"Looking for user with email: {email}")
-            user = User.objects.filter(email=email).first()
+            from .email_auth import find_user
+            user = find_user(email)
+            if not user and User.objects.filter(email__iexact=email).exists():
+                return Response({"detail": "Account linking unavailable"}, status=401)
             if user:
+                if not user.is_active or (user.google_sub and user.google_sub != google_sub):
+                    return Response({"detail": "Account unavailable"}, status=401)
+                if user.email_verification_pending:
+                    user.set_unusable_password()
+                    user.email_verification_pending = False
                 user.google_sub = google_sub
                 user.auth_provider = "google"
                 if picture and not getattr(user, "avatar_url", None):
@@ -144,7 +154,7 @@ class GoogleAuthView(APIView):
                 logger.debug(f"User found by email: {user}")
             else:
                 logger.debug("Creating new user")
-                user = User.objects.create(
+                user = User.objects.create_user(
                     email=email,
                     google_sub=google_sub,
                     auth_provider="google",
@@ -153,6 +163,8 @@ class GoogleAuthView(APIView):
                 )
                 logger.debug(f"User created: {user}")
 
+        if not user.is_active:
+            return Response({"detail": "Account unavailable"}, status=401)
         refresh = RefreshToken.for_user(user)
         logger.info(f"User {user} authenticated via Google")
         return Response(

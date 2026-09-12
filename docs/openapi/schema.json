@@ -3,7 +3,7 @@
     "info": {
         "title": "MamaAir API",
         "version": "1.0.0",
-        "description": "Backend API for the MamaAir mobile app. Use Google sign-in to obtain JWT Bearer tokens for protected endpoints. OpenAPI examples follow the mobile E2E flow in scripts/test_server_api.py."
+        "description": "Backend API for the MamaAir mobile app. Use Google sign-in or verified email/password login to obtain JWT Bearer tokens. OpenAPI examples follow the mobile E2E flow in scripts/test_server_api.py."
     },
     "paths": {
         "/api/advice/": {
@@ -82,6 +82,216 @@
                 "responses": {
                     "204": {
                         "description": "Account deleted successfully."
+                    }
+                }
+            }
+        },
+        "/api/auth/email/login/": {
+            "post": {
+                "operationId": "auth_email_login_create",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GoogleAuthResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/email/register/": {
+            "post": {
+                "operationId": "auth_email_register_create",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/email/resend/": {
+            "post": {
+                "operationId": "auth_email_resend_create",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EmailInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EmailInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EmailInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/email/verify/": {
+            "post": {
+                "operationId": "auth_email_verify_create",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConfirmInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConfirmInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConfirmInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -222,6 +432,182 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/password-change/": {
+            "post": {
+                "operationId": "auth_password_change_create",
+                "description": "Allows an authenticated user to change their password by providing the current and new password.",
+                "summary": "Change user password",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "old_password": {
+                                        "type": "string",
+                                        "example": "testpass123"
+                                    },
+                                    "new_password": {
+                                        "type": "string",
+                                        "example": "newpass456"
+                                    }
+                                },
+                                "required": [
+                                    "old_password",
+                                    "new_password"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PasswordChangeSuccessResponse"
+                                },
+                                "examples": {
+                                    "PasswordChanged": {
+                                        "value": {
+                                            "detail": "Password changed successfully"
+                                        },
+                                        "summary": "Password changed"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PasswordChangeErrorResponse"
+                                },
+                                "examples": {
+                                    "WrongOldPassword": {
+                                        "value": {
+                                            "old_password": "Wrong password."
+                                        },
+                                        "summary": "Wrong old password"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/password-reset/confirm/": {
+            "post": {
+                "operationId": "auth_password_reset_confirm_create",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConfirmInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConfirmInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConfirmInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/password-reset/request/": {
+            "post": {
+                "operationId": "auth_password_reset_request_create",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EmailInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EmailInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EmailInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
                                 }
                             }
                         },
@@ -1079,8 +1465,7 @@
                                 "$ref": "#/components/schemas/UserProfile"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -2490,6 +2875,36 @@
                 "type": "string",
                 "description": "* `walk` - Walk\n* `matatu-bus` - Matatu/Bus\n* `bike` - Bike\n* `car` - Car\n* `mixed` - Mixed"
             },
+            "ConfirmInput": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "token": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 256
+                    },
+                    "new_password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 128
+                    },
+                    "password_confirm": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 128
+                    }
+                },
+                "required": [
+                    "new_password",
+                    "password_confirm",
+                    "token",
+                    "uid"
+                ]
+            },
             "CookingMethodEnum": {
                 "enum": [
                     "wood",
@@ -2805,6 +3220,17 @@
                     "title"
                 ]
             },
+            "DetailOutput": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
             "DietTypeEnum": {
                 "enum": [
                     "carnivore",
@@ -2823,6 +3249,19 @@
                 ],
                 "type": "string",
                 "description": "* `nutrition` - Nutrition\n* `activity` - Activity\n* `behavior` - Behavior\n* `mental` - Mental\n* `service` - Service"
+            },
+            "EmailInput": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                    }
+                },
+                "required": [
+                    "email"
+                ]
             },
             "Error": {
                 "type": "object",
@@ -3002,7 +3441,7 @@
             },
             "LoggingTokenRefresh": {
                 "type": "object",
-                "description": "Log refresh-token payloads and handle missing users safely.",
+                "description": "Reject missing users and password-revoked refresh tokens without logging secrets.",
                 "properties": {
                     "refresh": {
                         "type": "string"
@@ -3015,6 +3454,25 @@
                 "required": [
                     "access",
                     "refresh"
+                ]
+            },
+            "LoginInput": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 128
+                    }
+                },
+                "required": [
+                    "email",
+                    "password"
                 ]
             },
             "Logout": {
@@ -3174,6 +3632,25 @@
             "NullEnum": {
                 "enum": [
                     null
+                ]
+            },
+            "PasswordChangeErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "old_password": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PasswordChangeSuccessResponse": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
                 ]
             },
             "PatchedUserLifeStyle": {
@@ -3408,10 +3885,11 @@
                     "email": {
                         "type": "string",
                         "format": "email",
-                        "maxLength": 254
+                        "readOnly": true
                     },
                     "is_active": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     },
                     "name": {
                         "type": "string",
@@ -3501,12 +3979,16 @@
                     },
                     "auth_provider": {
                         "type": "string",
-                        "maxLength": 20
+                        "readOnly": true
+                    },
+                    "email_verification_pending": {
+                        "type": "boolean",
+                        "readOnly": true
                     },
                     "google_sub": {
                         "type": "string",
-                        "nullable": true,
-                        "maxLength": 255
+                        "readOnly": true,
+                        "nullable": true
                     },
                     "consent": {
                         "type": "boolean"
@@ -3856,6 +4338,31 @@
                 ],
                 "type": "string",
                 "description": "* `diet` - Diet\n* `activity` - Activity\n* `behavior` - Behavior\n* `mental` - Mental"
+            },
+            "RegisterInput": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 128
+                    },
+                    "password_confirm": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 128
+                    }
+                },
+                "required": [
+                    "email",
+                    "password",
+                    "password_confirm"
+                ]
             },
             "RestMicrobreakPreferenceEnum": {
                 "enum": [
@@ -4627,10 +5134,11 @@
                     "email": {
                         "type": "string",
                         "format": "email",
-                        "maxLength": 254
+                        "readOnly": true
                     },
                     "is_active": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     },
                     "name": {
                         "type": "string",
@@ -4720,12 +5228,16 @@
                     },
                     "auth_provider": {
                         "type": "string",
-                        "maxLength": 20
+                        "readOnly": true
+                    },
+                    "email_verification_pending": {
+                        "type": "boolean",
+                        "readOnly": true
                     },
                     "google_sub": {
                         "type": "string",
-                        "nullable": true,
-                        "maxLength": 255
+                        "readOnly": true,
+                        "nullable": true
                     },
                     "consent": {
                         "type": "boolean"
@@ -4751,9 +5263,13 @@
                     }
                 },
                 "required": [
+                    "auth_provider",
                     "bmi",
                     "email",
+                    "email_verification_pending",
+                    "google_sub",
                     "id",
+                    "is_active",
                     "registered_at"
                 ]
             },

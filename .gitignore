@@ -90,3 +90,5 @@ coverage.xml
 
 # Firebase service account secrets
 secrets/
+.e2e-emails/
+.e2e-artifacts/

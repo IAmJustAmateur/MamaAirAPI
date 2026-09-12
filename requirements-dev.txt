@@ -1,0 +1,3 @@
+-r requirements.txt
+# Optional filesystem-broker process smoke test on Windows.
+pywin32==311; sys_platform == "win32"

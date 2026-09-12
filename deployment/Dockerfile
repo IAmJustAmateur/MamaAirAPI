@@ -1,5 +1,5 @@
 # Use official Python image
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
@@ -28,7 +28,7 @@ ENV PYTHONUNBUFFERED=1
 COPY deployment/entrypoint.sh ./entrypoint.sh
 
 # Make it executable
-RUN chmod +x ./entrypoint.sh
+RUN sed -i 's/\r$//' ./entrypoint.sh && chmod +x ./entrypoint.sh
 
 # Default command
 CMD ["./entrypoint.sh"]

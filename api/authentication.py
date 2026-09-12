@@ -24,7 +24,7 @@ class EmailBackend(ModelBackend):
             logger.info(f"User with email {username} does not exist")
             return None
 
-        if user.check_password(password):
+        if user.check_password(password) and self.user_can_authenticate(user) and not user.email_verification_pending:
             logger.info(f"User authenticated: {user}")
             return user
 
@@ -41,33 +41,21 @@ class EmailBackend(ModelBackend):
 
 
 class LoggingJWTAuthentication(JWTAuthentication):
-    """
-    Класс аутентификации, который логирует payload токена
-    и информацию о пользователе.
-    """
+    """Authenticate JWTs without writing token claims or password fingerprints to logs."""
 
     def get_validated_token(self, raw_token):
         token = super().get_validated_token(raw_token)
-        # В token.payload лежит декодированный JWT
-        try:
-            payload = token.payload
-        except AttributeError:
-            # На всякий случай, если версия simplejwt другая
-            payload = dict(token)
-
-        logger.info("JWT access token payload: %s", payload)
+        logger.debug("JWT access token validated")
         return token
 
     def get_user(self, validated_token):
         try:
             user = super().get_user(validated_token)
+            if user.email_verification_pending:
+                from rest_framework.exceptions import AuthenticationFailed
+                raise AuthenticationFailed("Email confirmation required")
         except Exception:
-            # Логируем payload, если не удалось найти пользователя
-            try:
-                payload = validated_token.payload
-            except AttributeError:
-                payload = dict(validated_token)
-            logger.exception("Failed to get user from JWT token. Payload: %s", payload)
+            logger.warning("JWT authentication failed")
             raise
 
         logger.info(

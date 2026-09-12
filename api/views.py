@@ -1796,7 +1796,7 @@ class PasswordChangeView(APIView):
     def post(self, request):
         logger.info("PasswordChangeView POST, user=%s", request.user)
         user = request.user
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         if not user.check_password(serializer.validated_data["old_password"]):
