@@ -30,6 +30,8 @@ def account_link(request, purpose):
             except ValidationError as exc:
                 context["errors"] = exc.detail
         response = render(request, "email/account_form.html", context)
-    response["Referrer-Policy"] = "no-referrer"
+    # no-referrer can make native form POSTs send Origin: null, failing CSRF.
+    # The form URL has already been cleaned; never disclose it cross-origin.
+    response["Referrer-Policy"] = "same-origin"
     response["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
     return response

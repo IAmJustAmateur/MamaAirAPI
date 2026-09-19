@@ -2,6 +2,7 @@
 
 This checks process boundaries but does not replace the Redis/PostgreSQL Compose E2E.
 """
+import argparse
 import os
 from pathlib import Path
 import socket
@@ -12,10 +13,13 @@ import time
 
 import requests
 
-from test_email_auth_e2e import run
+from test_email_auth_e2e import run, run_with_browser
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--browser", action="store_true", help="Use Chromium for both account forms")
+    args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix="mamaair-email-e2e-") as temp:
         temp_path = Path(temp)
@@ -52,7 +56,8 @@ def main():
                 time.sleep(0.25)
             else:
                 raise RuntimeError("E2E server did not start")
-            run(base_url, temp_path / "mail")
+            runner = run_with_browser if args.browser else run
+            runner(base_url, temp_path / "mail")
         except Exception:
             for output in logs:
                 output.flush()

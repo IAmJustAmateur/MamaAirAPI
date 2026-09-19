@@ -1,5 +1,22 @@
 # Codex Handoff: MamaAir API
 
+## Email form CSRF fix (2026-09-19)
+
+Branch `codex/email-auth-celery`: use `Referrer-Policy: same-origin` in both
+Django account pages and Caddy. `no-referrer` made native browser POSTs use
+`Origin: null`, which CSRF middleware correctly rejected. Do not exempt these
+forms from CSRF or add null to trusted origins. Token-free form redirects remain.
+
+`scripts/run_email_process_e2e.py --browser` uses real Chromium without Docker.
+The Compose/CI E2E now uses Chromium through an isolated HTTPS Caddy proxy,
+Redis and PostgreSQL. The test runner's private-CA bypass is only for that stack.
+Production browser dependencies are unchanged. Redeploy web and reload/recreate
+Caddy after updating its bind-mounted configuration; see the email auth guide.
+
+Local validation: reproduced the old null-Origin failure in Chromium before the
+fix, then passed both browser forms, the HTTP-client E2E and all 282 Django tests.
+OpenAPI validation, migration drift and dependency checks also passed.
+
 ## Email authentication work (2026-09-12)
 
 Branch `codex/email-auth-celery` adds public email registration/login, web email

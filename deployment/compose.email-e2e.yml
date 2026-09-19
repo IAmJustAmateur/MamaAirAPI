@@ -8,7 +8,7 @@ x-app: &app
     DJANGO_ENV: staging
     DEBUG: "False"
     SECRET_KEY: isolated-email-e2e-secret-not-for-production
-    ALLOWED_HOSTS: web,localhost,127.0.0.1
+    ALLOWED_HOSTS: web,email.test,localhost,127.0.0.1
     DB_HOST: db
     DB_PORT: "5432"
     DB_NAME: email_e2e
@@ -20,7 +20,7 @@ x-app: &app
     AUTH_REDIS_CACHE_URL: redis://redis:6379/1
     EMAIL_BACKEND: django.core.mail.backends.filebased.EmailBackend
     EMAIL_FILE_PATH: /mail
-    AUTH_PUBLIC_URL: http://web:8000
+    AUTH_PUBLIC_URL: https://email.test
     EMAIL_HOST_PASSWORD: ""
     MOVEMENT_COORDINATE_KEYS: '{"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
   volumes:
@@ -68,11 +68,35 @@ services:
       interval: 5s
       timeout: 10s
       retries: 20
+  proxy:
+    image: caddy:2
+    volumes:
+      - ./Caddyfile.email-e2e:/etc/caddy/Caddyfile:ro
+    networks:
+      default:
+        aliases:
+          - email.test
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-q", "-O", "/dev/null", "https://email.test/api/meta/choices/"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
   tests:
-    <<: *app
-    command: ["python", "scripts/test_email_auth_e2e.py", "--base-url", "http://web:8000", "--mail-dir", "/mail"]
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.email-e2e
+    init: true
+    shm_size: 1gb
+    volumes:
+      - email_messages:/mail:ro
+    command: ["python", "scripts/test_email_auth_e2e.py", "--base-url", "https://email.test", "--mail-dir", "/mail", "--browser", "--insecure-test-tls"]
     depends_on:
       worker:
+        condition: service_healthy
+      proxy:
         condition: service_healthy
 volumes:
   email_messages:

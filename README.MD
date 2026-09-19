@@ -69,6 +69,16 @@ login, password reset and old-token revocation without Gmail or Docker. It does
 not replace the Redis/PostgreSQL E2E check; see the [email auth guide](docs/email_auth_guide.md)
 for that command and deployment requirements.
 
+For real browser form submission (including the `Origin: null` regression):
+
+```powershell
+.\venv\Scripts\python.exe -m playwright install chromium
+.\venv\Scripts\python.exe scripts\run_email_process_e2e.py --browser
+```
+
+CI runs this account flow through Chromium and an isolated HTTPS Caddy proxy
+with Redis/PostgreSQL. Gmail credentials are never used by automated E2E tests.
+
 ### Application settings
 
 Create `.env` next to `manage.py`. Start from `env.dist` when possible.

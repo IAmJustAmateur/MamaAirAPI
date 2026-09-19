@@ -1,0 +1,7 @@
+# Browser binaries and the Python package must have matching versions.
+# This image is only used by the isolated E2E runner, never the deployed app.
+FROM mcr.microsoft.com/playwright/python:v1.58.0-noble
+WORKDIR /app
+COPY requirements-browser-e2e.txt .
+RUN pip install --no-cache-dir -r requirements-browser-e2e.txt requests==2.32.4
+COPY scripts/test_email_auth_e2e.py scripts/test_email_auth_e2e.py

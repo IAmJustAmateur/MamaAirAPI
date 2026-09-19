@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   email-auth-e2e:
-    name: Email auth E2E (Redis and Celery)
+    name: Email auth E2E (Chromium, HTTPS, Redis and Celery)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -25,7 +25,7 @@ jobs:
         run: docker compose -f deployment/compose.email-e2e.yml up --build --abort-on-container-exit --exit-code-from tests
       - name: Show service diagnostics
         if: failure()
-        run: docker compose -f deployment/compose.email-e2e.yml logs --tail=100 web worker redis
+        run: docker compose -f deployment/compose.email-e2e.yml logs --tail=100 web worker redis proxy tests
       - name: Remove isolated test stack
         if: always()
         run: docker compose -f deployment/compose.email-e2e.yml down --volumes --remove-orphans

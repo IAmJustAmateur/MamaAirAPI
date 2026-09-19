@@ -95,6 +95,18 @@ its temporary files. It never uses Gmail. On Windows it uses the solo pool and
 pywin32 for this smoke test; Windows is not a supported production Celery platform.
 This proves process handoff but does not validate Redis or PostgreSQL behavior.
 
+To submit the verification and reset forms in real headless Chromium (no Docker):
+
+```powershell
+.\venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\venv\Scripts\python.exe -m playwright install chromium
+.\venv\Scripts\python.exe scripts\run_email_process_e2e.py --browser
+```
+
+This also checks the browser-generated Origin and Referer headers. It reproduces
+the old `Origin: null` failure with `no-referrer`, without manually injecting
+headers. Local process tests use HTTP; the CI stack below covers real HTTPS.
+
 Unit/API tests:
 
 ```powershell
@@ -112,11 +124,13 @@ docker compose -f deployment/compose.email-e2e.yml down --volumes --remove-orpha
 ```
 
 The Compose project is named `mamaair-email-e2e`, has its own PostgreSQL, Redis,
-web, worker and captured email volume, and does not load the repository `.env` or
+web, worker, HTTPS Caddy proxy, Chromium runner and captured email volume, and does not load the repository `.env` or
 production secrets. The cleanup command deletes only this test stack's data.
-It checks registration, real queue handoff, email contents, browser-form
-confirmation, login, reset, link replay, and access/refresh revocation. Every run
+It checks registration, real queue handoff, email contents, native Chromium form
+confirmation over HTTPS, login, reset, link replay, and access/refresh revocation. Every run
 uses a unique address. CI has a separate `email-auth-e2e` job for this stack.
+Only the test runner accepts the private test CA (`--insecure-test-tls`). Do not
+use that flag for production. Chromium dependencies are isolated from the production image.
 
 To test an already-running isolated stack with a shared captured-mail directory:
 
@@ -165,7 +179,28 @@ docker compose --env-file .env -f deployment/docker-compose.yml logs --tail=100 
 Web startup applies migrations and collects static files. The worker starts after
 web/Redis are healthy. Redis is private and persistent, with no public host port.
 The image now uses Python 3.12, matching CI. Caddy forwards HTTPS information and
-sets no-referrer; Django configures secure form cookies for an HTTPS public URL.
+sets `Referrer-Policy: same-origin`, matching Django's account forms; Django
+configures secure form cookies for an HTTPS public URL. A `no-referrer` policy
+can cause browsers to send `Origin: null` on native form POSTs, which Django
+correctly rejects. Keep CSRF protection enabled and never trust a null origin.
+The initial link is redirected to a token-free URL before the form is rendered;
+the cleaned URL is only sent as Referer to the same origin, never to other sites.
+
+### Deploying the form CSRF fix
+
+Pull the updated `codex/email-auth-celery` branch on the server. No new migration
+is needed for this fix. Rebuild web/worker and recreate Caddy to load the changed
+bind-mounted Caddyfile (rebuilding web alone does not update Caddy's policy):
+
+```sh
+docker compose --env-file .env -f deployment/docker-compose.yml up -d --build web celery_worker
+docker compose --env-file .env -f deployment/docker-compose.yml up -d --no-deps --force-recreate caddy
+```
+
+Open the confirmation link again in a fresh browser tab, not the old form tab.
+If the link expired, request a new verification email via `/api/auth/email/resend/`.
+Complete verification before requesting password reset. Do not manually clear
+`email_verification_pending` to bypass this check.
 
 JWT revocation is enabled: tokens issued before this release lack the required
 password fingerprint and require one new login. After a password change/reset,

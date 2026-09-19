@@ -194,10 +194,46 @@ class EmailAuthTests(APITestCase):
         self.assertEqual(response["Location"], "/reset-password")
         response = client.get(response["Location"])
         self.assertNotContains(response, payload["token"])
-        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
         self.assertEqual(client.post("/reset-password", payload).status_code, 403)
         payload["csrfmiddlewaretoken"] = client.cookies["csrftoken"].value
         self.assertContains(client.post("/reset-password", payload), "Password saved")
+
+    def test_https_forms_accept_same_origin_and_referer_fallback(self):
+        for purpose, path in (("verify", "/verify-email"), ("reset", "/reset-password")):
+            for headers in ({"HTTP_ORIGIN": "https://testserver"},
+                            {"HTTP_REFERER": "https://testserver" + path}):
+                with self.subTest(purpose=purpose, headers=headers):
+                    self.user.email_verification_pending = purpose == "verify"
+                    self.user.save()
+                    client = Client(enforce_csrf_checks=True)
+                    payload = self.payload(purpose=purpose)
+                    response = client.get(path, {"uid": payload["uid"], "token": payload["token"]}, secure=True)
+                    self.assertEqual(response["Location"], path)
+                    response = client.get(path, secure=True)
+                    self.assertEqual(response["Referrer-Policy"], "same-origin")
+                    self.assertNotContains(response, payload["token"])
+                    form = {"new_password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD,
+                            "csrfmiddlewaretoken": client.cookies["csrftoken"].value}
+                    self.assertContains(client.post(path, form, secure=True, **headers), "Password saved")
+
+    def test_https_forms_still_reject_null_foreign_and_missing_origins(self):
+        for purpose, path in (("verify", "/verify-email"), ("reset", "/reset-password")):
+            self.user.email_verification_pending = purpose == "verify"
+            self.user.save()
+            client = Client(enforce_csrf_checks=True)
+            payload = self.payload(purpose=purpose)
+            client.get(path, {"uid": payload["uid"], "token": payload["token"]}, secure=True)
+            client.get(path, secure=True)
+            form = {"new_password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD,
+                    "csrfmiddlewaretoken": client.cookies["csrftoken"].value}
+            for headers in ({"HTTP_ORIGIN": "null"}, {"HTTP_ORIGIN": "https://untrusted.example"}, {}):
+                self.assertEqual(client.post(path, form, secure=True, **headers).status_code, 403)
+            self.assertEqual(client.post(path, {"new_password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD},
+                                         secure=True, HTTP_ORIGIN="https://testserver").status_code, 403)
+            self.user.refresh_from_db()
+            self.assertEqual(self.user.email_verification_pending, purpose == "verify")
+            self.assertTrue(self.user.check_password(PASSWORD))
 
     def test_email_request_throttled(self):
         for _ in range(5):
