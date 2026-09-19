@@ -21,6 +21,7 @@ Django REST Framework backend for the MamaAir mobile app. The API stores user pr
 - Committed OpenAPI snapshot: `docs/openapi/schema.json`
 - Mobile developer guide: `docs/mobile_api_guide.md`
 - Email auth, Gmail setup, deployment and rollback: [email auth guide](docs/email_auth_guide.md)
+- Reproducible email auth curl flow: [mobile curl guide](docs/email_auth_mobile_curl_guide.md)
 
 Production Swagger URL:
 

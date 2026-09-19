@@ -8,6 +8,9 @@ blocked accounts. No Celery database tables or result backend are required.
 
 ## Mobile requests
 
+For a complete copy/paste registration, verification, login, reset, replay, and
+JWT-revocation sequence, see the [mobile curl walkthrough](email_auth_mobile_curl_guide.md).
+
 | Endpoint (POST) | Request | Success |
 | --- | --- | --- |
 | `/api/auth/email/register/` | `email`, `password`, `password_confirm` | 202 |
