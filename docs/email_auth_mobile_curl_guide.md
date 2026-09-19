@@ -18,6 +18,22 @@ NEW_PASSWORD=Ocean!Quartz62-spring
 Replace the values directly in each command. Keep the password only in your local
 test environment; do not commit it.
 
+## Flow summary
+
+Follow the steps in this order:
+
+1. Register the account.
+2. **Do not confirm the email yet.** Optionally try to log in and verify that it
+   returns `401` while the account is pending.
+3. If the first verification email did not arrive, optionally request another one.
+4. Open the verification link in the browser, or confirm with the curl request.
+5. Log in with the verified account.
+6. Request password reset and complete the reset.
+7. Verify the new password and JWT revocation.
+
+Steps 2 and 3 are diagnostic checks. In the normal mobile flow, the user can go
+directly from registration to opening the verification link, then log in.
+
 ## 1. Register a new account
 
 `password_confirm` is required and must equal `password`.
@@ -36,7 +52,14 @@ This creates a pending account and queues a verification email. A registration
 request without `password_confirm` returns `400 Bad Request`, creates no account,
 and queues no email.
 
-## 2. Confirm that login is blocked before verification
+For the complete test below, wait before opening the verification link: first run
+the optional pending-login check in step 2. If you only need the normal user flow,
+you can skip steps 2 and 3 and open the link immediately.
+
+## 2. Optional: confirm that login is blocked before verification
+
+At this point the email must still be unconfirmed. Do not open its verification
+link until this negative check is complete.
 
 ```powershell
 curl.exe --include --request POST "https://api.mamaair.work/api/auth/email/login/" --header "Content-Type: application/json" --data-raw '{"email":"replace-with-a-real-inbox@example.com","password":"Birch!Quartz85-frost"}'
@@ -44,7 +67,7 @@ curl.exe --include --request POST "https://api.mamaair.work/api/auth/email/login
 
 Expected: `401 Unauthorized`. A pending user must not receive JWT tokens.
 
-## 3. Resend verification when necessary
+## 3. Optional: resend verification when necessary
 
 Use this only for an existing pending account:
 
@@ -59,7 +82,7 @@ still be valid, but using the newest message avoids confusion.
 delivered. No verification email is sent for an unknown, disabled, or already
 verified account.
 
-## 4. Verify the email address
+## 4. Verify the email address (required before login and password reset)
 
 The email contains a URL similar to:
 
