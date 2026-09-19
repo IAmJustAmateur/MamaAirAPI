@@ -13,7 +13,7 @@ class EmailCookieSettingsTests(SimpleTestCase):
         deployment = Path(__file__).resolve().parents[2] / "deployment"
         for filename in ("Caddyfile", "Caddyfile.email-e2e"):
             config = (deployment / filename).read_text(encoding="utf-8")
-            self.assertIn('Referrer-Policy "same-origin"', config)
+            self.assertIn('>Referrer-Policy "same-origin"', config)
             self.assertNotIn('Referrer-Policy "no-referrer"', config)
 
     def read_cookies(self, environment, public_url):

@@ -185,6 +185,8 @@ can cause browsers to send `Origin: null` on native form POSTs, which Django
 correctly rejects. Keep CSRF protection enabled and never trust a null origin.
 The initial link is redirected to a token-free URL before the form is rendered;
 the cleaned URL is only sent as Referer to the same origin, never to other sites.
+Caddy applies this header after the upstream response (`>Referrer-Policy`) so
+the browser receives one policy rather than duplicate proxy/application values.
 
 ### Deploying the form CSRF fix
 

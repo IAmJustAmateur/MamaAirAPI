@@ -1,7 +1,7 @@
 # Private test CA, no public listener or production certificate state.
 https://email.test {
     tls internal
-    header Referrer-Policy "same-origin"
+    header >Referrer-Policy "same-origin"
     reverse_proxy web:8000 {
         header_up X-Forwarded-Proto {scheme}
     }

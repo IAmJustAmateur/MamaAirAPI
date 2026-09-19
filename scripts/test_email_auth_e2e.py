@@ -118,7 +118,8 @@ def browser_confirm(browser, url, password, insecure_test_tls):
         assert headers.get("referer") == clean_url, "Referer must contain only the cleaned form URL"
         assert result.status == 200, f"Browser form rejected: HTTP {result.status}"
         expect(page.get_by_role("heading", name="Password saved")).to_be_visible()
-        assert response.headers.get("referrer-policy") == "same-origin"
+        policy = response.headers.get("referrer-policy")
+        assert policy == "same-origin", f"Expected a single same-origin policy, got {policy!r}"
         print(f"Browser form passed: {urlparse(clean_url).path}, same-origin POST, no token in Referer.")
     finally:
         context.close()
