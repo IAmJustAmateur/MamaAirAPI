@@ -1,22 +1,22 @@
 # MamaAir email authentication: curl walkthrough
 
-This is the expected mobile flow for a new email/password account. The commands
-below work in PowerShell 7 with `curl.exe` and in a POSIX shell with `curl`.
-On Windows, use `curl.exe` explicitly so PowerShell does not select another command.
+This is the expected mobile flow for a new email/password account. Run the
+commands below in Bash with `curl`.
 
 Use a new test email that has never been registered in MamaAir and whose inbox
 you can open. Do not use a production user's account: password reset revokes that
 user's existing access and refresh tokens.
 
-```text
+```bash
 BASE_URL=https://api.mamaair.work
 TEST_EMAIL=replace-with-a-real-inbox@example.com
 INITIAL_PASSWORD=Birch!Quartz85-frost
 NEW_PASSWORD=Ocean!Quartz62-spring
 ```
 
-Replace the values directly in each command. Keep the password only in your local
-test environment; do not commit it.
+Set these variables once in the current Bash session. Keep the passwords only in
+your local test environment; do not commit them. The example passwords do not
+contain JSON-sensitive quote or backslash characters.
 
 ## Flow summary
 
@@ -38,8 +38,10 @@ directly from registration to opening the verification link, then log in.
 
 `password_confirm` is required and must equal `password`.
 
-```powershell
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/email/register/" --header "Content-Type: application/json" --data-raw '{"email":"replace-with-a-real-inbox@example.com","password":"Birch!Quartz85-frost","password_confirm":"Birch!Quartz85-frost"}'
+```bash
+curl --include --request POST "$BASE_URL/api/auth/email/register/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"email\":\"$TEST_EMAIL\",\"password\":\"$INITIAL_PASSWORD\",\"password_confirm\":\"$INITIAL_PASSWORD\"}"
 ```
 
 Expected: `202 Accepted`.
@@ -61,8 +63,10 @@ you can skip steps 2 and 3 and open the link immediately.
 At this point the email must still be unconfirmed. Do not open its verification
 link until this negative check is complete.
 
-```powershell
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/email/login/" --header "Content-Type: application/json" --data-raw '{"email":"replace-with-a-real-inbox@example.com","password":"Birch!Quartz85-frost"}'
+```bash
+curl --include --request POST "$BASE_URL/api/auth/email/login/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"email\":\"$TEST_EMAIL\",\"password\":\"$INITIAL_PASSWORD\"}"
 ```
 
 Expected: `401 Unauthorized`. A pending user must not receive JWT tokens.
@@ -71,8 +75,10 @@ Expected: `401 Unauthorized`. A pending user must not receive JWT tokens.
 
 Use this only for an existing pending account:
 
-```powershell
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/email/resend/" --header "Content-Type: application/json" --data-raw '{"email":"replace-with-a-real-inbox@example.com"}'
+```bash
+curl --include --request POST "$BASE_URL/api/auth/email/resend/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"email\":\"$TEST_EMAIL\"}"
 ```
 
 Expected: `202 Accepted`. Wait for the newest email. Older verification links may
@@ -91,10 +97,15 @@ https://api.mamaair.work/verify-email?uid=ENCODED_UID&token=TOKEN
 ```
 
 The normal user flow is to open this URL in a browser and save the password on
-the page. For a curl-only test, copy `uid` and `token` from the URL and call:
+the page. For a curl-only test, copy `uid` and `token` from the URL:
 
-```powershell
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/email/verify/" --header "Content-Type: application/json" --data-raw '{"uid":"ENCODED_UID_FROM_EMAIL","token":"TOKEN_FROM_EMAIL","new_password":"Birch!Quartz85-frost","password_confirm":"Birch!Quartz85-frost"}'
+```bash
+VERIFY_UID=ENCODED_UID_FROM_EMAIL
+VERIFY_TOKEN=TOKEN_FROM_EMAIL
+
+curl --include --request POST "$BASE_URL/api/auth/email/verify/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"uid\":\"$VERIFY_UID\",\"token\":\"$VERIFY_TOKEN\",\"new_password\":\"$INITIAL_PASSWORD\",\"password_confirm\":\"$INITIAL_PASSWORD\"}"
 ```
 
 Expected: `200 OK`.
@@ -109,17 +120,25 @@ successful verification.
 
 ## 5. Log in after verification
 
-```powershell
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/email/login/" --header "Content-Type: application/json" --data-raw '{"email":"replace-with-a-real-inbox@example.com","password":"Birch!Quartz85-frost"}'
+```bash
+curl --include --request POST "$BASE_URL/api/auth/email/login/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"email\":\"$TEST_EMAIL\",\"password\":\"$INITIAL_PASSWORD\"}"
 ```
 
-Expected: `200 OK` with `access`, `refresh`, and `user`. Save the returned tokens
-as `OLD_ACCESS` and `OLD_REFRESH` for the revocation checks below.
+Expected: `200 OK` with `access`, `refresh`, and `user`. Copy the returned token
+values into Bash variables for the revocation checks below:
+
+```bash
+OLD_ACCESS='paste-access-token-here'
+OLD_REFRESH='paste-refresh-token-here'
+```
 
 Verify the access token:
 
-```powershell
-curl.exe --include "https://api.mamaair.work/api/profile/" --header "Authorization: Bearer OLD_ACCESS"
+```bash
+curl --include "$BASE_URL/api/profile/" \
+  --header "Authorization: Bearer $OLD_ACCESS"
 ```
 
 Expected: `200 OK`.
@@ -128,8 +147,10 @@ Expected: `200 OK`.
 
 Password reset is available only after the account is verified.
 
-```powershell
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/password-reset/request/" --header "Content-Type: application/json" --data-raw '{"email":"replace-with-a-real-inbox@example.com"}'
+```bash
+curl --include --request POST "$BASE_URL/api/auth/password-reset/request/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"email\":\"$TEST_EMAIL\"}"
 ```
 
 Expected: `202 Accepted`. A pending account does not receive a reset email; use
@@ -145,8 +166,13 @@ https://api.mamaair.work/reset-password?uid=ENCODED_UID&token=TOKEN
 
 The normal user flow is the browser page. For a curl-only test, copy its values:
 
-```powershell
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/password-reset/confirm/" --header "Content-Type: application/json" --data-raw '{"uid":"ENCODED_UID_FROM_RESET_EMAIL","token":"TOKEN_FROM_RESET_EMAIL","new_password":"Ocean!Quartz62-spring","password_confirm":"Ocean!Quartz62-spring"}'
+```bash
+RESET_UID=ENCODED_UID_FROM_RESET_EMAIL
+RESET_TOKEN=TOKEN_FROM_RESET_EMAIL
+
+curl --include --request POST "$BASE_URL/api/auth/password-reset/confirm/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"uid\":\"$RESET_UID\",\"token\":\"$RESET_TOKEN\",\"new_password\":\"$NEW_PASSWORD\",\"password_confirm\":\"$NEW_PASSWORD\"}"
 ```
 
 Expected: `200 OK` with `Password saved`. Repeating this exact request must return
@@ -156,34 +182,51 @@ Expected: `200 OK` with `Password saved`. Repeating this exact request must retu
 
 The old password must fail:
 
-```powershell
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/email/login/" --header "Content-Type: application/json" --data-raw '{"email":"replace-with-a-real-inbox@example.com","password":"Birch!Quartz85-frost"}'
+```bash
+curl --include --request POST "$BASE_URL/api/auth/email/login/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"email\":\"$TEST_EMAIL\",\"password\":\"$INITIAL_PASSWORD\"}"
 ```
 
 Expected: `401 Unauthorized`.
 
 The new password must work:
 
-```powershell
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/email/login/" --header "Content-Type: application/json" --data-raw '{"email":"replace-with-a-real-inbox@example.com","password":"Ocean!Quartz62-spring"}'
+```bash
+curl --include --request POST "$BASE_URL/api/auth/email/login/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"email\":\"$TEST_EMAIL\",\"password\":\"$NEW_PASSWORD\"}"
 ```
 
-Expected: `200 OK`. Save these tokens as `NEW_ACCESS` and `NEW_REFRESH`.
+Expected: `200 OK`. Copy these token values:
+
+```bash
+NEW_ACCESS='paste-new-access-token-here'
+NEW_REFRESH='paste-new-refresh-token-here'
+```
 
 Old tokens must be rejected:
 
-```powershell
-curl.exe --include "https://api.mamaair.work/api/profile/" --header "Authorization: Bearer OLD_ACCESS"
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/token/refresh/" --header "Content-Type: application/json" --data-raw '{"refresh":"OLD_REFRESH"}'
+```bash
+curl --include "$BASE_URL/api/profile/" \
+  --header "Authorization: Bearer $OLD_ACCESS"
+
+curl --include --request POST "$BASE_URL/api/auth/token/refresh/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"refresh\":\"$OLD_REFRESH\"}"
 ```
 
 Expected: `401 Unauthorized` for both.
 
 New tokens must work:
 
-```powershell
-curl.exe --include "https://api.mamaair.work/api/profile/" --header "Authorization: Bearer NEW_ACCESS"
-curl.exe --include --request POST "https://api.mamaair.work/api/auth/token/refresh/" --header "Content-Type: application/json" --data-raw '{"refresh":"NEW_REFRESH"}'
+```bash
+curl --include "$BASE_URL/api/profile/" \
+  --header "Authorization: Bearer $NEW_ACCESS"
+
+curl --include --request POST "$BASE_URL/api/auth/token/refresh/" \
+  --header "Content-Type: application/json" \
+  --data-raw "{\"refresh\":\"$NEW_REFRESH\"}"
 ```
 
 Expected: `200 OK` for both.
