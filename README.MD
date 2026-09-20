@@ -22,6 +22,7 @@ Django REST Framework backend for the MamaAir mobile app. The API stores user pr
 - Mobile developer guide: `docs/mobile_api_guide.md`
 - Email auth, Gmail setup, deployment and rollback: [email auth guide](docs/email_auth_guide.md)
 - Reproducible email auth curl flow: [mobile curl guide](docs/email_auth_mobile_curl_guide.md)
+- Account deletion mobile contract: [account deletion guide](docs/account_deletion_mobile_guide.md)
 
 Production Swagger URL:
 
@@ -66,7 +67,8 @@ Run from the repository root (PowerShell):
 
 This starts separate API and Celery processes with a temporary SQLite database,
 filesystem queue and captured emails. It tests registration, email confirmation,
-login, password reset and old-token revocation without Gmail or Docker. It does
+login, password reset, old-token revocation, permanent account deletion, and
+email reuse without Gmail or Docker. It does
 not replace the Redis/PostgreSQL E2E check; see the [email auth guide](docs/email_auth_guide.md)
 for that command and deployment requirements.
 
@@ -157,7 +159,7 @@ Auth:
 - `POST /api/auth/google/`
 - `POST /api/auth/token/refresh/`
 - `POST /api/auth/logout/`
-- `DELETE /api/auth/delete-account/`
+- `DELETE /api/auth/delete-account/` — permanent deletion; JSON body `{"confirmation":"DELETE"}`
 
 Profile and configuration:
 

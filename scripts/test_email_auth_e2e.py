@@ -92,7 +92,22 @@ def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
     profile_url = base_url + "/api/profile/"
     assert session.get(profile_url, headers={"Authorization": "Bearer " + old_tokens["access"]}, timeout=15).status_code == 401
     assert session.get(profile_url, headers={"Authorization": "Bearer " + new_tokens["access"]}, timeout=15).status_code == 200
-    print("Email auth E2E passed: register, captured mail, web verification, login, reset, replay, JWT revocation.")
+    deletion_url = base_url + "/api/auth/delete-account/"
+    auth_headers = {"Authorization": "Bearer " + new_tokens["access"]}
+    rejected = session.delete(deletion_url, json={"confirmation": "delete"}, headers=auth_headers, timeout=15)
+    assert rejected.status_code == 400, f"Invalid deletion confirmation: {rejected.status_code} {rejected.text[:300]}"
+    assert session.get(profile_url, headers=auth_headers, timeout=15).status_code == 200
+    deleted = session.delete(deletion_url, json={"confirmation": "DELETE"}, headers=auth_headers, timeout=15)
+    assert deleted.status_code == 204, f"Account deletion: {deleted.status_code} {deleted.text[:300]}"
+    assert not deleted.content, "A 204 account deletion response must have an empty body"
+    assert session.get(profile_url, headers=auth_headers, timeout=15).status_code == 401
+    post("token/refresh", {"refresh": new_tokens["refresh"]}, 401)
+    post("email/login", {"email": email, "password": new_password}, 401)
+    post("email/register", register, 202)
+    print(
+        "Email auth E2E passed: registration, verification, login, reset, JWT "
+        "revocation, permanent deletion, and email reuse."
+    )
 
 
 def browser_confirm(browser, url, password, insecure_test_tls):

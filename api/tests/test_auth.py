@@ -162,7 +162,11 @@ class AuthTests(APITestCase):
         access = tokens["access"]
 
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
-        response = self.client.delete(reverse("delete-account"))
+        response = self.client.delete(
+            reverse("delete-account"),
+            {"confirmation": "DELETE"},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
         # Убедимся, что пользователь действительно удалён

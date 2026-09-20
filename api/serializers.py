@@ -62,6 +62,22 @@ class PasswordChangeSerializer(serializers.Serializer):
         return value
 
 
+class DeleteAccountSerializer(serializers.Serializer):
+    confirmation = serializers.CharField(
+        write_only=True,
+        trim_whitespace=False,
+        max_length=16,
+        help_text='Enter "DELETE" exactly to confirm permanent account deletion.',
+    )
+
+    def validate_confirmation(self, value):
+        if value != "DELETE":
+            raise serializers.ValidationError(
+                'Enter "DELETE" exactly to confirm permanent account deletion.'
+            )
+        return value
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     week_of_pregnancy = serializers.IntegerField(required=False, allow_null=True)
     pregnancy_number = serializers.IntegerField(

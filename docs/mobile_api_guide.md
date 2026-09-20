@@ -24,6 +24,9 @@ Access tokens are issued by Google sign-in or email/password login. Refresh toke
 
 For registration, confirmation, password reset, and request examples, see [Email authentication](email_auth_guide.md). A complete reproducible sequence with expected statuses is in the [email auth curl walkthrough](email_auth_mobile_curl_guide.md). Email login uses `POST /api/auth/email/login/`; the JWT response format matches Google login. Password changes invalidate old access and refresh tokens. The initial deployment of this change requires existing sessions to sign in again.
 
+For permanent account removal, including the required confirmation payload and
+mobile cleanup behavior, see [Account deletion](account_deletion_mobile_guide.md).
+
 JWT API calls do not require `X-CSRFTOKEN`. Swagger UI may show a CSRF header when it runs in a browser session, but mobile clients should use the Bearer token header.
 
 ### Google Sign-In

@@ -196,6 +196,15 @@ The following checks passed during feature development before merge:
 - OpenAPI schema regeneration: no warnings;
 - `git diff --check`: no whitespace errors.
 
+## Account deletion API
+
+Branch `codex/account-deletion-api` hardens `DELETE /api/auth/delete-account/`.
+It requires `{"confirmation":"DELETE"}`, permanently deletes the user-owned
+database graph and uploaded avatar, returns an empty `204`, invalidates existing
+JWTs through user removal, and permits later registration with the same email.
+The committed OpenAPI snapshot, mobile documentation, unit/API tests, and the
+email-auth process e2e cover this contract. No model migration is required.
+
 ## Recommended Start For The Next Session
 
 ```powershell
