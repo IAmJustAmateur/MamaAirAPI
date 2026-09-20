@@ -28,7 +28,8 @@
     # Небольшие полезные заголовки
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        Referrer-Policy "same-origin"
+        # Apply after upstream headers to avoid duplicate policies.
+        >Referrer-Policy "same-origin"
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
     }

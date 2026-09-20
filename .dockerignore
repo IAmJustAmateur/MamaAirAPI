@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+**/.env
+**/.env.*
+venv
+env
+**/__pycache__
+*.sqlite3
+*.log
+.e2e-emails
+.e2e-artifacts
+media
+secrets
+.idea

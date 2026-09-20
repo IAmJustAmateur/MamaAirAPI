@@ -20,10 +20,13 @@ from django.conf.urls.static import static
 from django.urls import path, include
 
 from django.contrib import admin
+from api.auth_pages import account_link
 from django.urls import path
 from debug_toolbar.toolbar import debug_toolbar_urls
 
 urlpatterns = [
+    path("reset-password", account_link, {"purpose": "reset"}, name="reset-password-page"),
+    path("verify-email", account_link, {"purpose": "verify"}, name="verify-email-page"),
     path("admin/", admin.site.urls),
     path("api/", include("api.urls")),
     path("demo/", include("demo_interface.urls")),

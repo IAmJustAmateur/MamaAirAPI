@@ -84,6 +84,36 @@ SECRET_KEY = os.getenv(
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1").split(",")
 
 REGISTRATION_API_KEY = os.getenv("REGISTRATION_API_KEY")
+GOOGLE_ALLOWED_AUDS = os.getenv("GOOGLE_ALLOWED_AUDS", "")
+
+# Email authentication: existing accounts remain usable; new registrations verify first.
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "true").lower() == "true"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_TIMEOUT = 10
+EMAIL_FILE_PATH = os.getenv("EMAIL_FILE_PATH", str(intermediate_base_dir / ".e2e-emails"))
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "MamaAir <noreply.mamaair@gmail.com>")
+SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "service@mamaair.work")
+AUTH_PUBLIC_URL = os.getenv("AUTH_PUBLIC_URL", "https://api.mamaair.work").rstrip("/")
+PASSWORD_RESET_TIMEOUT = 48 * 60 * 60
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_TASK_DEFAULT_QUEUE = "email"
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_BROKER_CONNECTION_TIMEOUT = 3
+CELERY_BROKER_TRANSPORT_OPTIONS = {"socket_connect_timeout": 3, "socket_timeout": 3}
+CELERY_TASK_PUBLISH_RETRY = False
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+if os.getenv("AUTH_REDIS_CACHE_URL"):
+    CACHES = {"default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.environ["AUTH_REDIS_CACHE_URL"],
+    }}
 
 HEALTH_INSIGHT_SNAPSHOT_FRESH_HOURS = int(
     os.getenv("HEALTH_INSIGHT_SNAPSHOT_FRESH_HOURS", "6")
@@ -237,6 +267,8 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("api.authentication.LoggingJWTAuthentication",),
     "DEFAULT_THROTTLE_RATES": {
         "signin": "10/min",  # пример
+        "email_auth": "20/min",
+        "email_address": "5/hour",
     },
 }
 
@@ -250,7 +282,7 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "MamaAir API",
     "DESCRIPTION": (
         "Backend API for the MamaAir mobile app. "
-        "Use Google sign-in to obtain JWT Bearer tokens for protected endpoints. "
+        "Use Google sign-in or verified email/password login to obtain JWT Bearer tokens. "
         "OpenAPI examples follow the mobile E2E flow in scripts/test_server_api.py."
     ),
     "VERSION": "1.0.0",
@@ -268,6 +300,8 @@ SPECTACULAR_SETTINGS = {
 }
 
 SIMPLE_JWT = {
+    "CHECK_REVOKE_TOKEN": True,
+    "USER_AUTHENTICATION_RULE": "api.email_auth.user_can_authenticate",
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=48),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
     "ROTATE_REFRESH_TOKENS": False,
@@ -349,16 +383,17 @@ LOGGING = {
 logger = logging.getLogger(__name__)
 logger.info("Logging initialized")
 
-# http
-# ! TODO: remove this for https
+# Keep cookie and proxy configuration in one place. Production requires HTTPS;
+# the isolated staging E2E stack uses HTTP on its private container network.
+CSRF_TRUSTED_ORIGINS = [AUTH_PUBLIC_URL]
 if DJANGO_ENV in {"production", "staging"}:
-    SESSION_COOKIE_SECURE = True  # если HTTPS
-    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = DJANGO_ENV == "production" or AUTH_PUBLIC_URL.startswith("https://")
+    CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
     SECURE_SSL_REDIRECT = False
-    CSRF_TRUSTED_ORIGINS = ["https://app.mamaair.com"]
+    # Only Caddy may reach the private web port in deployment.
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 else:
-    SESSION_COOKIE_SECURE = False  # если HTTP
+    SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
 SESSION_COOKIE_SAMESITE = "Lax"
 

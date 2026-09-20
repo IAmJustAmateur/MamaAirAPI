@@ -241,6 +241,7 @@ class User(MyUser, PermissionsMixin):
     timezone = models.CharField(max_length=64, null=True, blank=True)
 
     auth_provider = models.CharField(max_length=20, default="password")
+    email_verification_pending = models.BooleanField(default=False)
     google_sub = models.CharField(max_length=255, null=True, blank=True, unique=True)
     avatar = models.ImageField(upload_to=user_avatar_upload_to, null=True, blank=True)
     avatar_url = models.URLField(null=True, blank=True)

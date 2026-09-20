@@ -10,13 +10,20 @@ services:
       - media_volume:/app/media
       - /home/ec2-user/secrets/firebase_service_account.json:/run/secrets/firebase_service_account.json:ro  # <<< NEW
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     expose:
       - "8000"
     restart: always
     env_file:
       - ../.env
     environment:
+      DB_HOST: db
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS},127.0.0.1,localhost
+      CELERY_BROKER_URL: redis://redis:6379/0
+      AUTH_REDIS_CACHE_URL: redis://redis:6379/1
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -25,6 +32,51 @@ services:
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-${ALLOWED_HOSTS}}
       DJANGO_ENV: ${DJANGO_ENV} # Set to 'production' for production environment
       FIREBASE_CREDENTIALS: /run/secrets/firebase_service_account.json   # <<< NEW
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/meta/choices/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  celery_worker:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    command: ["celery", "-A", "agent_api", "worker", "--loglevel=INFO", "--concurrency=2", "-Q", "email"]
+    env_file:
+      - ../.env
+    environment:
+      DB_HOST: db
+      CELERY_BROKER_URL: redis://redis:6379/0
+      AUTH_REDIS_CACHE_URL: redis://redis:6379/1
+      FIREBASE_CREDENTIALS: /run/secrets/firebase_service_account.json
+    volumes:
+      - /home/ec2-user/secrets/firebase_service_account.json:/run/secrets/firebase_service_account.json:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+    stop_grace_period: 45s
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A agent_api inspect ping --destination celery@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   db:
     image: postgres:15
@@ -32,6 +84,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     env_file:
       - ../.env
     environment:
@@ -60,6 +117,7 @@ services:
       - web
 
 volumes:
+  redis_data:
   postgres_data:
   static_volume:
   media_volume:

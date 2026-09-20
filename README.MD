@@ -6,6 +6,7 @@ Django REST Framework backend for the MamaAir mobile app. The API stores user pr
 
 - JWT authentication for protected mobile endpoints
 - Google mobile sign-in
+- Verified email/password sign-in and password reset via Celery
 - User profile, pregnancy, consent, language, and lifestyle data
 - Wellbeing logs, daily check-ins, and daily task completion
 - Mommy and baby symptom checklists, selections, and statistics
@@ -19,11 +20,14 @@ Django REST Framework backend for the MamaAir mobile app. The API stores user pr
 - OpenAPI schema: `/api/schema/`
 - Committed OpenAPI snapshot: `docs/openapi/schema.json`
 - Mobile developer guide: `docs/mobile_api_guide.md`
+- Email auth, Gmail setup, deployment and rollback: [email auth guide](docs/email_auth_guide.md)
+- Reproducible email auth curl flow: [mobile curl guide](docs/email_auth_mobile_curl_guide.md)
+- Account deletion mobile contract: [account deletion guide](docs/account_deletion_mobile_guide.md)
 
 Production Swagger URL:
 
 ```text
-https://api.mamaair.app/api/docs/
+https://api.mamaair.work/api/docs/
 ```
 
 The E2E scripts also support explicit deployment targets with `--base-url`.
@@ -51,6 +55,34 @@ pip install -r requirements.txt
 ```
 
 ## Environment
+
+### Email E2E without Docker
+
+Run from the repository root (PowerShell):
+
+```powershell
+.\venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\venv\Scripts\python.exe scripts\run_email_process_e2e.py
+```
+
+This starts separate API and Celery processes with a temporary SQLite database,
+filesystem queue and captured emails. It tests registration, email confirmation,
+login, password reset, old-token revocation, permanent account deletion, and
+email reuse without Gmail or Docker. It does
+not replace the Redis/PostgreSQL E2E check; see the [email auth guide](docs/email_auth_guide.md)
+for that command and deployment requirements.
+
+For real browser form submission (including the `Origin: null` regression):
+
+```powershell
+.\venv\Scripts\python.exe -m playwright install chromium
+.\venv\Scripts\python.exe scripts\run_email_process_e2e.py --browser
+```
+
+CI runs this account flow through Chromium and an isolated HTTPS Caddy proxy
+with Redis/PostgreSQL. Gmail credentials are never used by automated E2E tests.
+
+### Application settings
 
 Create `.env` next to `manage.py`. Start from `env.dist` when possible.
 
@@ -127,7 +159,7 @@ Auth:
 - `POST /api/auth/google/`
 - `POST /api/auth/token/refresh/`
 - `POST /api/auth/logout/`
-- `DELETE /api/auth/delete-account/`
+- `DELETE /api/auth/delete-account/` — permanent deletion; JSON body `{"confirmation":"DELETE"}`
 
 Profile and configuration:
 
@@ -319,7 +351,7 @@ Useful overrides:
 ```bash
 python scripts/test_server_api.py --env production
 python scripts/test_server_api_legacy.py --env production
-python scripts/test_server_api.py --base-url https://api.mamaair.app/
+python scripts/test_server_api.py --base-url https://api.mamaair.work/
 python scripts/test_server_api.py --base-url https://api.mamaair.work/
 ```
 
@@ -332,7 +364,7 @@ because daily plans are intentionally immutable for their date.
 
 ## Notes for Mobile Developers
 
-- Use Google sign-in as the mobile auth flow.
+- Use Google sign-in or verified email/password sign-in as the mobile auth flow.
 - Read dropdown values from `GET /api/meta/choices/`.
 - `POST /api/wellbeing/log/` adds `water_amount` to the stored daily total.
 - Mood and feeling answers for the user's current local date can produce a

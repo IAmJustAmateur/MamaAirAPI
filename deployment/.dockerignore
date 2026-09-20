@@ -9,6 +9,11 @@ env/
 venv/
 
 .git
+.env
+.env.*
+secrets/
+.e2e-emails/
+.e2e-artifacts/
 .gitignore
 .vscode/
 .idea/

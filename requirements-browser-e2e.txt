@@ -1,0 +1,2 @@
+# Only the test runner needs a browser; keep it out of production dependencies.
+playwright==1.58.0

@@ -5,6 +5,11 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
+# The worker and one-off checks share the web image without running web setup.
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
 # Function to wait for PostgreSQL to be ready
 wait_for_postgres() {
   echo "Waiting for PostgreSQL..."

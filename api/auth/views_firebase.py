@@ -46,12 +46,14 @@ class FirebaseAuthView(APIView):
 
         # if not email or not email_verified:
         #     return Response({"detail": "Email missing or not verified"}, status=401)
-        if not email:
+        if not email or not email_verified:
             return Response({"detail": "Email missing or not verified"}, status=401)
 
         # Линкуем/создаём юзера у себя
         user = User.objects.filter(email=email).first()
         if user:
+            if not user.is_active or user.email_verification_pending:
+                return Response({"detail": "Account unavailable"}, status=401)
             # можно хранить связь с Firebase UID
             if not getattr(user, "firebase_uid", None):
                 setattr(user, "firebase_uid", uid)
@@ -59,11 +61,11 @@ class FirebaseAuthView(APIView):
                 setattr(user, "auth_provider", "firebase")
             if picture and not getattr(user, "avatar_url", None):
                 setattr(user, "avatar_url", picture)
-            if name and not user.first_name:
-                user.first_name = name
+            if name and not user.name:
+                user.name = name
             user.save()
         else:
-            user = User.objects.create(
+            user = User.objects.create_user(
                 # username=email,
                 email=email,
                 # first_name=name,

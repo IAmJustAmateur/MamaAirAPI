@@ -51,10 +51,18 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from django.conf import settings
 
 from .jwt_refresh import LoggingTokenRefreshView
+from .email_auth import (EmailRegisterView, EmailLoginView, EmailVerifyView,
+                         EmailResendView, PasswordResetRequestView, PasswordResetConfirmView)
 
 # app_name = "api"
 
 urlpatterns = [
+    path("auth/email/register/", EmailRegisterView.as_view(), name="email-register"),
+    path("auth/email/login/", EmailLoginView.as_view(), name="email-login"),
+    path("auth/email/verify/", EmailVerifyView.as_view(), name="email-verify"),
+    path("auth/email/resend/", EmailResendView.as_view(), name="email-resend"),
+    path("auth/password-reset/request/", PasswordResetRequestView.as_view(), name="password-reset-request"),
+    path("auth/password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     # path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),

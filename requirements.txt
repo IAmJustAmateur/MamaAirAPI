@@ -1,4 +1,5 @@
 anyio==4.9.0
+celery[redis]==5.5.3
 asgiref==3.8.1
 attrs==25.3.0
 CacheControl==0.14.4

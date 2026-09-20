@@ -13,12 +13,9 @@ from rest_framework.exceptions import ValidationError
 from drf_spectacular.types import OpenApiTypes
 
 from rest_framework_simplejwt.tokens import RefreshToken
-
-# from rest_framework_simplejwt.token_blacklist.models import (
-#     BlacklistedToken,
-#     OutstandingToken,
-# )
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from api.services.guidelines import compute_pollutant_compliance
+from api.schema_hooks import DeleteRequestBodyAutoSchema
 
 from rest_framework.response import Response
 
@@ -75,6 +72,7 @@ from .models import (
     UserWellbeingLog,
     SYMPTOM_CHECKLIST_MOMMY,
     SYMPTOM_CHECKLIST_BABY,
+    SymptomChecklistResponse,
 )
 from recommendations.services.symptom_monitoring import (
     InvalidSymptomChecklist,
@@ -100,6 +98,7 @@ from .serializers import (
     AirExposureLogSerializer,
     AdviceTemplateSerializer,
     PasswordChangeSerializer,
+    DeleteAccountSerializer,
     LogoutSerializer,
     ErrorResponseSerializer,
     WEEKLY_EXPOSURE_RESPONSE_SCHEMA,
@@ -1724,24 +1723,79 @@ class LogoutView(APIView):
 
 @extend_schema(
     summary="Delete current user account",
-    description="Deletes the authenticated user's account from the system. This action is irreversible.",
+    description=(
+        "Permanently deletes the authenticated user's account, all related data, "
+        "and the uploaded avatar. Send the exact confirmation value `DELETE`. "
+        "The action is irreversible, invalidates existing tokens, and allows the "
+        "same email address to be registered again."
+    ),
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "confirmation": {
+                    "type": "string",
+                    "enum": ["DELETE"],
+                    "description": 'Enter "DELETE" exactly.',
+                }
+            },
+            "required": ["confirmation"],
+        }
+    },
     responses={
         204: OpenApiResponse(description="Account deleted successfully."),
+        400: OpenApiResponse(
+            response=inline_serializer(
+                name="DeleteAccountValidationError",
+                fields={
+                    "confirmation": serializers.ListField(
+                        child=serializers.CharField(),
+                        required=False,
+                    )
+                },
+            ),
+            description="The confirmation value is missing or invalid.",
+        ),
+        401: OpenApiResponse(description="Authentication credentials are invalid or missing."),
     },
+    tags=["Auth"],
 )
 class DeleteAccountView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = DeleteAccountSerializer
+    schema = DeleteRequestBodyAutoSchema()
 
     def delete(self, request):
-        logger.info("DeleteAccountView DELETE, user=%s", request.user)
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         user = request.user
         user_id = user.id
-        user.delete()
+        avatar_name = user.avatar.name if user.avatar else None
+        avatar_storage = user.avatar.storage if avatar_name else None
+
+        with transaction.atomic():
+            # Responses protect their generated checklist. Delete them first so
+            # Django can cascade the remaining account-owned checklist data.
+            SymptomChecklistResponse.objects.filter(user=user).delete()
+            # Simple JWT otherwise keeps these rows and only nulls their user.
+            OutstandingToken.objects.filter(user=user).delete()
+            user.delete()
+
+            if avatar_name:
+                def delete_avatar_file():
+                    try:
+                        avatar_storage.delete(avatar_name)
+                    except Exception:
+                        logger.exception(
+                            "DeleteAccountView could not delete avatar for user_id=%s",
+                            user_id,
+                        )
+
+                transaction.on_commit(delete_avatar_file)
+
         logger.info("DeleteAccountView deleted user_id=%s", user_id)
-        return Response(
-            {"detail": "Account deleted successfully"},
-            status=status.HTTP_204_NO_CONTENT,
-        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(
@@ -1796,7 +1850,7 @@ class PasswordChangeView(APIView):
     def post(self, request):
         logger.info("PasswordChangeView POST, user=%s", request.user)
         user = request.user
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         if not user.check_password(serializer.validated_data["old_password"]):
