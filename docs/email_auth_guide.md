@@ -33,6 +33,18 @@ entered during registration. Choosing the password again prevents a third party
 who registered someone else's email from retaining access after confirmation.
 Repeated registration never overwrites an existing account's password.
 
+Account passwords must contain 6 to 128 characters. Numeric, common, and
+email-similar passwords are accepted; spaces are preserved. This policy applies
+to public email registration, verification, reset, authenticated password change,
+and the legacy API-key registration endpoint. Confirmation must match wherever
+requested. Login does not impose the new minimum on existing passwords.
+Django's administrative password-strength validators are unchanged.
+
+Both email-link web forms hide the new password and confirmation initially.
+Use **Show passwords** / **Hide passwords** to toggle both fields without changing
+their values. The control also works with a keyboard; without JavaScript the
+masked forms can still be submitted. The script uses a per-response CSP nonce.
+
 After confirmation, return to the app and POST email/password to the login URL.
 The response has `access`, `refresh`, and `user` (`id`, `email`, `avatar_url`,
 `provider: "password"`). Google login keeps its current response format.
@@ -109,6 +121,10 @@ To submit the verification and reset forms in real headless Chromium (no Docker)
 This also checks the browser-generated Origin and Referer headers. It reproduces
 the old `Origin: null` failure with `no-referrer`, without manually injecting
 headers. Local process tests use HTTP; the CI stack below covers real HTTPS.
+The scenario registers, verifies and resets using six-character numeric passwords,
+then changes to a common password and checks JWT revocation. Chromium additionally
+checks the minimum length and shows/hides both fields on both forms, including
+keyboard activation and submission while the passwords are visible.
 
 Unit/API tests:
 

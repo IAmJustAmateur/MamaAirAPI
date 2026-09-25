@@ -1,3 +1,5 @@
+import secrets
+
 from django.shortcuts import render, redirect
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
@@ -13,13 +15,14 @@ from .email_auth import ConfirmInput, confirm_account
 @csrf_protect
 @require_http_methods(["GET", "POST"])
 def account_link(request, purpose):
+    script_nonce = secrets.token_urlsafe(16)
     session_key = "account_link_" + purpose
     if request.method == "GET" and "token" in request.GET:
         request.session[session_key] = {"uid": request.GET.get("uid", ""), "token": request.GET.get("token", "")}
         # Remove the bearer secret from the visible URL before rendering a form.
         response = redirect(request.path)
     else:
-        context = {"verify": purpose == "verify", "success": False}
+        context = {"verify": purpose == "verify", "success": False, "script_nonce": script_nonce}
         if request.method == "POST":
             serializer = ConfirmInput(data={**request.POST.dict(), **request.session.get(session_key, {})})
             try:
@@ -33,5 +36,9 @@ def account_link(request, purpose):
     # no-referrer can make native form POSTs send Origin: null, failing CSRF.
     # The form URL has already been cleaned; never disclose it cross-origin.
     response["Referrer-Policy"] = "same-origin"
-    response["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+    response["Content-Security-Policy"] = (
+        "default-src 'none'; style-src 'unsafe-inline'; "
+        f"script-src 'nonce-{script_nonce}'; "
+        "form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+    )
     return response

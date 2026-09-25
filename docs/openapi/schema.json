@@ -477,7 +477,7 @@
         "/api/auth/password-change/": {
             "post": {
                 "operationId": "auth_password_change_create",
-                "description": "Allows an authenticated user to change their password by providing the current and new password.",
+                "description": "Allows an authenticated user to change their password by providing the current and new password. New passwords require 6 to 128 characters; simple and numeric passwords are accepted.",
                 "summary": "Change user password",
                 "tags": [
                     "auth"
@@ -494,7 +494,9 @@
                                     },
                                     "new_password": {
                                         "type": "string",
-                                        "example": "newpass456"
+                                        "minLength": 6,
+                                        "maxLength": 128,
+                                        "example": "123456"
                                     }
                                 },
                                 "required": [
@@ -2924,12 +2926,14 @@
                     "new_password": {
                         "type": "string",
                         "writeOnly": true,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "minLength": 6
                     },
                     "password_confirm": {
                         "type": "string",
                         "writeOnly": true,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "minLength": 6
                     }
                 },
                 "required": [
@@ -4395,12 +4399,14 @@
                     "password": {
                         "type": "string",
                         "writeOnly": true,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "minLength": 6
                     },
                     "password_confirm": {
                         "type": "string",
                         "writeOnly": true,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "minLength": 6
                     }
                 },
                 "required": [

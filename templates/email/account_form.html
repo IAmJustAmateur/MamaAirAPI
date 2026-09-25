@@ -5,10 +5,21 @@
 </head><body><main><p>MamaAir</p>
 {% if success %}<h1>Password saved</h1><p>You can return to the app and sign in with your email and new password.</p>
 {% else %}<h1>{% if verify %}Confirm your email{% else %}Reset password{% endif %}</h1>
-<p>Choose a password for your account. Use at least 8 characters and avoid common passwords.</p>
+<p>Choose a password for your account. Use 6 to 128 characters.</p>
 {% if errors %}<div class="errors" role="alert">{% for field, messages in errors.items %}<p>{{ field }}: {{ messages }}</p>{% endfor %}</div>{% endif %}
 <form method="post">{% csrf_token %}
-<label>New password<input type="password" name="new_password" required minlength="8" maxlength="128" autocomplete="new-password"></label>
-<label>Confirm password<input type="password" name="password_confirm" required maxlength="128" autocomplete="new-password"></label>
-<button type="submit">Save password</button></form>{% endif %}
+<label>New password<input id="new-password" type="password" name="new_password" required minlength="6" maxlength="128" autocomplete="new-password"></label>
+<label>Confirm password<input id="password-confirm" type="password" name="password_confirm" required minlength="6" maxlength="128" autocomplete="new-password"></label>
+<button type="button" id="password-visibility" aria-controls="new-password password-confirm" hidden>Show passwords</button>
+<button type="submit">Save password</button></form>
+<script nonce="{{ script_nonce }}">
+const visibilityButton = document.getElementById('password-visibility');
+const passwordFields = [document.getElementById('new-password'), document.getElementById('password-confirm')];
+visibilityButton.hidden = false;
+visibilityButton.addEventListener('click', () => {
+    const show = passwordFields[0].type === 'password';
+    passwordFields.forEach(field => { field.type = show ? 'text' : 'password'; });
+    visibilityButton.textContent = show ? 'Hide passwords' : 'Show passwords';
+});
+</script>{% endif %}
 </main></body></html>

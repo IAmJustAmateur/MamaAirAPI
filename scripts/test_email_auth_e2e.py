@@ -43,8 +43,8 @@ def wait_for_mail(directory, recipient, purpose, timeout=30):
 def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
     base_url = base_url.rstrip("/")
     email = f"email-e2e-{uuid4().hex}@example.com"
-    password = "Birch!Quartz85-frost"
-    new_password = "Ocean!Quartz62-spring"
+    password = "123456"
+    new_password = "654321"
     session = requests.Session()
     session.verify = not insecure_test_tls
 
@@ -72,6 +72,8 @@ def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
                              headers={"Origin": base_url, "Referer": page.url}, timeout=15)
         assert result.status_code == 200 and "Password saved" in result.text, "Web form confirmation failed"
 
+    # Six-character numeric passwords must work; five characters still fail.
+    post("email/register", {"email": email, "password": "12345", "password_confirm": "12345"}, 400)
     register = {"email": email, "password": password, "password_confirm": password}
     post("email/register", register, 202)
     post("email/login", {"email": email, "password": password}, 401)
@@ -92,6 +94,20 @@ def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
     profile_url = base_url + "/api/profile/"
     assert session.get(profile_url, headers={"Authorization": "Bearer " + old_tokens["access"]}, timeout=15).status_code == 401
     assert session.get(profile_url, headers={"Authorization": "Bearer " + new_tokens["access"]}, timeout=15).status_code == 200
+    # Changing to a common password uses the same relaxed policy and revokes JWTs.
+    change_url = base_url + "/api/auth/password-change/"
+    change_headers = {"Authorization": "Bearer " + new_tokens["access"]}
+    rejected = session.post(change_url, json={"old_password": new_password, "new_password": "12345"},
+                            headers=change_headers, timeout=15)
+    assert rejected.status_code == 400
+    changed = session.post(change_url, json={"old_password": new_password, "new_password": "password"},
+                           headers=change_headers, timeout=15)
+    assert changed.status_code == 200, f"Simple password change failed: {changed.status_code}"
+    assert session.get(profile_url, headers=change_headers, timeout=15).status_code == 401
+    post("token/refresh", {"refresh": new_tokens["refresh"]}, 401)
+    post("email/login", {"email": email, "password": new_password}, 401)
+    new_password = "password"
+    new_tokens = post("email/login", {"email": email, "password": new_password}, 200)
     deletion_url = base_url + "/api/auth/delete-account/"
     auth_headers = {"Authorization": "Bearer " + new_tokens["access"]}
     rejected = session.delete(deletion_url, json={"confirmation": "delete"}, headers=auth_headers, timeout=15)
@@ -105,7 +121,7 @@ def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
     post("email/login", {"email": email, "password": new_password}, 401)
     post("email/register", register, 202)
     print(
-        "Email auth E2E passed: registration, verification, login, reset, JWT "
+        "Email auth E2E passed: simple passwords, registration, verification, login, reset, password change, JWT "
         "revocation, permanent deletion, and email reuse."
     )
 
@@ -122,8 +138,33 @@ def browser_confirm(browser, url, password, insecure_test_tls):
         clean_url = page.url
         assert not urlparse(clean_url).query, "Token was not removed before rendering"
         assert urlparse(clean_url).netloc == urlparse(url).netloc
-        page.locator('input[name="new_password"]').fill(password)
-        page.locator('input[name="password_confirm"]').fill(password)
+        new_password = page.get_by_label("New password", exact=True)
+        confirmation = page.get_by_label("Confirm password", exact=True)
+        for field in (new_password, confirmation):
+            expect(field).to_have_attribute("type", "password")
+            expect(field).to_have_attribute("minlength", "6")
+            expect(field).to_have_attribute("maxlength", "128")
+        new_password.fill("12345")
+        confirmation.fill("12345")
+        page.get_by_role("button", name="Save password").click()
+        assert new_password.evaluate("el => el.validity.tooShort"), "Browser must reject five-character passwords"
+        expect(page.get_by_role("button", name="Save password")).to_be_visible()
+        new_password.fill(password)
+        confirmation.fill(password)
+        page.get_by_role("button", name="Show passwords", exact=True).click()
+        for field in (new_password, confirmation):
+            expect(field).to_have_attribute("type", "text")
+            expect(field).to_have_value(password)
+        page.get_by_role("button", name="Hide passwords", exact=True).click()
+        for field in (new_password, confirmation):
+            expect(field).to_have_attribute("type", "password")
+            expect(field).to_have_value(password)
+        # Keyboard activation must also reveal both values without submitting.
+        toggle = page.get_by_role("button", name="Show passwords", exact=True)
+        toggle.focus()
+        page.keyboard.press("Enter")
+        for field in (new_password, confirmation):
+            expect(field).to_have_attribute("type", "text")
         with page.expect_response(lambda r: r.request.method == "POST" and r.url == clean_url) as submitted:
             page.get_by_role("button", name="Save password").click()
         result = submitted.value
@@ -135,7 +176,7 @@ def browser_confirm(browser, url, password, insecure_test_tls):
         expect(page.get_by_role("heading", name="Password saved")).to_be_visible()
         policy = response.headers.get("referrer-policy")
         assert policy == "same-origin", f"Expected a single same-origin policy, got {policy!r}"
-        print(f"Browser form passed: {urlparse(clean_url).path}, same-origin POST, no token in Referer.")
+        print(f"Browser form passed: {urlparse(clean_url).path}, password visibility, six-character password, same-origin POST, no token in Referer.")
     finally:
         context.close()
 
