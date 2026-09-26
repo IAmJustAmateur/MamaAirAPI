@@ -16,7 +16,7 @@ JWT-revocation sequence, see the [mobile curl walkthrough](email_auth_mobile_cur
 | `/api/auth/email/register/` | `email`, `password`, `password_confirm` | 202 |
 | `/api/auth/email/resend/` | `email` | 202 |
 | `/api/auth/email/login/` | `email`, `password` | 200, access/refresh/user |
-| `/api/auth/email/verify/` | `uid`, `token`, `new_password`, `password_confirm` | 200 |
+| `/api/auth/email/verify/` | `uid`, `token` | 200 |
 | `/api/auth/password-reset/request/` | `email` | 202 |
 | `/api/auth/password-reset/confirm/` | `uid`, `token`, `new_password`, `password_confirm` | 200 |
 | `/api/auth/password-change/` | `old_password`, `new_password` + Bearer access | 200 |
@@ -27,11 +27,19 @@ Registration example:
 {"email":"user@example.com","password":"Birch!Quartz85-frost","password_confirm":"Birch!Quartz85-frost"}
 ```
 
-The user receives a `/verify-email?uid=...&token=...` link. The web page asks the
-email holder to choose and confirm the final password. They can reuse the password
-entered during registration. Choosing the password again prevents a third party
-who registered someone else's email from retaining access after confirmation.
+The user receives a `/verify-email?uid=...&token=...` link. Opening it displays
+one **Confirm email** button; only pressing that button confirms the address.
+There are no password fields. The password chosen during registration is preserved.
+After success, the page asks the user to return to the app and sign in with that
+password. Verification does not automatically sign the user in.
+Only confirm if you created the account yourself; otherwise ignore the email.
 Repeated registration never overwrites an existing account's password.
+
+Existing unexpired verification links remain valid after this change. The verify
+API returns `{"detail":"Email confirmed. You can now sign in."}`. Legacy
+`new_password` and `password_confirm` fields are ignored by this endpoint; clients
+must remove the password prompt and sign in with the registration password.
+No database migration is needed.
 
 For valid registration input, existing emails return `409 Conflict` and no email
 is queued. Email matching is case-insensitive. The mobile app should route by
@@ -51,15 +59,16 @@ requests retain their generic `202` responses.
 
 Account passwords must contain 6 to 128 characters. Numeric, common, and
 email-similar passwords are accepted; spaces are preserved. This policy applies
-to public email registration, verification, reset, authenticated password change,
+to public email registration, reset, authenticated password change,
 and the legacy API-key registration endpoint. Confirmation must match wherever
 requested. Login does not impose the new minimum on existing passwords.
 Django's administrative password-strength validators are unchanged.
 
-Both email-link web forms hide the new password and confirmation initially.
+The password-reset web form hides the new password and confirmation initially.
 Use **Show passwords** / **Hide passwords** to toggle both fields without changing
 their values. The control also works with a keyboard; without JavaScript the
-masked forms can still be submitted. The script uses a per-response CSP nonce.
+masked reset form can still be submitted. Email confirmation also works without
+JavaScript. The password visibility script uses a per-response CSP nonce.
 
 After confirmation, return to the app and POST email/password to the login URL.
 The response has `access`, `refresh`, and `user` (`id`, `email`, `avatar_url`,
@@ -74,10 +83,11 @@ message is the same for unknown, blocked, pending, and eligible accounts:
 
 202 means the request was queued, not that the email has reached the inbox.
 The reset email opens `/reset-password?uid=...&token=...`. Both links expire in
-48 hours and cannot be reused after a successful password update. Verification
-tokens and reset tokens are distinct. GET only displays the form; the state-changing
-POST requires CSRF protection on the web page. A future mobile screen can use the
-same confirm API with `uid`, `token`, and the two password fields.
+48 hours and cannot be reused after successful verification or reset, respectively.
+Verification tokens and reset tokens are distinct. GET only displays the form;
+the state-changing POST requires CSRF protection on the web page. A mobile screen
+can POST `uid` and `token` to the verification API; only password reset requires
+the two password fields.
 
 Google-only accounts can set their first password through reset; `google_sub` is
 preserved, so both login methods work afterward. Pending registrations must use
@@ -138,10 +148,12 @@ To submit the verification and reset forms in real headless Chromium (no Docker)
 This also checks the browser-generated Origin and Referer headers. It reproduces
 the old `Origin: null` failure with `no-referrer`, without manually injecting
 headers. Local process tests use HTTP; the CI stack below covers real HTTPS.
-The scenario registers, verifies and resets using six-character numeric passwords,
+The scenario registers with a six-character numeric password, confirms email with
+a button without changing that password, and resets to another numeric password,
 then changes to a common password and checks JWT revocation. Chromium additionally
-checks the minimum length and shows/hides both fields on both forms, including
-keyboard activation and submission while the passwords are visible.
+checks the minimum length and shows/hides both fields on the reset form, including
+keyboard activation and reset submission while the passwords are visible.
+Verification has no password fields or automatic submission.
 
 Unit/API tests:
 

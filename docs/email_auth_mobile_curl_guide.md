@@ -26,13 +26,13 @@ Follow the steps in this order:
 2. **Do not confirm the email yet.** Optionally try to log in and verify that it
    returns `401` while the account is pending.
 3. If the first verification email did not arrive, optionally request another one.
-4. Open the verification link in the browser, or confirm with the curl request.
+4. Open the verification link and click **Confirm email**, or confirm with the curl request.
 5. Log in with the verified account.
 6. Request password reset and complete the reset.
 7. Verify the new password and JWT revocation.
 
 Steps 2 and 3 are diagnostic checks. In the normal mobile flow, the user can go
-directly from registration to opening the verification link, then log in.
+directly from registration to opening the link, clicking **Confirm email**, then logging in.
 
 ## 1. Register a new account
 
@@ -116,8 +116,9 @@ The email contains a URL similar to:
 https://api.mamaair.work/verify-email?uid=ENCODED_UID&token=TOKEN
 ```
 
-The normal user flow is to open this URL in a browser and save the password on
-the page. For a curl-only test, copy `uid` and `token` from the URL:
+The normal user flow is to open this URL in a browser and click **Confirm email**.
+Opening the link alone does not confirm the account. No password is requested.
+For a curl-only test, copy `uid` and `token` from the URL:
 
 ```bash
 VERIFY_UID=ENCODED_UID_FROM_EMAIL
@@ -125,18 +126,19 @@ VERIFY_TOKEN=TOKEN_FROM_EMAIL
 
 curl --include --request POST "$BASE_URL/api/auth/email/verify/" \
   --header "Content-Type: application/json" \
-  --data-raw "{\"uid\":\"$VERIFY_UID\",\"token\":\"$VERIFY_TOKEN\",\"new_password\":\"$INITIAL_PASSWORD\",\"password_confirm\":\"$INITIAL_PASSWORD\"}"
+  --data-raw "{\"uid\":\"$VERIFY_UID\",\"token\":\"$VERIFY_TOKEN\"}"
 ```
 
 Expected: `200 OK`.
 
 ```json
-{"detail":"Password saved. You can now sign in."}
+{"detail":"Email confirmed. You can now sign in."}
 ```
 
-The email owner chooses the final password during verification. It may be the
-same password entered during registration. The link cannot be reused after a
-successful verification.
+Verification preserves the password entered during registration. Return to the app
+and sign in with that password. The link cannot be reused after successful
+verification. Existing unexpired links still work; legacy password fields sent
+to the verify API are ignored and must be removed from the mobile verification UI.
 
 ## 5. Log in after verification
 

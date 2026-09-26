@@ -68,9 +68,12 @@ class LoginInput(EmailInput):
     password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
 
 
-class ConfirmInput(serializers.Serializer):
+class VerifyInput(serializers.Serializer):
     uid = serializers.CharField(max_length=128)
     token = serializers.CharField(max_length=256, write_only=True)
+
+
+class ConfirmInput(VerifyInput):
     new_password = serializers.CharField(write_only=True, trim_whitespace=False, min_length=6, max_length=128)
     password_confirm = serializers.CharField(write_only=True, trim_whitespace=False, min_length=6, max_length=128)
 
@@ -219,29 +222,33 @@ def confirm_account(attrs, purpose):
             eligible = user.is_active and user.email_verification_pending == (purpose == "verify")
             if not eligible or not generator.check_token(user, attrs["token"]):
                 raise ValueError("invalid token")
-            check_password(attrs["new_password"], attrs["password_confirm"])
-            # The email holder chooses the final password. A pre-registration by
-            # somebody else can never leave that person's password on the account.
-            user.set_password(attrs["new_password"])
-            user.email_verification_pending = False
-            user.save(update_fields=["password", "email_verification_pending"])
+            if purpose == "verify":
+                user.email_verification_pending = False
+                user.save(update_fields=["email_verification_pending"])
+            else:
+                check_password(attrs["new_password"], attrs["password_confirm"])
+                user.set_password(attrs["new_password"])
+                user.save(update_fields=["password"])
     except (User.DoesNotExist, ValueError, TypeError, OverflowError, UnicodeDecodeError):
         raise serializers.ValidationError({"detail": "This link is invalid, expired, or already used."})
 
 
 class EmailVerifyView(PublicEmailView):
-    purpose = "verify"
+    @extend_schema(tags=["Auth"], request=VerifyInput, responses={200: DetailOutput, 400: DetailOutput})
+    def post(self, request):
+        data = VerifyInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        confirm_account(data.validated_data, "verify")
+        return Response({"detail": "Email confirmed. You can now sign in."})
 
+
+class PasswordResetConfirmView(PublicEmailView):
     @extend_schema(tags=["Auth"], request=ConfirmInput, responses={200: DetailOutput, 400: DetailOutput})
     def post(self, request):
         data = ConfirmInput(data=request.data)
         data.is_valid(raise_exception=True)
-        confirm_account(data.validated_data, self.purpose)
+        confirm_account(data.validated_data, "reset")
         return Response({"detail": "Password saved. You can now sign in."})
-
-
-class PasswordResetConfirmView(EmailVerifyView):
-    purpose = "reset"
 
 
 def encoded_uid(user):

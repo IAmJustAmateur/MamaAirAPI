@@ -4,7 +4,10 @@ Hi {{ name }},
 {% autoescape off %}{{ url }}{% endautoescape %}
 
 This link is valid for 48 hours and can only be used once.
-If you did not request this email, you can ignore it.
+{% if verify %}Open the link and click Confirm email. Your registration password will stay the same.
+Only confirm if you created this account yourself. Otherwise, ignore this email.
+{% else %}If you did not request this email, you can ignore it.
+{% endif %}
 
 Need help? Contact {{ support_email }}.
 MamaAir

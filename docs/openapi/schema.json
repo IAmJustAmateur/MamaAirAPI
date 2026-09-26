@@ -311,17 +311,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/ConfirmInput"
+                                "$ref": "#/components/schemas/VerifyInput"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/ConfirmInput"
+                                "$ref": "#/components/schemas/VerifyInput"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/ConfirmInput"
+                                "$ref": "#/components/schemas/VerifyInput"
                             }
                         }
                     },
@@ -5511,6 +5511,24 @@
                 ],
                 "type": "string",
                 "description": "* `low` - Low\n* `medium` - Medium\n* `high` - High"
+            },
+            "VerifyInput": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "token": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 256
+                    }
+                },
+                "required": [
+                    "token",
+                    "uid"
+                ]
             },
             "WaterGoal": {
                 "type": "object",

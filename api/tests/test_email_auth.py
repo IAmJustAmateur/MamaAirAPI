@@ -32,8 +32,10 @@ class EmailAuthTests(APITestCase):
     def payload(self, user=None, purpose="reset", password=NEW_PASSWORD):
         user = user or self.user
         generator = reset_tokens if purpose == "reset" else verification_tokens
-        return {"uid": encoded_uid(user), "token": generator.make_token(user),
-                "new_password": password, "password_confirm": password}
+        payload = {"uid": encoded_uid(user), "token": generator.make_token(user)}
+        if purpose == "reset":
+            payload.update(new_password=password, password_confirm=password)
+        return payload
 
     def post_queued(self, url, data):
         with patch("api.tasks.send_account_email.apply_async") as publish:
@@ -62,16 +64,46 @@ class EmailAuthTests(APITestCase):
         refresh = RefreshToken.for_user(self.user)
         self.assertEqual(self.client.post(reverse("token_refresh"), {"refresh": str(refresh)}).status_code, 401)
 
-    def test_verify_sets_owner_password_and_invalidates_link(self):
+    def test_verify_preserves_registration_password_and_invalidates_link(self):
         self.user.email_verification_pending = True
         self.user.save()
         payload = self.payload(purpose="verify")
+        password_hash = self.user.password
         self.assertEqual(self.client.post(reverse("email-verify"), payload).status_code, 200)
         self.user.refresh_from_db()
         self.assertFalse(self.user.email_verification_pending)
-        self.assertTrue(self.user.check_password(NEW_PASSWORD))
-        self.assertFalse(self.user.check_password(PASSWORD))
+        self.assertEqual(self.user.password, password_hash)
+        self.assertTrue(self.user.check_password(PASSWORD))
+        self.assertEqual(self.client.post(reverse("email-login"), {
+            "email": self.user.email, "password": PASSWORD}).status_code, 200)
         self.assertEqual(self.client.post(reverse("email-verify"), payload).status_code, 400)
+
+    def test_verification_ignores_legacy_password_fields(self):
+        self.user.email_verification_pending = True
+        self.user.save()
+        payload = {**self.payload(purpose="verify"),
+                   "new_password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD}
+        response = self.client.post(reverse("email-verify"), payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {"detail": "Email confirmed. You can now sign in."})
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(PASSWORD))
+
+    def test_verification_rejects_invalid_expired_and_reset_tokens(self):
+        self.user.email_verification_pending = True
+        self.user.save()
+        payload = self.payload(purpose="verify")
+        for changes in ({"uid": "bad"}, {"token": "bad"},
+                        {"token": reset_tokens.make_token(self.user)}):
+            self.assertEqual(self.client.post(reverse("email-verify"), {**payload, **changes}).status_code, 400)
+        for missing in ("uid", "token"):
+            self.assertEqual(self.client.post(reverse("email-verify"), {
+                key: value for key, value in payload.items() if key != missing}).status_code, 400)
+        with patch.object(verification_tokens, "_now", return_value=verification_tokens._now() + timedelta(hours=48, seconds=1)):
+            self.assertEqual(self.client.post(reverse("email-verify"), payload).status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.email_verification_pending)
+        self.assertTrue(self.user.check_password(PASSWORD))
 
     def test_registration_never_overwrites_existing_password(self):
         for active, pending, code in ((True, False, "account_exists"),
@@ -234,7 +266,7 @@ class EmailAuthTests(APITestCase):
                 self.assertEqual(response.status_code, 400)
                 publish.assert_not_called()
                 self.assertFalse(User.objects.filter(email="new@example.com").exists())
-                for purpose, endpoint in (("verify", "email-verify"), ("reset", "password-reset-confirm")):
+                for purpose, endpoint in (("reset", "password-reset-confirm"),):
                     self.user.email_verification_pending = purpose == "verify"
                     self.user.save()
                     payload = {**self.payload(purpose=purpose, password=password),
@@ -367,8 +399,8 @@ class EmailAuthTests(APITestCase):
         payload["csrfmiddlewaretoken"] = client.cookies["csrftoken"].value
         self.assertContains(client.post("/reset-password", payload), "Password saved")
 
-    def test_web_forms_use_scoped_scripts_and_accept_simple_passwords(self):
-        for purpose, path in (("verify", "/verify-email"), ("reset", "/reset-password")):
+    def test_reset_form_uses_scoped_script_and_accepts_simple_passwords(self):
+        for purpose, path in (("reset", "/reset-password"),):
             with self.subTest(purpose=purpose):
                 self.user.email_verification_pending = purpose == "verify"
                 self.user.save()
@@ -409,9 +441,47 @@ class EmailAuthTests(APITestCase):
                     response = client.get(path, secure=True)
                     self.assertEqual(response["Referrer-Policy"], "same-origin")
                     self.assertNotContains(response, payload["token"])
-                    form = {"new_password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD,
-                            "csrfmiddlewaretoken": client.cookies["csrftoken"].value}
-                    self.assertContains(client.post(path, form, secure=True, **headers), "Password saved")
+                    form = {**payload, "csrfmiddlewaretoken": client.cookies["csrftoken"].value}
+                    message = "Email confirmed" if purpose == "verify" else "Password saved"
+                    self.assertContains(client.post(path, form, secure=True, **headers), message)
+
+    def test_verification_page_requires_explicit_csrf_protected_confirmation(self):
+        self.user.email_verification_pending = True
+        self.user.save()
+        password_hash = self.user.password
+        client = Client(enforce_csrf_checks=True)
+        payload = self.payload(purpose="verify")
+        response = client.get("/verify-email", payload, follow=True)
+        self.assertEqual(response.redirect_chain, [("/verify-email", 302)])
+        self.assertContains(response, '>Confirm email</button>')
+        self.assertNotContains(response, 'name="new_password"')
+        self.assertNotContains(response, 'name="password_confirm"')
+        self.assertNotContains(response, "<script")
+        self.assertNotContains(response, payload["token"])
+        self.assertIn("no-store", response["Cache-Control"])
+        client.get("/verify-email")
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.email_verification_pending)
+        self.assertEqual(client.post("/verify-email", {}).status_code, 403)
+        form = {"csrfmiddlewaretoken": client.cookies["csrftoken"].value}
+        self.assertContains(client.post("/verify-email", form), "Email confirmed")
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.email_verification_pending)
+        self.assertEqual(self.user.password, password_hash)
+        self.assertNotIn("account_link_verify", client.session)
+        client.get("/verify-email", payload, follow=True)
+        self.assertContains(client.post("/verify-email", form), "invalid, expired, or already used")
+
+    def test_verification_email_explains_confirmation_without_password_reset(self):
+        self.user.email_verification_pending = True
+        self.user.save()
+        send_account_email.run(self.user.email, "verify", account_state(self.user))
+        message = mail.outbox[0]
+        self.assertEqual(message.subject, "MamaAir: Confirm email")
+        for content in (message.body, message.alternatives[0][0]):
+            self.assertIn("click Confirm email", content)
+            self.assertIn("Only confirm if you created this account yourself", content)
+            self.assertNotIn("set password", content)
 
     def test_https_forms_still_reject_null_foreign_and_missing_origins(self):
         for purpose, path in (("verify", "/verify-email"), ("reset", "/reset-password")):
