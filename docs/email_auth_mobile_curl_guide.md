@@ -46,6 +46,26 @@ curl --include --request POST "$BASE_URL/api/auth/email/register/" \
 
 Expected: `202 Accepted`.
 
+For a valid payload with an existing email, expect `409 Conflict` instead:
+
+```json
+{"code":"account_exists","detail":"An account with this email already exists."}
+```
+
+For an active account that still needs email verification:
+
+```json
+{"code":"email_verification_required","detail":"This email is already registered but has not been verified."}
+```
+
+Route by `code`: offer sign-in/password recovery for `account_exists`, or
+verification/resend for `email_verification_required`. Neither conflict changes
+the account or sends mail. Email comparison is case-insensitive. Google accounts
+and disabled accounts return `account_exists`; disabled status is not disclosed.
+Invalid input returns `400` before the account lookup, and rate limits return `429`.
+If initial registration returns `503`, the account may already have been created;
+use resend after a retry returns `email_verification_required`.
+
 ```json
 {"detail":"If the account is eligible, an email will be sent. Please check your inbox."}
 ```
@@ -236,11 +256,12 @@ Expected: `200 OK` for both.
 | Account state | Registration | Verification resend | Password reset request |
 | --- | --- | --- | --- |
 | Unknown email | Creates pending account only with a valid registration payload | Returns 202, sends nothing | Returns 202, sends nothing |
-| Pending email | Returns 202 without replacing the existing password | Returns 202 and queues verification | Returns 202, sends nothing |
-| Verified active email | Returns 202 without changing the account | Returns 202, sends nothing | Returns 202 and queues reset |
-| Disabled email | Returns a generic response | Returns 202, sends nothing | Returns 202, sends nothing |
+| Pending active email | Returns 409 `email_verification_required`, sends nothing | Returns 202 and queues verification | Returns 202, sends nothing |
+| Verified active email | Returns 409 `account_exists`, sends nothing | Returns 202, sends nothing | Returns 202 and queues reset |
+| Disabled email | Returns 409 `account_exists`, sends nothing | Returns 202, sends nothing | Returns 202, sends nothing |
 
-Generic `202` responses prevent account enumeration. They mean that the request
+Resend and reset requests retain generic `202` responses; registration explicitly
+reports existing accounts. A `202` response means that the request
 was accepted for processing, not that Gmail accepted or delivered a message.
 
 ## Troubleshooting delivery

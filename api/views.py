@@ -1800,13 +1800,13 @@ class DeleteAccountView(APIView):
 
 @extend_schema(
     summary="Change user password",
-    description="Allows an authenticated user to change their password by providing the current and new password.",
+    description="Allows an authenticated user to change their password by providing the current and new password. New passwords require 6 to 128 characters; simple and numeric passwords are accepted.",
     request={
         "application/json": {
             "type": "object",
             "properties": {
                 "old_password": {"type": "string", "example": "testpass123"},
-                "new_password": {"type": "string", "example": "newpass456"},
+                "new_password": {"type": "string", "minLength": 6, "maxLength": 128, "example": "123456"},
             },
             "required": ["old_password", "new_password"],
         }

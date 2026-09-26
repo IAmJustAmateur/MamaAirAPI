@@ -5,8 +5,6 @@ from collections.abc import Mapping
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -58,11 +56,11 @@ class EmailInput(serializers.Serializer):
 
 
 class RegisterInput(EmailInput):
-    password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
-    password_confirm = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
+    password = serializers.CharField(write_only=True, trim_whitespace=False, min_length=6, max_length=128)
+    password_confirm = serializers.CharField(write_only=True, trim_whitespace=False, min_length=6, max_length=128)
 
     def validate(self, attrs):
-        check_password(attrs["password"], attrs["password_confirm"], User(email=attrs["email"]), field="password")
+        check_password(attrs["password"], attrs["password_confirm"])
         return attrs
 
 
@@ -73,21 +71,39 @@ class LoginInput(EmailInput):
 class ConfirmInput(serializers.Serializer):
     uid = serializers.CharField(max_length=128)
     token = serializers.CharField(max_length=256, write_only=True)
-    new_password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
-    password_confirm = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False, min_length=6, max_length=128)
+    password_confirm = serializers.CharField(write_only=True, trim_whitespace=False, min_length=6, max_length=128)
 
 
 class DetailOutput(serializers.Serializer):
     detail = serializers.CharField()
 
 
-def check_password(password, confirmation, user, field="new_password"):
+class RegistrationConflictOutput(DetailOutput):
+    code = serializers.ChoiceField(choices=["account_exists", "email_verification_required"])
+
+
+def registration_conflict(email):
+    users = list(User.objects.filter(email__iexact=email)[:2])
+    if not users:
+        return None
+    # Do not disclose disabled status or select among ambiguous legacy records.
+    if len(users) == 1 and users[0].is_active and users[0].email_verification_pending:
+        return Response({
+            "code": "email_verification_required",
+            "detail": "This email is already registered but has not been verified.",
+        }, status=409)
+    return Response({
+        "code": "account_exists",
+        "detail": "An account with this email already exists.",
+    }, status=409)
+
+
+def check_password(password, confirmation):
+    # Account passwords require length and confirmation only; Django's global
+    # strength validators remain available to administrative forms.
     if password != confirmation:
         raise serializers.ValidationError({"password_confirm": ["Passwords do not match."]})
-    try:
-        validate_password(password, user)
-    except DjangoValidationError as exc:
-        raise serializers.ValidationError({field: exc.messages}) from exc
 
 
 class EmailIPThrottle(throttling.AnonRateThrottle):
@@ -137,18 +153,26 @@ class PublicEmailView(APIView):
 class EmailRegisterView(PublicEmailView):
     throttle_classes = [EmailIPThrottle, EmailAddressThrottle]
 
-    @extend_schema(tags=["Auth"], request=RegisterInput, responses={202: DetailOutput, 400: DetailOutput, 503: DetailOutput})
+    @extend_schema(tags=["Auth"], request=RegisterInput,
+                   description="Register a new email account. Existing accounts return 409 without changing the account or sending email. Use email/resend/ for pending verification.",
+                   responses={202: DetailOutput, 400: DetailOutput, 409: RegistrationConflictOutput, 429: DetailOutput, 503: DetailOutput})
     def post(self, request):
         data = RegisterInput(data=request.data)
         data.is_valid(raise_exception=True)
         email = data.validated_data["email"]
-        # A repeated registration cannot replace the password of an existing user.
-        if not User.objects.filter(email__iexact=email).exists():
-            try:
-                with transaction.atomic():
-                    User.objects.create_user(email=email, password=data.validated_data["password"], email_verification_pending=True)
-            except IntegrityError:
-                pass  # A concurrent registration won; resend without changing it.
+        conflict = registration_conflict(email)
+        if conflict is not None:
+            return conflict
+        try:
+            with transaction.atomic():
+                User.objects.create_user(email=email, password=data.validated_data["password"], email_verification_pending=True)
+        except IntegrityError:
+            # A concurrent registration may have won. Query after the savepoint
+            # rolls back; unrelated database failures must not become success.
+            conflict = registration_conflict(email)
+            if conflict is None:
+                raise
+            return conflict
         queue_email(email, "verify")
         return Response(ACCEPTED, status=202)
 
@@ -195,7 +219,7 @@ def confirm_account(attrs, purpose):
             eligible = user.is_active and user.email_verification_pending == (purpose == "verify")
             if not eligible or not generator.check_token(user, attrs["token"]):
                 raise ValueError("invalid token")
-            check_password(attrs["new_password"], attrs["password_confirm"], user)
+            check_password(attrs["new_password"], attrs["password_confirm"])
             # The email holder chooses the final password. A pre-registration by
             # somebody else can never leave that person's password on the account.
             user.set_password(attrs["new_password"])

@@ -38,7 +38,7 @@ DAILY_ACTION_COMPLETION_CHOICES = [
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=6)
+    password = serializers.CharField(write_only=True, trim_whitespace=False, min_length=6, max_length=128)
 
     class Meta:
         model = User
@@ -50,16 +50,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class PasswordChangeSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True, write_only=True, trim_whitespace=False, max_length=128)
-    new_password = serializers.CharField(required=True, write_only=True, trim_whitespace=False, max_length=128)
-
-    def validate_new_password(self, value):
-        from django.contrib.auth.password_validation import validate_password
-        from django.core.exceptions import ValidationError
-        try:
-            validate_password(value, self.context["request"].user)
-        except ValidationError as exc:
-            raise serializers.ValidationError(exc.messages)
-        return value
+    new_password = serializers.CharField(required=True, write_only=True, trim_whitespace=False, min_length=6, max_length=128)
 
 
 class DeleteAccountSerializer(serializers.Serializer):

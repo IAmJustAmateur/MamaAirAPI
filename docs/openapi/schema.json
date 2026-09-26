@@ -173,6 +173,7 @@
         "/api/auth/email/register/": {
             "post": {
                 "operationId": "auth_email_register_create",
+                "description": "Register a new email account. Existing accounts return 409 without changing the account or sending email. Use email/resend/ for pending verification.",
                 "tags": [
                     "Auth"
                 ],
@@ -208,6 +209,26 @@
                         "description": ""
                     },
                     "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RegistrationConflictOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "429": {
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -477,7 +498,7 @@
         "/api/auth/password-change/": {
             "post": {
                 "operationId": "auth_password_change_create",
-                "description": "Allows an authenticated user to change their password by providing the current and new password.",
+                "description": "Allows an authenticated user to change their password by providing the current and new password. New passwords require 6 to 128 characters; simple and numeric passwords are accepted.",
                 "summary": "Change user password",
                 "tags": [
                     "auth"
@@ -494,7 +515,9 @@
                                     },
                                     "new_password": {
                                         "type": "string",
-                                        "example": "newpass456"
+                                        "minLength": 6,
+                                        "maxLength": 128,
+                                        "example": "123456"
                                     }
                                 },
                                 "required": [
@@ -2898,6 +2921,14 @@
                     "value"
                 ]
             },
+            "CodeEnum": {
+                "enum": [
+                    "account_exists",
+                    "email_verification_required"
+                ],
+                "type": "string",
+                "description": "* `account_exists` - account_exists\n* `email_verification_required` - email_verification_required"
+            },
             "CommuteModeEnum": {
                 "enum": [
                     "walk",
@@ -2924,12 +2955,14 @@
                     "new_password": {
                         "type": "string",
                         "writeOnly": true,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "minLength": 6
                     },
                     "password_confirm": {
                         "type": "string",
                         "writeOnly": true,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "minLength": 6
                     }
                 },
                 "required": [
@@ -4395,18 +4428,35 @@
                     "password": {
                         "type": "string",
                         "writeOnly": true,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "minLength": 6
                     },
                     "password_confirm": {
                         "type": "string",
                         "writeOnly": true,
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "minLength": 6
                     }
                 },
                 "required": [
                     "email",
                     "password",
                     "password_confirm"
+                ]
+            },
+            "RegistrationConflictOutput": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "$ref": "#/components/schemas/CodeEnum"
+                    }
+                },
+                "required": [
+                    "code",
+                    "detail"
                 ]
             },
             "RestMicrobreakPreferenceEnum": {

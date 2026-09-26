@@ -216,6 +216,26 @@ class AuthTests(APITestCase):
         self.assertTrue(User.objects.filter(email="newuser@example.com").exists())
 
     @override_settings(REGISTRATION_API_KEY="test-registration-key")
+    def test_legacy_registration_accepts_simple_password_and_preserves_spaces(self):
+        for index, password in enumerate(("123456", "password", " 1234 ", "a" * 128)):
+            with self.subTest(password=password):
+                email = f"simple-{index}@example.com"
+                response = self.client.post(reverse("register"), {
+                    "email": email, "password": password}, HTTP_X_API_KEY=settings.REGISTRATION_API_KEY)
+                self.assertEqual(response.status_code, 201)
+                self.assertTrue(User.objects.get(email=email).check_password(password))
+
+    @override_settings(REGISTRATION_API_KEY="test-registration-key")
+    def test_legacy_registration_rejects_invalid_password_length(self):
+        for password in ("", "12345", "a" * 129):
+            with self.subTest(password=password):
+                response = self.client.post(reverse("register"), {
+                    "email": "invalid-length@example.com", "password": password},
+                    HTTP_X_API_KEY=settings.REGISTRATION_API_KEY)
+                self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(email="invalid-length@example.com").exists())
+
+    @override_settings(REGISTRATION_API_KEY="test-registration-key")
     def test_register_user_without_api_key(self):
         response = self.client.post(
             reverse("register"),
