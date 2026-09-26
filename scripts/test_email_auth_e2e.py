@@ -73,12 +73,21 @@ def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
         assert result.status_code == 200 and "Password saved" in result.text, "Web form confirmation failed"
 
     # Six-character numeric passwords must work; five characters still fail.
-    post("email/register", {"email": email, "password": "12345", "password_confirm": "12345"}, 400)
+    post("email/register", {"email": f"invalid-{uuid4().hex}@example.com", "password": "12345", "password_confirm": "12345"}, 400)
     register = {"email": email, "password": password, "password_confirm": password}
     post("email/register", register, 202)
+    duplicate = {"email": email.upper(), "password": "999999", "password_confirm": "999999"}
+    assert post("email/register", duplicate, 409) == {
+        "code": "email_verification_required",
+        "detail": "This email is already registered but has not been verified.",
+    }
     post("email/login", {"email": email, "password": password}, 401)
     verification = wait_for_mail(mail_dir, email, "verify-email")
     form_confirm(verification, password)
+    assert post("email/register", duplicate, 409) == {
+        "code": "account_exists",
+        "detail": "An account with this email already exists.",
+    }
     old_tokens = post("email/login", {"email": email, "password": password}, 200)
     known_response = post("password-reset/request", {"email": email}, 202)
     unknown = f"unknown-{uuid4().hex}@example.com"
@@ -122,7 +131,7 @@ def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
     post("email/register", register, 202)
     print(
         "Email auth E2E passed: simple passwords, registration, verification, login, reset, password change, JWT "
-        "revocation, permanent deletion, and email reuse."
+        "revocation, registration conflicts, permanent deletion, and email reuse."
     )
 
 

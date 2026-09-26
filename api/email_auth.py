@@ -79,6 +79,26 @@ class DetailOutput(serializers.Serializer):
     detail = serializers.CharField()
 
 
+class RegistrationConflictOutput(DetailOutput):
+    code = serializers.ChoiceField(choices=["account_exists", "email_verification_required"])
+
+
+def registration_conflict(email):
+    users = list(User.objects.filter(email__iexact=email)[:2])
+    if not users:
+        return None
+    # Do not disclose disabled status or select among ambiguous legacy records.
+    if len(users) == 1 and users[0].is_active and users[0].email_verification_pending:
+        return Response({
+            "code": "email_verification_required",
+            "detail": "This email is already registered but has not been verified.",
+        }, status=409)
+    return Response({
+        "code": "account_exists",
+        "detail": "An account with this email already exists.",
+    }, status=409)
+
+
 def check_password(password, confirmation):
     # Account passwords require length and confirmation only; Django's global
     # strength validators remain available to administrative forms.
@@ -133,18 +153,26 @@ class PublicEmailView(APIView):
 class EmailRegisterView(PublicEmailView):
     throttle_classes = [EmailIPThrottle, EmailAddressThrottle]
 
-    @extend_schema(tags=["Auth"], request=RegisterInput, responses={202: DetailOutput, 400: DetailOutput, 503: DetailOutput})
+    @extend_schema(tags=["Auth"], request=RegisterInput,
+                   description="Register a new email account. Existing accounts return 409 without changing the account or sending email. Use email/resend/ for pending verification.",
+                   responses={202: DetailOutput, 400: DetailOutput, 409: RegistrationConflictOutput, 429: DetailOutput, 503: DetailOutput})
     def post(self, request):
         data = RegisterInput(data=request.data)
         data.is_valid(raise_exception=True)
         email = data.validated_data["email"]
-        # A repeated registration cannot replace the password of an existing user.
-        if not User.objects.filter(email__iexact=email).exists():
-            try:
-                with transaction.atomic():
-                    User.objects.create_user(email=email, password=data.validated_data["password"], email_verification_pending=True)
-            except IntegrityError:
-                pass  # A concurrent registration won; resend without changing it.
+        conflict = registration_conflict(email)
+        if conflict is not None:
+            return conflict
+        try:
+            with transaction.atomic():
+                User.objects.create_user(email=email, password=data.validated_data["password"], email_verification_pending=True)
+        except IntegrityError:
+            # A concurrent registration may have won. Query after the savepoint
+            # rolls back; unrelated database failures must not become success.
+            conflict = registration_conflict(email)
+            if conflict is None:
+                raise
+            return conflict
         queue_email(email, "verify")
         return Response(ACCEPTED, status=202)
 

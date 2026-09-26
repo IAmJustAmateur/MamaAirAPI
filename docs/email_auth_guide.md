@@ -33,6 +33,22 @@ entered during registration. Choosing the password again prevents a third party
 who registered someone else's email from retaining access after confirmation.
 Repeated registration never overwrites an existing account's password.
 
+For valid registration input, existing emails return `409 Conflict` and no email
+is queued. Email matching is case-insensitive. The mobile app should route by
+`code` and display its own localized text:
+
+| Account state | `code` | `detail` | Mobile action |
+| --- | --- | --- | --- |
+| Active, unverified | `email_verification_required` | This email is already registered but has not been verified. | Offer verification and an explicit `/api/auth/email/resend/` request |
+| Verified, including Google accounts | `account_exists` | An account with this email already exists. | Offer sign-in or password recovery |
+| Disabled, or ambiguous legacy email records | `account_exists` | An account with this email already exists. | Do not disclose disabled status or reactivate the account |
+
+Responses contain exactly `code` and `detail`. Invalid registration input returns
+`400` before the account lookup; rate limits still return `429`. A concurrent
+registration that loses the database uniqueness race returns the same `409`
+contract. Registration intentionally reports account existence; resend and reset
+requests retain their generic `202` responses.
+
 Account passwords must contain 6 to 128 characters. Numeric, common, and
 email-similar passwords are accepted; spaces are preserved. This policy applies
 to public email registration, verification, reset, authenticated password change,
@@ -67,9 +83,10 @@ Google-only accounts can set their first password through reset; `google_sub` is
 preserved, so both login methods work afterward. Pending registrations must use
 verification/resend first. Disabled accounts cannot be verified or reset.
 
-Handle 400 for invalid input/link, 401 for rejected login/session, 429 for request
+Handle 400 for invalid input/link, 401 for rejected login/session, 409 for registration conflicts, 429 for request
 limits, and 503 when queue publication fails. For 503 during registration the
-account may already exist; retry registration or resend confirmation.
+account may already exist. A registration retry then returns
+`409 email_verification_required`; use resend confirmation to queue a new email.
 
 Auth-related profile fields (`email`, `is_active`, `auth_provider`, `google_sub`,
 `email_verification_pending`) are read-only. Email changes need a separate verified

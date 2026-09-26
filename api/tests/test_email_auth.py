@@ -7,12 +7,13 @@ from urllib.parse import parse_qs, urlparse
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.test import Client, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from api.email_auth import account_state, encoded_uid, reset_tokens, verification_tokens
+from api.email_auth import account_state, encoded_uid, registration_conflict, reset_tokens, verification_tokens
 from api.tasks import send_account_email
 
 User = get_user_model()
@@ -73,14 +74,98 @@ class EmailAuthTests(APITestCase):
         self.assertEqual(self.client.post(reverse("email-verify"), payload).status_code, 400)
 
     def test_registration_never_overwrites_existing_password(self):
+        for active, pending, code in ((True, False, "account_exists"),
+                                      (True, True, "email_verification_required"),
+                                      (False, False, "account_exists"),
+                                      (False, True, "account_exists")):
+            with self.subTest(active=active, pending=pending):
+                cache.clear()
+                self.user.is_active = active
+                self.user.email_verification_pending = pending
+                self.user.save()
+                state = account_state(self.user)
+                response, publish = self.post_queued(reverse("email-register"), {
+                    "email": " " + self.user.email.upper() + " ",
+                    "password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD})
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.data, {
+                    "code": code,
+                    "detail": ("This email is already registered but has not been verified."
+                               if code == "email_verification_required"
+                               else "An account with this email already exists.")})
+                publish.assert_not_called()
+                self.user.refresh_from_db()
+                self.assertEqual(account_state(self.user), state)
+                self.assertEqual(User.objects.count(), 1)
+
+    def test_registration_conflict_for_google_account_preserves_login_method(self):
+        self.user.google_sub = "google-sub"
+        self.user.set_unusable_password()
+        self.user.save()
+        response, publish = self.post_queued(reverse("email-register"), {
+            "email": self.user.email, "password": PASSWORD, "password_confirm": PASSWORD})
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "account_exists")
+        publish.assert_not_called()
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.has_usable_password())
+        self.assertEqual(self.user.google_sub, "google-sub")
+
+    def test_registration_conflict_for_ambiguous_legacy_emails_is_generic(self):
+        User.objects.create_user(email=self.user.email.upper(), password=PASSWORD,
+                                 email_verification_pending=True)
+        response, publish = self.post_queued(reverse("email-register"), {
+            "email": self.user.email, "password": PASSWORD, "password_confirm": PASSWORD})
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "account_exists")
+        self.assertEqual(User.objects.count(), 2)
+        publish.assert_not_called()
+
+    def test_concurrent_registration_conflict_after_unique_constraint_failure(self):
         for pending in (False, True):
+            cache.clear()
             self.user.email_verification_pending = pending
             self.user.save()
-            response, publish = self.post_queued(reverse("email-register"), {
-                "email": self.user.email.upper(), "password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD})
-            self.assertEqual(response.status_code, 202)
+            # Model a stale initial lookup; create_user then hits the real DB
+            # uniqueness constraint, and the second lookup sees the winner.
+            with patch("api.email_auth.registration_conflict",
+                       side_effect=[None, registration_conflict(self.user.email)]):
+                response, publish = self.post_queued(reverse("email-register"), {
+                    "email": self.user.email, "password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD})
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.data["code"], "email_verification_required" if pending else "account_exists")
+            publish.assert_not_called()
             self.user.refresh_from_db()
             self.assertTrue(self.user.check_password(PASSWORD))
+            self.assertEqual(User.objects.count(), 1)
+
+    def test_unrelated_registration_integrity_error_is_not_hidden(self):
+        with patch.object(User.objects, "create_user", side_effect=IntegrityError("unrelated")), \
+                patch("api.email_auth.queue_email") as queue:
+            with self.assertRaises(IntegrityError):
+                self.client.post(reverse("email-register"), {
+                    "email": "new@example.com", "password": PASSWORD, "password_confirm": PASSWORD})
+        queue.assert_not_called()
+
+    def test_registration_queue_failure_recovers_via_explicit_resend(self):
+        from api.email_auth import EmailUnavailable
+
+        data = {"email": "new@example.com", "password": PASSWORD, "password_confirm": PASSWORD}
+        with patch("api.email_auth.queue_email", side_effect=EmailUnavailable):
+            self.assertEqual(self.client.post(reverse("email-register"), data).status_code, 503)
+        response, publish = self.post_queued(reverse("email-register"), data)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "email_verification_required")
+        publish.assert_not_called()
+        response, publish = self.post_queued(reverse("email-resend"), {"email": data["email"]})
+        self.assertEqual(response.status_code, 202)
+        publish.assert_called_once()
+
+    def test_existing_email_still_requires_valid_registration_input(self):
+        response, publish = self.post_queued(reverse("email-register"), {
+            "email": self.user.email, "password": PASSWORD, "password_confirm": "different"})
+        self.assertEqual(response.status_code, 400)
+        publish.assert_not_called()
 
     def test_simple_passwords_work_for_registration_verification_and_login(self):
         for index, password in enumerate(SIMPLE_PASSWORDS):
