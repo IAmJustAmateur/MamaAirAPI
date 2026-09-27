@@ -53,7 +53,7 @@ def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
         assert response.status_code == expected, f"{path}: expected {expected}, got {response.status_code}: {response.text[:300]}"
         return response.json()
 
-    def form_confirm(url, selected_password):
+    def form_confirm(url, selected_password=None):
         assert urlparse(url).netloc == urlparse(base_url).netloc, "Email points outside the test server"
         if browser is not None:
             browser_confirm(browser, url, selected_password, insecure_test_tls)
@@ -67,10 +67,17 @@ def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
         parser.feed(page.text)
         assert parser.csrf, "CSRF field missing"
         # Model a same-origin form submission; Chromium mode checks real headers.
-        result = client.post(page.url, data={"csrfmiddlewaretoken": parser.csrf,
-                             "new_password": selected_password, "password_confirm": selected_password},
+        form = {"csrfmiddlewaretoken": parser.csrf}
+        if selected_password is None:
+            assert 'name="new_password"' not in page.text
+            assert '>Confirm email</button>' in page.text
+            post("email/login", {"email": email, "password": password}, 401)
+        else:
+            form.update(new_password=selected_password, password_confirm=selected_password)
+        result = client.post(page.url, data=form,
                              headers={"Origin": base_url, "Referer": page.url}, timeout=15)
-        assert result.status_code == 200 and "Password saved" in result.text, "Web form confirmation failed"
+        message = "Email confirmed" if selected_password is None else "Password saved"
+        assert result.status_code == 200 and message in result.text, "Web form confirmation failed"
 
     # Six-character numeric passwords must work; five characters still fail.
     post("email/register", {"email": f"invalid-{uuid4().hex}@example.com", "password": "12345", "password_confirm": "12345"}, 400)
@@ -83,7 +90,9 @@ def run(base_url, mail_dir, browser=None, insecure_test_tls=False):
     }
     post("email/login", {"email": email, "password": password}, 401)
     verification = wait_for_mail(mail_dir, email, "verify-email")
-    form_confirm(verification, password)
+    form_confirm(verification)
+    verification_fields = {key: value[0] for key, value in parse_qs(urlparse(verification).query).items()}
+    post("email/verify", verification_fields, 400)
     assert post("email/register", duplicate, 409) == {
         "code": "account_exists",
         "detail": "An account with this email already exists.",
@@ -147,45 +156,54 @@ def browser_confirm(browser, url, password, insecure_test_tls):
         clean_url = page.url
         assert not urlparse(clean_url).query, "Token was not removed before rendering"
         assert urlparse(clean_url).netloc == urlparse(url).netloc
-        new_password = page.get_by_label("New password", exact=True)
-        confirmation = page.get_by_label("Confirm password", exact=True)
-        for field in (new_password, confirmation):
-            expect(field).to_have_attribute("type", "password")
-            expect(field).to_have_attribute("minlength", "6")
-            expect(field).to_have_attribute("maxlength", "128")
-        new_password.fill("12345")
-        confirmation.fill("12345")
-        page.get_by_role("button", name="Save password").click()
-        assert new_password.evaluate("el => el.validity.tooShort"), "Browser must reject five-character passwords"
-        expect(page.get_by_role("button", name="Save password")).to_be_visible()
-        new_password.fill(password)
-        confirmation.fill(password)
-        page.get_by_role("button", name="Show passwords", exact=True).click()
-        for field in (new_password, confirmation):
-            expect(field).to_have_attribute("type", "text")
-            expect(field).to_have_value(password)
-        page.get_by_role("button", name="Hide passwords", exact=True).click()
-        for field in (new_password, confirmation):
-            expect(field).to_have_attribute("type", "password")
-            expect(field).to_have_value(password)
-        # Keyboard activation must also reveal both values without submitting.
-        toggle = page.get_by_role("button", name="Show passwords", exact=True)
-        toggle.focus()
-        page.keyboard.press("Enter")
-        for field in (new_password, confirmation):
-            expect(field).to_have_attribute("type", "text")
-        with page.expect_response(lambda r: r.request.method == "POST" and r.url == clean_url) as submitted:
+        if password is None:
+            expect(page.locator('input[name="new_password"]')).to_have_count(0)
+            expect(page.locator('input[name="password_confirm"]')).to_have_count(0)
+            expect(page.get_by_role("heading", name="Email confirmed", exact=True)).to_have_count(0)
+            button = "Confirm email"
+            success = "Email confirmed"
+        else:
+            button = "Save password"
+            success = "Password saved"
+            new_password = page.get_by_label("New password", exact=True)
+            confirmation = page.get_by_label("Confirm password", exact=True)
+            for field in (new_password, confirmation):
+                expect(field).to_have_attribute("type", "password")
+                expect(field).to_have_attribute("minlength", "6")
+                expect(field).to_have_attribute("maxlength", "128")
+            new_password.fill("12345")
+            confirmation.fill("12345")
             page.get_by_role("button", name="Save password").click()
+            assert new_password.evaluate("el => el.validity.tooShort"), "Browser must reject five-character passwords"
+            expect(page.get_by_role("button", name="Save password")).to_be_visible()
+            new_password.fill(password)
+            confirmation.fill(password)
+            page.get_by_role("button", name="Show passwords", exact=True).click()
+            for field in (new_password, confirmation):
+                expect(field).to_have_attribute("type", "text")
+                expect(field).to_have_value(password)
+            page.get_by_role("button", name="Hide passwords", exact=True).click()
+            for field in (new_password, confirmation):
+                expect(field).to_have_attribute("type", "password")
+                expect(field).to_have_value(password)
+            # Keyboard activation must also reveal both values without submitting.
+            toggle = page.get_by_role("button", name="Show passwords", exact=True)
+            toggle.focus()
+            page.keyboard.press("Enter")
+            for field in (new_password, confirmation):
+                expect(field).to_have_attribute("type", "text")
+        with page.expect_response(lambda r: r.request.method == "POST" and r.url == clean_url) as submitted:
+            page.get_by_role("button", name=button, exact=True).click()
         result = submitted.value
         headers = result.request.all_headers()
         origin = f"{urlparse(clean_url).scheme}://{urlparse(clean_url).netloc}"
         assert headers.get("origin") == origin, "Browser form must send its actual Origin, not null"
         assert headers.get("referer") == clean_url, "Referer must contain only the cleaned form URL"
         assert result.status == 200, f"Browser form rejected: HTTP {result.status}"
-        expect(page.get_by_role("heading", name="Password saved")).to_be_visible()
+        expect(page.get_by_role("heading", name=success)).to_be_visible()
         policy = response.headers.get("referrer-policy")
         assert policy == "same-origin", f"Expected a single same-origin policy, got {policy!r}"
-        print(f"Browser form passed: {urlparse(clean_url).path}, password visibility, six-character password, same-origin POST, no token in Referer.")
+        print(f"Browser form passed: {urlparse(clean_url).path}, explicit confirmation, same-origin POST, no token in Referer.")
     finally:
         context.close()
 

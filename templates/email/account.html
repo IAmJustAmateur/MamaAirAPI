@@ -3,7 +3,9 @@
 <p>Hi {{ name }},</p>
 <p><a href="{{ url }}">{{ action }}</a> for your MamaAir account.</p>
 <p>This link is valid for 48 hours and can only be used once.</p>
-<p>If you did not request this email, you can ignore it.</p>
+{% if verify %}<p>Open the link and click Confirm email. Your registration password will stay the same.</p>
+<p>Only confirm if you created this account yourself. Otherwise, ignore this email.</p>
+{% else %}<p>If you did not request this email, you can ignore it.</p>{% endif %}
 <p>Need help? Contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>.</p>
 <p>MamaAir</p>
 </body></html>

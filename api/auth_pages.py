@@ -7,7 +7,7 @@ from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
-from .email_auth import ConfirmInput, confirm_account
+from .email_auth import ConfirmInput, VerifyInput, confirm_account
 
 
 @sensitive_post_parameters("new_password", "password_confirm")
@@ -24,7 +24,8 @@ def account_link(request, purpose):
     else:
         context = {"verify": purpose == "verify", "success": False, "script_nonce": script_nonce}
         if request.method == "POST":
-            serializer = ConfirmInput(data={**request.POST.dict(), **request.session.get(session_key, {})})
+            input_class = VerifyInput if purpose == "verify" else ConfirmInput
+            serializer = input_class(data={**request.POST.dict(), **request.session.get(session_key, {})})
             try:
                 serializer.is_valid(raise_exception=True)
                 confirm_account(serializer.validated_data, purpose)

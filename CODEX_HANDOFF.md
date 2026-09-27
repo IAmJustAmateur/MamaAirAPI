@@ -1,5 +1,26 @@
 # Codex Handoff: MamaAir API
 
+## Email confirmation without password reset (2026-09-26)
+
+Branch `codex/email-confirmation-only`: `/verify-email` now displays a single
+**Confirm email** button. GET does not activate the account; a CSRF-protected
+POST confirms the address and preserves the registration password. The success
+page asks the user to return to the app and sign in. No automatic login is added.
+
+`POST /api/auth/email/verify/` requires only `uid` and `token`, returning
+`{"detail":"Email confirmed. You can now sign in."}`. Legacy password fields are
+ignored; mobile clients should remove any verification password prompt. Password
+reset keeps its existing contract. Existing unexpired verification links work,
+and become invalid once the pending flag is cleared. No migration is required.
+
+Email templates, mobile guides, the OpenAPI snapshot, and API/browser E2E tests
+are updated. Redeploy both web and Celery workers to update pages and email copy.
+
+Validation: all 307 Django tests passed with the documented local test coordinate
+encryption key; all 39 email-auth tests also passed separately. Both HTTP-client
+and real Chromium process E2E passed. OpenAPI snapshot generation with validation
+and fail-on-warning passed; no missing migrations were detected.
+
 ## Email form CSRF fix (2026-09-19)
 
 Branch `codex/email-auth-celery`: use `Referrer-Policy: same-origin` in both

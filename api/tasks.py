@@ -25,7 +25,8 @@ def send_account_email(self, email, purpose, expected_state):
     path = "verify-email" if purpose == "verify" else "reset-password"
     context = {
         "name": user.name or "there",
-        "action": "Confirm email and set password" if purpose == "verify" else "Reset password",
+        "action": "Confirm email" if purpose == "verify" else "Reset password",
+        "verify": purpose == "verify",
         "url": f"{settings.AUTH_PUBLIC_URL}/{path}?" + urlencode({"uid": encoded_uid(user), "token": generator.make_token(user)}),
         "support_email": settings.SUPPORT_EMAIL,
     }
