@@ -26,7 +26,13 @@ class JoinedServerThread(LiveServerThread):
     server_class = JoinedHTTPServer
 
 
-@override_settings(ALLOWED_HOSTS=["localhost", "127.0.0.1", "testserver"])
+@override_settings(
+    ALLOWED_HOSTS=["localhost", "127.0.0.1", "testserver"],
+    # LiveServer uses HTTP, including when CI loads HTTPS staging settings.
+    # Keep CSRF validation enabled, but allow cookies on this test transport.
+    CSRF_COOKIE_SECURE=False,
+    SESSION_COOKIE_SECURE=False,
+)
 class AuditLogHTTPTests(StaticLiveServerTestCase):
     server_thread_class = JoinedServerThread
 
@@ -58,6 +64,10 @@ class AuditLogHTTPTests(StaticLiveServerTestCase):
         self.addCleanup(session.close)
         login_url = self.live_server_url + "/admin/login/"
         session.get(login_url, timeout=10).raise_for_status()
+        missing_csrf = session.post(login_url, data={
+            "username": operator.email, "password": "admin-test-password",
+        }, headers={"Referer": login_url}, timeout=10)
+        self.assertEqual(missing_csrf.status_code, 403)
         logged_in = session.post(login_url, data={
             "username": operator.email, "password": "admin-test-password",
             "csrfmiddlewaretoken": session.cookies["csrftoken"], "next": "/admin/api/auditlog/",
