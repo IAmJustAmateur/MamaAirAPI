@@ -30,6 +30,38 @@ from django.conf import settings
 logger = getLogger(__name__)
 
 
+class AuditLog(models.Model):
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+    request_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                             null=True, blank=True, related_name="audit_logs")
+    action = models.CharField(max_length=255, blank=True)
+    method = models.CharField(max_length=16)
+    path = models.TextField()
+    status_code = models.PositiveSmallIntegerField()
+    duration_ms = models.PositiveIntegerField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    request_headers = models.JSONField(default=dict, blank=True)
+    query_params = models.JSONField(default=dict, blank=True)
+    request_body = models.JSONField(null=True, blank=True)
+    response_body = models.JSONField(null=True, blank=True)
+    error_type = models.CharField(max_length=255, blank=True)
+    traceback = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-timestamp", "-id"]
+        indexes = [
+            models.Index(fields=["user", "-timestamp"]),
+            models.Index(fields=["action", "-timestamp"]),
+            models.Index(fields=["status_code", "-timestamp"]),
+        ]
+
+    def __str__(self):
+        return f"{self.method} {self.path} → {self.status_code}"
+
+
 def user_avatar_upload_to(instance, filename):
     suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
     return f"avatars/user_{instance.pk}/{uuid.uuid4().hex}.{suffix}"
