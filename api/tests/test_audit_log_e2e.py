@@ -60,7 +60,6 @@ class AuditLogHTTPTests(StaticLiveServerTestCase):
 
         # Login via the real admin form, including CSRF, and inspect list/detail pages.
         session = requests.Session()
-        session.headers["Connection"] = "close"
         self.addCleanup(session.close)
         login_url = self.live_server_url + "/admin/login/"
         session.get(login_url, timeout=10).raise_for_status()
