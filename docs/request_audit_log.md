@@ -28,6 +28,21 @@ Symptom values are retained. Do not add secrets or coordinates to arbitrary
 free-text fields: redaction targets structured sensitive fields and common text
 patterns, not every possible encoding of sensitive information.
 
+Known response diagnostics (`code`, `token_type`, `token_class`) are retained
+only for explicitly allowed values such as `token_not_valid`, `access` and
+`AccessToken`. Request codes, actual tokens and arbitrary values under these
+field names remain redacted.
+
+For anonymous 401 responses, an expired Bearer access token can identify the
+token's owner in the User column. Its signature, algorithm, configured issuer
+and audience, and other temporal claims are verified; only expiration is
+relaxed for this diagnostic lookup. The request still receives 401. Metadata
+marks `user_source=expired_access_token`, `authentication_succeeded=false`, the
+expiry time and elapsed seconds. This identifies the owner of the credential,
+not necessarily the person presenting it. Invalid signatures, refresh tokens,
+missing users or failed lookups leave User empty. Lookup uses the configured
+JWT user claim (currently email); a changed email cannot recover the old owner.
+
 Unhandled exceptions include their type and stack frame locations, without the
 exception message, source lines or local variables. Handled errors retain their
 sanitized JSON response. Audit persistence failures do not change the API response.

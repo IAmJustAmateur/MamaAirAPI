@@ -1,5 +1,6 @@
 """Real HTTP requests through Django's live server, database and admin UI."""
 import os
+from datetime import timedelta
 import requests
 
 from django.contrib.auth.models import Permission
@@ -7,6 +8,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.servers.basehttp import ThreadedWSGIServer
 from django.test import override_settings
 from django.test.testcases import LiveServerThread
+from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.models import AuditLog, MommySymptom, User
@@ -57,6 +59,17 @@ class AuditLogHTTPTests(StaticLiveServerTestCase):
                                 json={"movements": [{"latitude": 51.11, "longitude": 12.22}]}, timeout=10)
         self.assertEqual(failure.status_code, 401)
         self.assertTrue(AuditLog.objects.filter(request_id=failure.headers["X-Request-ID"], status_code=401).exists())
+
+        expired = RefreshToken.for_user(user).access_token
+        expired.set_exp(from_time=timezone.now() - timedelta(days=3), lifetime=timedelta(days=2))
+        denied = requests.get(self.live_server_url + "/api/profile/",
+                              headers={"Authorization": f"Bearer {expired}"}, timeout=10)
+        self.assertEqual(denied.status_code, 401)
+        expired_log = AuditLog.objects.get(request_id=denied.headers["X-Request-ID"])
+        self.assertEqual(expired_log.user_id, user.pk)
+        self.assertEqual(expired_log.metadata["user_source"], "expired_access_token")
+        self.assertEqual(expired_log.response_body["code"], "token_not_valid")
+        self.assertEqual(expired_log.response_body["messages"][0]["token_type"], "access")
 
         # Login via the real admin form, including CSRF, and inspect list/detail pages.
         session = requests.Session()

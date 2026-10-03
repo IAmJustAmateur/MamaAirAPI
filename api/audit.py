@@ -24,20 +24,31 @@ SENSITIVE = re.compile(
     re.I,
 )
 SUCCESS_ACTIONS = {"symptoms-mommy-selection", "symptoms-baby-selection"}
+SAFE_RESPONSE_DIAGNOSTICS = {
+    "code": {"token_not_valid", "authentication_failed", "not_authenticated",
+             "permission_denied", "user_not_found", "user_inactive", "password_changed"},
+    "token_type": {"access", "refresh", "sliding"},
+    "token_class": {"AccessToken", "RefreshToken", "SlidingToken", "UntypedToken"},
+}
+
+
+def safe_diagnostic(key, value, diagnostics):
+    return diagnostics and isinstance(value, str) and value in SAFE_RESPONSE_DIAGNOSTICS.get(key, ())
 
 
 def sensitive(key):
     return bool(SENSITIVE.search(re.sub(r"[^a-z0-9]", "", str(key).lower())))
 
 
-def sanitize(value, secrets=(), depth=0):
+def sanitize(value, secrets=(), depth=0, diagnostics=False):
     if depth > 20:
         return "[depth limit]"
     if isinstance(value, dict):
-        return {str(k): REDACTED if sensitive(k) else sanitize(v, secrets, depth + 1)
+        return {str(k): REDACTED if sensitive(k) and not safe_diagnostic(k, v, diagnostics)
+                else sanitize(v, secrets, depth + 1, diagnostics)
                 for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return [sanitize(v, secrets, depth + 1) for v in value]
+        return [sanitize(v, secrets, depth + 1, diagnostics) for v in value]
     if isinstance(value, str):
         for secret in secrets:
             if secret:
@@ -52,11 +63,11 @@ def sanitize(value, secrets=(), depth=0):
     return value
 
 
-def collect_secrets(value):
+def collect_secrets(value, diagnostics=False):
     result = []
     if isinstance(value, dict):
         for key, item in value.items():
-            if sensitive(key):
+            if sensitive(key) and not safe_diagnostic(key, item, diagnostics):
                 def leaves(v):
                     if isinstance(v, dict):
                         for child in v.values():
@@ -68,10 +79,10 @@ def collect_secrets(value):
                         yield str(v)
                 result.extend(leaves(item))
             else:
-                result.extend(collect_secrets(item))
+                result.extend(collect_secrets(item, diagnostics))
     elif isinstance(value, list):
         for item in value:
-            result.extend(collect_secrets(item))
+            result.extend(collect_secrets(item, diagnostics))
     return sorted(set(result), key=len, reverse=True)
 
 
@@ -133,7 +144,7 @@ class AuditLogMiddleware(MiddlewareMixin):
                 secrets.append(request.META[name])
 
         def bounded(value, field):
-            value = sanitize(value, secrets)
+            value = sanitize(value, secrets, diagnostics=field == "response_body")
             if len(json.dumps(value, ensure_ascii=False).encode("utf-8")) > settings.AUDIT_LOG_MAX_BODY_BYTES:
                 metadata[field + "_omitted"] = "size_limit"
                 return None
@@ -151,7 +162,7 @@ class AuditLogMiddleware(MiddlewareMixin):
             if len(response.content) <= settings.AUDIT_LOG_MAX_BODY_BYTES:
                 try:
                     body = json.loads(response.content)
-                    secrets.extend(collect_secrets(body))
+                    secrets.extend(collect_secrets(body, diagnostics=True))
                 except (ValueError, UnicodeError, RecursionError):
                     metadata["response_body_omitted"] = "invalid_json"
             else:
@@ -163,7 +174,8 @@ class AuditLogMiddleware(MiddlewareMixin):
             # Without inspecting that body we cannot safely retain its error text.
             def omit_text(value):
                 if isinstance(value, dict):
-                    return {key: omit_text(item) for key, item in value.items()}
+                    return {key: item if safe_diagnostic(key, item, True) else omit_text(item)
+                            for key, item in value.items()}
                 if isinstance(value, list):
                     return [omit_text(item) for item in value]
                 return "[text omitted: request body unavailable]" if isinstance(value, str) else value
@@ -178,6 +190,11 @@ class AuditLogMiddleware(MiddlewareMixin):
         user_id = user.pk if user and user.is_authenticated else None
         if user_id and not get_user_model().objects.filter(pk=user_id).exists():
             user_id = None
+        if user_id is None and response.status_code == 401:
+            from api.audit_auth import expired_token_owner
+
+            user_id, attribution = expired_token_owner(request)
+            metadata.update(attribution)
         with transaction.atomic():
             AuditLog.objects.create(
                 timestamp=request.audit_timestamp, request_id=request.audit_id,
