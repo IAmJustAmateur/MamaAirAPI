@@ -6,6 +6,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import AuthenticationForm
 from django.utils.translation import gettext_lazy as _
 from .models import (
+    AuditLog,
     User,
     UserLifeStyle,
     UserMommySymptoms,
@@ -585,3 +586,23 @@ class DailyActionAdmin(admin.ModelAdmin):
     )
     ordering = ("plan", "sort_order", "stable_key")
     raw_id_fields = ("plan",)
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ("timestamp", "user", "action", "method", "path", "status_code", "duration_ms")
+    list_filter = ("timestamp", "action", "method", "status_code")
+    search_fields = ("=request_id", "path", "user__email")
+    list_select_related = ("user",)
+    readonly_fields = tuple(field.name for field in AuditLog._meta.fields)
+    date_hierarchy = "timestamp"
+    show_full_result_count = False
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

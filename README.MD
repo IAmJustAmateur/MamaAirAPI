@@ -274,6 +274,9 @@ curl "$BASE_URL/api/summary/" \
 
 ## Local Django Tests
 
+Request/error logging in Django Admin is described in [Request audit log](docs/request_audit_log.md),
+including retention cleanup and focused HTTP E2E tests.
+
 Movement ingestion tests need the coordinate encryption key that CI creates automatically. For a local full-suite run in PowerShell, set a temporary test key first:
 
 ```powershell

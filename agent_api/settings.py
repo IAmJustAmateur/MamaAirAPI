@@ -156,6 +156,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "api.audit.AuditLogMiddleware",
     "django.middleware.security.SecurityMiddleware",
     # standard middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -170,6 +171,10 @@ MIDDLEWARE = [
     # third-party middleware
     "debug_toolbar.middleware.DebugToolbarMiddleware",
 ]
+
+AUDIT_LOG_ENABLED = os.getenv("AUDIT_LOG_ENABLED", "true").lower() in {"true", "1", "yes"}
+AUDIT_LOG_MAX_BODY_BYTES = int(os.getenv("AUDIT_LOG_MAX_BODY_BYTES", "65536"))
+AUDIT_LOG_RETENTION_DAYS = int(os.getenv("AUDIT_LOG_RETENTION_DAYS", "14"))
 
 
 TEMPLATES = [
