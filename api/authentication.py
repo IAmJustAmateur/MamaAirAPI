@@ -3,6 +3,7 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth import get_user_model
+from api.firebase_auth import check_firebase_session
 
 UserModel = get_user_model()
 import logging
@@ -54,6 +55,7 @@ class LoggingJWTAuthentication(JWTAuthentication):
             if user.email_verification_pending:
                 from rest_framework.exceptions import AuthenticationFailed
                 raise AuthenticationFailed("Email confirmation required")
+            check_firebase_session(user, validated_token)
         except Exception:
             logger.warning("JWT authentication failed")
             raise
