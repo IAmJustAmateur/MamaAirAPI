@@ -9,6 +9,8 @@ from firebase_admin import auth
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
+from api.serializers import GoogleAuthResponseSerializer
+
 User = get_user_model()
 API_URL = "/api/auth/firebase/"
 CLAIMS = {
@@ -46,6 +48,9 @@ class FirebaseAuthTests(TestCase):
     def test_new_user_profile_and_session(self):
         response = self.login()
         self.assertEqual(response.status_code, 200, response.data)
+        serializer = GoogleAuthResponseSerializer(data=response.json())
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(response.data["user"]["name"], CLAIMS["name"])
         self.verify_id_token.assert_called_once_with("private-test-token", check_revoked=True)
         user = User.objects.get()
         self.assertEqual(user.firebase_uid, CLAIMS["uid"])
@@ -60,6 +65,14 @@ class FirebaseAuthTests(TestCase):
         self.assertEqual(access.status_code, 200, access.data)
         self.assertEqual(refresh.status_code, 200, refresh.data)
         self.assertEqual(AccessToken(refresh.data["access"])["firebase_auth_time"], CLAIMS["auth_time"])
+
+    def test_response_contract_without_firebase_name(self):
+        self.verify_id_token.return_value = {key: value for key, value in CLAIMS.items() if key != "name"}
+        response = self.client.post(API_URL, {"id_token": "private-test-token"}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        serializer = GoogleAuthResponseSerializer(data=response.json())
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(response.data["user"]["name"], "")
 
     def test_repeat_and_changed_email_keep_same_account(self):
         original = self.login().data
@@ -79,6 +92,7 @@ class FirebaseAuthTests(TestCase):
         response = self.login()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["user"]["id"], user.pk)
+        self.assertEqual(response.data["user"]["name"], "Existing name")
         user.refresh_from_db()
         self.assertEqual(user.password, password_hash)
         self.assertEqual(user.name, "Existing name")
