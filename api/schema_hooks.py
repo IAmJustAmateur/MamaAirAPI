@@ -36,7 +36,6 @@ def hide_non_mobile_endpoints(endpoints):
     hidden_paths = {
         "/api/auth/register/",
         "/api/auth/token/",
-        "/api/auth/firebase/",
     }
     hidden_prefixes = (
         "/api/debug/",

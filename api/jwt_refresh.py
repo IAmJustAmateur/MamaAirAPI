@@ -4,6 +4,7 @@ import logging
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
+from api.firebase_auth import check_firebase_session
 
 from rest_framework_simplejwt.settings import (
     api_settings,
@@ -52,6 +53,9 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
                 user = User._default_manager.get(**{user_id_field: user_id})
                 if api_settings.CHECK_REVOKE_TOKEN and token.get(api_settings.REVOKE_TOKEN_CLAIM) != get_md5_hash_password(user.password):
                     raise InvalidToken("Password has changed. Please sign in again.")
+                if not api_settings.USER_AUTHENTICATION_RULE(user):
+                    raise InvalidToken("Account unavailable")
+                check_firebase_session(user, token)
                 logger.info(
                     "User found for refresh token: id=%s, email=%s",
                     getattr(user, "id", None),

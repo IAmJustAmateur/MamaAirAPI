@@ -87,6 +87,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "is_superuser",
             "is_staff",
             "avatar",
+            "firebase_uid",
         ]
         read_only_fields = (
             "email", "is_active", "auth_provider", "google_sub", "email_verification_pending",

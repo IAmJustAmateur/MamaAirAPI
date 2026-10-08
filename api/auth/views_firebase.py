@@ -1,14 +1,13 @@
-# auth/views_firebase.py
 from django.contrib.auth import get_user_model
-from rest_framework.views import APIView
+from django.db import IntegrityError, transaction
+from rest_framework import serializers, throttling
 from rest_framework.response import Response
-from rest_framework import throttling
-from firebase_admin import auth as fb_auth
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from drf_spectacular.utils import extend_schema
 
-from logging import getLogger
-
-logger = getLogger(__name__)
+from api.firebase_auth import FirebaseRejected, verify_firebase_token
+from api.serializers import GoogleAuthResponseSerializer, ErrorSerializer
 
 User = get_user_model()
 
@@ -17,75 +16,70 @@ class SigninThrottle(throttling.AnonRateThrottle):
     scope = "signin"
 
 
+class FirebaseInput(serializers.Serializer):
+    id_token = serializers.CharField(max_length=16384, trim_whitespace=False)
+
+
 class FirebaseAuthView(APIView):
     authentication_classes = []
     permission_classes = []
     throttle_classes = [SigninThrottle]
 
+    @extend_schema(
+        tags=["Auth"], summary="Sign in with Firebase",
+        request=FirebaseInput,
+        responses={200: GoogleAuthResponseSerializer, 400: ErrorSerializer,
+                   401: ErrorSerializer, 409: ErrorSerializer, 503: ErrorSerializer},
+    )
     def post(self, request):
-        token = request.data.get("id_token")
-        if not token:
-            return Response({"detail": "id_token is required"}, status=400)
-
+        data = FirebaseInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        claims, email = verify_firebase_token(data.validated_data["id_token"])
+        uid = claims["uid"]
+        name = str(claims.get("name") or "")[:255]
         try:
-            # Проверка подписи и клеймов Firebase ID Token
-            decoded = fb_auth.verify_id_token(
-                token
-            )  # при необходимости: check_revoked=True
-            logger.info(f"Decoded Firebase token: {decoded}")
-        except Exception:
-            logger.exception("Failed to verify Firebase token")
-            return Response({"detail": "Invalid Firebase token"}, status=401)
+            picture = serializers.URLField(max_length=200).run_validation(claims.get("picture"))
+        except serializers.ValidationError:
+            picture = None
+        try:
+            with transaction.atomic():
+                user = User.objects.select_for_update().filter(firebase_uid=uid).first()
+                if user is None:
+                    matches = list(User.objects.select_for_update().filter(email__iexact=email)[:2])
+                    if len(matches) > 1:
+                        raise FirebaseRejected("Account unavailable")
+                    user = matches[0] if matches else None
+                    if user and user.firebase_uid not in (None, uid):
+                        raise FirebaseRejected("Account unavailable")
+                if user:
+                    if not user.is_active or user.email_verification_pending:
+                        raise FirebaseRejected("Account unavailable")
+                    # Local email identifies existing JWTs and password accounts.
+                    # Keep it stable; Firebase identity is the UID.
+                    user.firebase_uid = uid
+                    user.auth_provider = "firebase"
+                    if not user.name:
+                        user.name = name
+                    if not user.avatar_url:
+                        user.avatar_url = picture
+                    user.save(update_fields=["firebase_uid", "auth_provider", "name", "avatar_url"])
+                else:
+                    user = User.objects.create_user(
+                        email=email, firebase_uid=uid, auth_provider="firebase",
+                        name=name, avatar_url=picture,
+                    )
+                refresh = RefreshToken.for_user(user)
+                refresh["firebase_uid"] = uid
+                refresh["firebase_auth_time"] = claims["auth_time"]
+                refresh["firebase_project_id"] = claims["aud"]
+        except IntegrityError:
+            return Response({"detail": "Account conflict. Please retry sign-in."}, status=409)
 
-        uid = decoded["uid"]
-        email = (decoded.get("email") or "").lower()
-        logger.info(f"Firebase token email: {email}")
-        email_verified = decoded.get("email_verified", False)
-        name = decoded.get("name") or ""
-        picture = decoded.get("picture")
-
-        # if not email or not email_verified:
-        #     return Response({"detail": "Email missing or not verified"}, status=401)
-        if not email or not email_verified:
-            return Response({"detail": "Email missing or not verified"}, status=401)
-
-        # Линкуем/создаём юзера у себя
-        user = User.objects.filter(email=email).first()
-        if user:
-            if not user.is_active or user.email_verification_pending:
-                return Response({"detail": "Account unavailable"}, status=401)
-            # можно хранить связь с Firebase UID
-            if not getattr(user, "firebase_uid", None):
-                setattr(user, "firebase_uid", uid)
-            if not getattr(user, "auth_provider", None):
-                setattr(user, "auth_provider", "firebase")
-            if picture and not getattr(user, "avatar_url", None):
-                setattr(user, "avatar_url", picture)
-            if name and not user.name:
-                user.name = name
-            user.save()
-        else:
-            user = User.objects.create_user(
-                # username=email,
-                email=email,
-                # first_name=name,
-                is_active=True,
-                # добавь поля в свою модель, если есть:
-                # firebase_uid=uid,
-                # auth_provider="firebase",
-                # avatar_url=picture or None,
-            )
-
-        refresh = RefreshToken.for_user(user)
-        data = {
+        return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
             "user": {
-                "id": user.id,
-                "email": user.email,
-                # "name": user.first_name,
-                "avatar_url": getattr(user, "avatar_url", None),
-                "provider": getattr(user, "auth_provider", "firebase"),
+                "id": user.id, "email": user.email,
+                "avatar_url": user.avatar_url, "provider": user.auth_provider,
             },
-        }
-        return Response(data, status=200)
+        })

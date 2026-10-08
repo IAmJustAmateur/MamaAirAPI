@@ -275,6 +275,7 @@ class User(MyUser, PermissionsMixin):
     auth_provider = models.CharField(max_length=20, default="password")
     email_verification_pending = models.BooleanField(default=False)
     google_sub = models.CharField(max_length=255, null=True, blank=True, unique=True)
+    firebase_uid = models.CharField(max_length=128, null=True, blank=True, unique=True)
     avatar = models.ImageField(upload_to=user_avatar_upload_to, null=True, blank=True)
     avatar_url = models.URLField(null=True, blank=True)
     consent = models.BooleanField(default=False)

@@ -181,7 +181,7 @@ class RecommendationOpenAPIContractTests(APITestCase):
         schema = SchemaGenerator().get_schema(request=None, public=True)
         paths = schema["paths"]
 
-        self.assertNotIn("/api/auth/firebase/", paths)
+        self.assertIn("/api/auth/firebase/", paths)
         self.assertNotIn("/api/auth/register/", paths)
         self.assertFalse(any(path.startswith("/api/debug/") for path in paths))
         self.assertFalse(any(path.startswith("/demo/") for path in paths))
