@@ -25,9 +25,10 @@ explicit identity migration.
 4. POST `/api/auth/token/refresh/` with `{"refresh": "<API refresh token>"}` to
    obtain a new access token. This endpoint does not accept Firebase tokens.
 
-The response includes `user.id`, `user.email`, `user.avatar_url`, and
+The response includes `user.id`, `user.email`, `user.name`, `user.avatar_url`, and
 `user.provider` (`firebase`). New profiles receive the Firebase name and valid
 avatar URL; existing nonempty profile values and passwords are preserved.
+`user.name` is always present and is an empty string when no name is available.
 
 The endpoint verifies signature, project, expiry, revocation, disabled status,
 and confirmed email. It looks up the persistent Firebase UID first. On first

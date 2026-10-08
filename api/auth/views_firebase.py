@@ -80,6 +80,7 @@ class FirebaseAuthView(APIView):
             "refresh": str(refresh),
             "user": {
                 "id": user.id, "email": user.email,
+                "name": user.name or "",
                 "avatar_url": user.avatar_url, "provider": user.auth_provider,
             },
         })
