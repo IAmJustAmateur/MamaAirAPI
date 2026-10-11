@@ -50,6 +50,7 @@ from django.utils import timezone
 from .models import (
     # Movement,
     AirExposureLog,
+    AuditLog,
     WeeklyExposure,
     LANGUAGE_CHOICES,
     User,
@@ -1780,6 +1781,8 @@ class DeleteAccountView(APIView):
             SymptomChecklistResponse.objects.filter(user=user).delete()
             # Simple JWT otherwise keeps these rows and only nulls their user.
             OutstandingToken.objects.filter(user=user).delete()
+            # Audit logs also use SET_NULL; remove them while the owner is known.
+            AuditLog.objects.filter(user=user).delete()
             user.delete()
 
             if avatar_name:
