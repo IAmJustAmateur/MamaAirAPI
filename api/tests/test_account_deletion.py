@@ -12,7 +12,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
-from api.models import GeneratedSymptomChecklist, SymptomChecklistResponse
+from api.models import AuditLog, GeneratedSymptomChecklist, SymptomChecklistResponse
 
 
 User = get_user_model()
@@ -90,6 +90,72 @@ class AccountDeletionTests(APITestCase):
                 format="json",
             ).status_code,
             status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def create_audit_logs(self, user):
+        return [
+            AuditLog.objects.create(
+                user=user,
+                method=method,
+                path="/api/profile/",
+                status_code=status_code,
+                duration_ms=1,
+            ).pk
+            for method, status_code in (("GET", 200), ("POST", 400))
+        ]
+
+    def test_deletes_user_audit_logs(self):
+        log_ids = self.create_audit_logs(self.user)
+
+        response = self.client.delete(
+            self.url, {"confirmation": "DELETE"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.content, b"")
+        # Check primary keys so SET_NULL cannot masquerade as deletion.
+        self.assertFalse(AuditLog.objects.filter(pk__in=log_ids).exists())
+
+    def test_preserves_other_users_and_anonymous_audit_logs(self):
+        other_user = User.objects.create_user(
+            email="keep-me@example.com", password=PASSWORD
+        )
+        self.create_audit_logs(self.user)
+        other_log_ids = self.create_audit_logs(other_user)
+        anonymous_log_ids = self.create_audit_logs(None)
+        preserved_ids = other_log_ids + anonymous_log_ids
+        original_logs = list(
+            AuditLog.objects.filter(pk__in=preserved_ids).order_by("pk").values()
+        )
+
+        response = self.client.delete(
+            self.url, {"confirmation": "DELETE"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertTrue(User.objects.filter(pk=other_user.pk).exists())
+        self.assertEqual(
+            list(AuditLog.objects.filter(pk__in=preserved_ids).order_by("pk").values()),
+            original_logs,
+        )
+
+    def test_restores_audit_logs_when_account_deletion_fails(self):
+        log_ids = self.create_audit_logs(self.user)
+
+        def fail_delete(user):
+            self.assertFalse(AuditLog.objects.filter(pk__in=log_ids).exists())
+            raise RuntimeError("Account deletion failed")
+
+        with patch.object(User, "delete", autospec=True, side_effect=fail_delete):
+            with self.assertRaisesMessage(RuntimeError, "Account deletion failed"):
+                self.client.delete(
+                    self.url, {"confirmation": "DELETE"}, format="json"
+                )
+
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+        self.assertEqual(
+            AuditLog.objects.filter(pk__in=log_ids, user=self.user).count(),
+            len(log_ids),
         )
 
     def test_deletes_protected_checklist_graph(self):
