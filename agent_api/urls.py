@@ -21,10 +21,12 @@ from django.urls import path, include
 
 from django.contrib import admin
 from api.auth_pages import account_link
+from api.deletion_pages import delete_account_page
 from django.urls import path
 from debug_toolbar.toolbar import debug_toolbar_urls
 
 urlpatterns = [
+    path("delete-account", delete_account_page, name="delete-account-page"),
     path("reset-password", account_link, {"purpose": "reset"}, name="reset-password-page"),
     path("verify-email", account_link, {"purpose": "verify"}, name="verify-email-page"),
     path("admin/", admin.site.urls),

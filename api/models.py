@@ -30,6 +30,24 @@ from django.conf import settings
 logger = getLogger(__name__)
 
 
+class AccountFileCleanup(models.Model):
+    """Durable deletion intent, retained only until storage cleanup succeeds."""
+    file_name = models.CharField(max_length=255, unique=True)
+    owner_id = models.PositiveBigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    next_attempt_at = models.DateTimeField(default=timezone.now, db_index=True)
+    attempts = models.PositiveIntegerField(default=0)
+    error_type = models.CharField(max_length=100, blank=True)
+
+
+class AccountDeletionGrant(models.Model):
+    """Short-lived, single-purpose proof; only its digest is stored here."""
+    token_hash = models.CharField(max_length=64, primary_key=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    account_state = models.CharField(max_length=64)
+    expires_at = models.DateTimeField(db_index=True)
+
+
 class AuditLog(models.Model):
     timestamp = models.DateTimeField(default=timezone.now, db_index=True)
     request_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)

@@ -13,7 +13,6 @@ from rest_framework.exceptions import ValidationError
 from drf_spectacular.types import OpenApiTypes
 
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from api.services.guidelines import compute_pollutant_compliance
 from api.schema_hooks import DeleteRequestBodyAutoSchema
 
@@ -50,7 +49,6 @@ from django.utils import timezone
 from .models import (
     # Movement,
     AirExposureLog,
-    AuditLog,
     WeeklyExposure,
     LANGUAGE_CHOICES,
     User,
@@ -73,7 +71,6 @@ from .models import (
     UserWellbeingLog,
     SYMPTOM_CHECKLIST_MOMMY,
     SYMPTOM_CHECKLIST_BABY,
-    SymptomChecklistResponse,
 )
 from recommendations.services.symptom_monitoring import (
     InvalidSymptomChecklist,
@@ -1770,34 +1767,9 @@ class DeleteAccountView(APIView):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user = request.user
-        user_id = user.id
-        avatar_name = user.avatar.name if user.avatar else None
-        avatar_storage = user.avatar.storage if avatar_name else None
+        from api.account_deletion import delete_account
 
-        with transaction.atomic():
-            # Responses protect their generated checklist. Delete them first so
-            # Django can cascade the remaining account-owned checklist data.
-            SymptomChecklistResponse.objects.filter(user=user).delete()
-            # Simple JWT otherwise keeps these rows and only nulls their user.
-            OutstandingToken.objects.filter(user=user).delete()
-            # Audit logs also use SET_NULL; remove them while the owner is known.
-            AuditLog.objects.filter(user=user).delete()
-            user.delete()
-
-            if avatar_name:
-                def delete_avatar_file():
-                    try:
-                        avatar_storage.delete(avatar_name)
-                    except Exception:
-                        logger.exception(
-                            "DeleteAccountView could not delete avatar for user_id=%s",
-                            user_id,
-                        )
-
-                transaction.on_commit(delete_avatar_file)
-
-        logger.info("DeleteAccountView deleted user_id=%s", user_id)
+        delete_account(request.user.pk)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
