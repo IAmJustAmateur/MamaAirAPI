@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Delete your MamaAir account</title>
+<style>
+body{font:17px system-ui;background:#f2f8f6;color:#163c34;margin:0}main{max-width:440px;margin:5vh auto;padding:32px;background:white;border-radius:16px}h1{font-size:28px}label{display:block;margin-top:18px}input,button{box-sizing:border-box;width:100%;padding:12px;margin-top:8px;font:inherit}button{background:#216957;color:white;border:0;border-radius:8px;margin-top:20px;cursor:pointer}.danger{background:#982e32}.secondary{background:#eaf2ef;color:#163c34}.error{color:#8b2424}a{color:#216957}.hint{font-size:14px}hr{border:0;border-top:1px solid #dde8e3;margin:24px 0}[hidden]{display:none!important}@media(max-width:520px){main{margin:16px;padding:24px}}
+</style></head><body><main><p>MamaAir</p>
+{% if success %}
+<h1>Account deleted</h1><p>Your MamaAir account has been deleted. You can close this page.</p>
+<p>Your Google or Firebase account has not been deleted.</p>
+{% else %}
+<h1>Delete your account</h1>
+<p>This permanently deletes your MamaAir account and its associated profile, health, location, and activity records. You will be signed out of MamaAir.</p>
+<p>Your Google or Firebase account will remain available.</p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if confirm %}
+<p>Verified account: <strong>{{ account_email }}</strong></p>
+<p>This cannot be undone. Confirmation expires five minutes after you sign in.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="confirm">
+<label>Type DELETE to confirm<input name="confirmation" autocomplete="off" required pattern="DELETE" maxlength="6"></label>
+<button class="danger" type="submit">Permanently delete my account</button></form>
+<form method="post">{% csrf_token %}<button class="secondary" name="action" value="cancel">Cancel</button></form>
+{% else %}
+<p>First, verify that you own the account. Signing in here does not delete it.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="password">
+<label>Email<input type="email" name="email" autocomplete="username" maxlength="254" required></label>
+<label>Password<input type="password" name="password" autocomplete="current-password" maxlength="128" required></label>
+<button type="submit">Continue with password</button></form>
+<p class="hint">Forgot your password? Use the password reset option in MamaAir, then return here.</p>
+<hr><p>Use the same sign-in method as in the app.</p>
+<p id="provider-error" class="error" role="alert" hidden>Sign-in could not be completed. Please try again.</p>
+<form id="provider-form" method="post" hidden>{% csrf_token %}<input name="action" id="provider-action"><input name="id_token" id="provider-token"></form>
+{% if google_config.client_id %}<div id="google-button"></div>{% else %}<p class="hint">Google web sign-in is currently unavailable.</p>{% endif %}
+{% if firebase_config %}<button type="button" id="firebase-button">Continue with Google via Firebase</button>{% else %}<p class="hint">Firebase web sign-in is currently unavailable.</p>{% endif %}
+<noscript><p>Google and Firebase sign-in require JavaScript. Password sign-in works without it.</p></noscript>
+{{ google_config|json_script:"google-config" }}
+{{ firebase_config|json_script:"firebase-config" }}
+<script nonce="{{ script_nonce }}">
+function submitProvider(provider, token) {
+    document.getElementById('provider-action').value = provider;
+    document.getElementById('provider-token').value = token;
+    document.getElementById('provider-form').submit();
+}
+function providerError() { document.getElementById('provider-error').hidden = false; }
+window.initializeGoogleDeletion = () => {
+    const config = JSON.parse(document.getElementById('google-config').textContent);
+    google.accounts.id.initialize({...config, auto_select: false, callback: result => submitProvider('google', result.credential)});
+    google.accounts.id.renderButton(document.getElementById('google-button'), {theme: 'outline', size: 'large'});
+};
+{% if google_config.client_id %}
+const googleScript = document.createElement('script');
+googleScript.src = 'https://accounts.google.com/gsi/client';
+googleScript.referrerPolicy = 'strict-origin-when-cross-origin';
+googleScript.onload = window.initializeGoogleDeletion;
+googleScript.onerror = providerError;
+document.head.appendChild(googleScript);
+{% endif %}
+</script>
+{% if firebase_config %}
+<script type="module" nonce="{{ script_nonce }}">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
+import {getAuth, inMemoryPersistence, setPersistence, GoogleAuthProvider, signInWithPopup, signOut} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
+const app = initializeApp(JSON.parse(document.getElementById('firebase-config').textContent));
+const auth = getAuth(app);
+const ready = setPersistence(auth, inMemoryPersistence);
+document.getElementById('firebase-button').addEventListener('click', async () => {
+    const button = document.getElementById('firebase-button');
+    button.disabled = true;
+    try {
+        await ready;
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({prompt: 'select_account'});
+        const result = await signInWithPopup(auth, provider);
+        const token = await result.user.getIdToken(true);
+        await signOut(auth);
+        submitProvider('firebase', token);
+    } catch (_) { providerError(); button.disabled = false; }
+});
+</script>
+{% endif %}
+{% endif %}{% endif %}
+</main></body></html>

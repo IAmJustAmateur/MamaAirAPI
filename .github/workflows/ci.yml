@@ -110,3 +110,11 @@ jobs:
 
       - name: Run test suite
         run: python manage.py test --verbosity=2
+
+      - name: Install browser smoke test dependencies
+        run: |
+          pip install -r requirements-browser-e2e.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Verify public deletion in Chromium
+        run: python scripts/test_deletion_browser.py

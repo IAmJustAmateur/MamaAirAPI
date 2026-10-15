@@ -66,6 +66,25 @@ services:
       timeout: 10s
       retries: 3
 
+  account_cleanup:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    command: ["python", "manage.py", "retry_account_file_cleanup", "--loop"]
+    env_file:
+      - ../.env
+    environment:
+      DB_HOST: db
+      FIREBASE_CREDENTIALS: /run/secrets/firebase_service_account.json
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - media_volume:/app/media
+      - /home/ec2-user/secrets/firebase_service_account.json:/run/secrets/firebase_service_account.json:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: always
+
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]

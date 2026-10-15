@@ -85,6 +85,18 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1").split(",")
 
 REGISTRATION_API_KEY = os.getenv("REGISTRATION_API_KEY")
 GOOGLE_ALLOWED_AUDS = os.getenv("GOOGLE_ALLOWED_AUDS", "")
+# Public web deletion uses its own web OAuth audience, never Android audiences.
+DELETION_GOOGLE_CLIENT_ID = os.getenv("DELETION_GOOGLE_CLIENT_ID", "")
+DELETION_FIREBASE_CONFIG = {
+    key: os.getenv(env, "") for key, env in {
+        "apiKey": "DELETION_FIREBASE_API_KEY",
+        "authDomain": "DELETION_FIREBASE_AUTH_DOMAIN",
+        "projectId": "DELETION_FIREBASE_PROJECT_ID",
+        "appId": "DELETION_FIREBASE_APP_ID",
+    }.items()
+}
+if not all(DELETION_FIREBASE_CONFIG.values()):
+    DELETION_FIREBASE_CONFIG = {}
 
 # Email authentication: existing accounts remain usable; new registrations verify first.
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
