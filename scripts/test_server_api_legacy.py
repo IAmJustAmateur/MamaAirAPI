@@ -26,7 +26,7 @@ load_dotenv()
 
 ENVIRONMENTS = {
     "local": "http://127.0.0.1:8000/",
-    "production": "https://api.mamaair.app/",
+    "production": "https://api.mamaair.work/",
 }
 
 
@@ -97,15 +97,11 @@ CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/mommy/checklist/")
 
 MOMMY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/mommy/selection/")
 MOMMY_STATISTICS_URL = urljoin(BASE_URL, "api/symptoms/mommy/statistics/")
-MOMMY_CLASS_STATISTICS_URL = urljoin(
-    BASE_URL, "api/symptoms/mommy/statistics/classes/"
-)
+MOMMY_CLASS_STATISTICS_URL = urljoin(BASE_URL, "api/symptoms/mommy/statistics/classes/")
 
 BABY_CHECKLIST_URL = urljoin(BASE_URL, "api/symptoms/baby/checklist/")
 BABY_SELECTION_URL = urljoin(BASE_URL, "api/symptoms/baby/selection/")
-BABY_CLASS_STATISTICS_URL = urljoin(
-    BASE_URL, "api/symptoms/baby/statistics/classes/"
-)
+BABY_CLASS_STATISTICS_URL = urljoin(BASE_URL, "api/symptoms/baby/statistics/classes/")
 
 EXPOSURE_HISTORY_URL = urljoin(BASE_URL, "api/exposure/history/")
 
@@ -313,23 +309,39 @@ def _assert_symptom_class_statistics_schema(
         )
     classes = body["classes"]
     if not isinstance(classes, list):
-        raise AssertionError(f"Class statistics classes must be list, got {type(classes)}")
+        raise AssertionError(
+            f"Class statistics classes must be list, got {type(classes)}"
+        )
     if expect_non_empty and not classes:
         raise AssertionError("Class statistics classes must not be empty")
 
     for class_item in classes:
         if not isinstance(class_item, dict):
-            raise AssertionError(f"Class statistics class item must be dict: {class_item}")
-        for key in ("symptom_class", "class_name", "color_flag", "quantity", "symptoms"):
+            raise AssertionError(
+                f"Class statistics class item must be dict: {class_item}"
+            )
+        for key in (
+            "symptom_class",
+            "class_name",
+            "color_flag",
+            "quantity",
+            "symptoms",
+        ):
             if key not in class_item:
                 raise AssertionError(
                     f"Class statistics class item missing '{key}': {class_item}"
                 )
         if class_item["symptom_class"] not in (1, 2, 3, 4):
             raise AssertionError(f"Invalid symptom_class: {class_item}")
-        if not isinstance(class_item["class_name"], str) or not class_item["class_name"]:
+        if (
+            not isinstance(class_item["class_name"], str)
+            or not class_item["class_name"]
+        ):
             raise AssertionError(f"class_name must be non-empty str: {class_item}")
-        if not isinstance(class_item["color_flag"], str) or not class_item["color_flag"]:
+        if (
+            not isinstance(class_item["color_flag"], str)
+            or not class_item["color_flag"]
+        ):
             raise AssertionError(f"color_flag must be non-empty str: {class_item}")
         if not isinstance(class_item["quantity"], int) or class_item["quantity"] < 1:
             raise AssertionError(f"class quantity must be positive int: {class_item}")
@@ -348,7 +360,9 @@ def _assert_symptom_class_statistics_schema(
             if not isinstance(symptom["symptom_id"], int):
                 raise AssertionError(f"symptom_id must be int: {symptom}")
             if not isinstance(symptom["quantity"], int) or symptom["quantity"] < 1:
-                raise AssertionError(f"symptom quantity must be positive int: {symptom}")
+                raise AssertionError(
+                    f"symptom quantity must be positive int: {symptom}"
+                )
             if not isinstance(symptom["risks"], list) or not symptom["risks"]:
                 raise AssertionError(f"symptom risks must be non-empty list: {symptom}")
             for risk in symptom["risks"]:
@@ -378,7 +392,9 @@ def _assert_summary_water_schema(
         if key not in water:
             raise AssertionError(f"summary.water missing '{key}'")
     if expected_date is not None and water["date"] != expected_date:
-        raise AssertionError(f"summary.water.date mismatch: {water['date']} vs {expected_date}")
+        raise AssertionError(
+            f"summary.water.date mismatch: {water['date']} vs {expected_date}"
+        )
     if not isinstance(water["amount"], (int, float)):
         raise AssertionError("summary.water.amount must be number")
     if expected_amount is not None and water["amount"] != expected_amount:
@@ -386,7 +402,9 @@ def _assert_summary_water_schema(
             f"summary.water.amount mismatch: {water['amount']} vs {expected_amount}"
         )
     if water["unit"] != expected_unit:
-        raise AssertionError(f"summary.water.unit mismatch: {water['unit']} vs {expected_unit}")
+        raise AssertionError(
+            f"summary.water.unit mismatch: {water['unit']} vs {expected_unit}"
+        )
 
 
 def _assert_daily_checkin_exists_schema(body: dict, expected_date: str):
@@ -425,7 +443,9 @@ def _assert_task_completion_schema(
     body: dict, expected_date: str, expected_tasks: list[str] | None = None
 ):
     if not isinstance(body, dict):
-        raise AssertionError(f"task completion response must be object, got {type(body)}")
+        raise AssertionError(
+            f"task completion response must be object, got {type(body)}"
+        )
     for k in ("date", "tasks"):
         if k not in body:
             raise AssertionError(f"task completion response missing '{k}'")
@@ -808,7 +828,9 @@ def step_summary_get(
             raise AssertionError(f"daily_checkins[{i}] must be string")
         _ = _parse_iso_date(item)
     if daily_checkins != sorted(daily_checkins):
-        raise AssertionError(f"daily_checkins must be sorted ascending: {daily_checkins}")
+        raise AssertionError(
+            f"daily_checkins must be sorted ascending: {daily_checkins}"
+        )
     if expected_checkin_date and expected_checkin_date not in daily_checkins:
         raise AssertionError(
             f"daily_checkins must contain {expected_checkin_date}, got {daily_checkins}"
@@ -844,9 +866,7 @@ def step_summary_get(
                     f"task_completions[{i}].tasks[{j}] must be non-empty string"
                 )
     if task_dates != sorted(task_dates):
-        raise AssertionError(
-            f"task_completions must be sorted ascending: {task_dates}"
-        )
+        raise AssertionError(f"task_completions must be sorted ascending: {task_dates}")
     if expected_task_date:
         match = next(
             (item for item in task_completions if item["date"] == expected_task_date),
@@ -1812,8 +1832,13 @@ def step_wellbeing_log_post_upsert(
 
     _assert_wellbeing_log_schema(body, target_date)
     if body["water_unit"] != water_unit:
-        raise AssertionError(f"water_unit mismatch: {body['water_unit']} vs {water_unit}")
-    if expected_water_amount is not None and body["water_amount"] != expected_water_amount:
+        raise AssertionError(
+            f"water_unit mismatch: {body['water_unit']} vs {water_unit}"
+        )
+    if (
+        expected_water_amount is not None
+        and body["water_amount"] != expected_water_amount
+    ):
         raise AssertionError(
             f"water_amount mismatch: {body['water_amount']} vs {expected_water_amount}"
         )
