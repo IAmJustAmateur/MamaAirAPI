@@ -118,3 +118,6 @@ jobs:
 
       - name: Verify public deletion in Chromium
         run: python scripts/test_deletion_browser.py
+
+      - name: Verify draft privacy policy in Chromium
+        run: python scripts/test_privacy_browser.py
