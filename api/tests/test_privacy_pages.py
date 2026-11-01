@@ -3,11 +3,14 @@ from django.urls import reverse
 
 
 class PrivacyPolicyPageTests(TestCase):
-    def test_public_draft_and_existing_deletion_link(self):
+    def test_public_policy_and_existing_deletion_link(self):
         response = self.client.get(reverse("privacy-policy-page"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "legal/privacy_policy.html")
-        self.assertContains(response, "Draft — subject to update")
+        self.assertContains(response, "<h2>", count=17)
+        self.assertContains(response, 'href="mailto:service@mamaair.work"')
+        self.assertNotContains(response, "service@mamaair.africa")
+        self.assertNotContains(response, "Draft")
         self.assertContains(response, 'href="' + reverse("delete-account-page") + '"')
         self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow")
 

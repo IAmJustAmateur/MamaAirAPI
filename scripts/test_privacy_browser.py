@@ -1,4 +1,4 @@
-"""Exercise the public draft in Chromium against an isolated Django process."""
+"""Exercise the public policy in Chromium against an isolated Django process."""
 import os
 from pathlib import Path
 import socket
@@ -61,13 +61,13 @@ def main():
                             page.on("pageerror", lambda error: errors.append(str(error)))
                             response = page.goto(base + "/privacy-policy")
                             assert response.status == 200
-                            expect(page).to_have_title("MamaAir Privacy Policy — Draft")
+                            expect(page).to_have_title("MamaAir Privacy Policy")
                             expect(page.get_by_role("heading", name="Privacy Policy", exact=True)).to_be_visible()
-                            expect(page.get_by_text("Draft — subject to update", exact=True)).to_be_visible()
+                            expect(page.get_by_role("heading", name="17. Contact us", exact=True)).to_be_visible()
                             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                             page.screenshot(path=str(artifacts / f"{label}.png"), full_page=True)
                             page.reload()
-                            expect(page.get_by_text("Draft — subject to update", exact=True)).to_be_visible()
+                            expect(page.get_by_role("heading", name="17. Contact us", exact=True)).to_be_visible()
                             page.get_by_role("link", name="Delete your account", exact=True).click()
                             expect(page).to_have_url(base + "/delete-account")
                             expect(page.get_by_role("heading", name="Delete your account", exact=True)).to_be_visible()
