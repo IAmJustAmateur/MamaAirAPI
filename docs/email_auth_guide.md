@@ -164,6 +164,11 @@ $env:MOVEMENT_COORDINATE_KEYS='{"1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
 ## Redis/PostgreSQL E2E with Docker
 
+To test the API already running on the new EC2 server, use the
+[EC2 email E2E guide](email_auth_ec2_e2e.md). It explains how to capture emails
+inside the existing worker, check the environment, run the test through public
+HTTPS, and restore SMTP. The separate stack below does not test that deployment.
+
 After Docker is available, from the repository root:
 
 ```powershell
