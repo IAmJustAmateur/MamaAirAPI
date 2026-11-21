@@ -7,7 +7,7 @@
 
 ## 1. Подготовить доступ и проверить обе базы
 
-Настройте SSH-алиасы `mamaair-api-prod` и `mamaair-api-dev` для старого
+Настройте SSH-алиасы `bsi-dev` и `mamaair-api` для старого
 и нового EC2 соответственно. Сверьте отпечатки SSH host keys по доверенному
 каналу и идентификаторы инстансов и AWS-аккаунтов по инвентарю. Для каждого шага
 явно проверяйте, к какому EC2 подключена сессия. На обоих серверах откройте Bash
@@ -21,6 +21,12 @@
 project="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' agent_api_db)" &&
   test -n "$project" && export COMPOSE_PROJECT_NAME="$project"
 ```
+
+Скрипты используют плагин Docker Compose. Если на старом EC2 доступна
+только команда docker-compose, установите плагин вручную для пользователя,
+который запускает backup. Перезапуск контейнеров не требуется. Сверьте ID
+контейнера db в выводе старой и новой команды с одинаковой конфигурацией.
+[Ручная установка плагина через curl](https://docs.docker.com/compose/install/linux/#install-the-plugin-manually)
 
 На обоих EC2 выполните команды ниже. Держите каталог резервных копий
 вне checkout на зашифрованном диске. Функции пригодятся в следующих шагах.
@@ -86,49 +92,11 @@ compose exec -T db df -h /var/lib/postgresql/data
 кода в фактически запущенных образах. Проверьте запас места под исходную
 базу нового EC2, восстановленную базу с индексами и WAL и оба архива.
 
-## 2. Изолировать новый EC2 перед получением копии
+## 2. Снять дамп на старом EC2 и передать по SSH
 
-- Разрешите SSH только операторам через утверждённый VPN, bastion или список IP.
-  Закройте публичный вход на 80/443 и 5432 во всех применимых security groups.
-  Для HTTPS-проверок ниже используется SSH-туннель до существующего Caddy.
-  С отдельной машины вне разрешённой сети проверьте, что сайт недоступен.
-- На время работы с копией запретите исходящие соединения контейнеров приложения
-  к внешним сервисам на сетевом уровне. Правило должно распространяться на Docker
-  и IPv4/IPv6, сохранять доступ к локальной БД и проверяться из тестового
-  контейнера до запуска на копии. В частности, заблокируйте SMTP, Google/Firebase
-  и OpenWeatherMap. Некоторые функции погоды передают координаты даже при
-  пустом `OWM_API_KEY`.
-- Ограничьте доступ к SSH, Docker, PostgreSQL, EBS и снимкам теми операторами,
-  которым он нужен. Проверьте правила обработки данных и доступ к KMS
-  в обоих AWS-аккаунтах. Архив, содержимое БД, WAL и снимки могут содержать ПДн,
-  сведения о беременностях и симптомах, геолокацию, хеши паролей, токены
-  и данные аудита. Храните их на зашифрованных дисках EBS в приватном каталоге
-  с правами `0700` и файлами `0600`. SHA-256 проверяет целостность, а шифрование
-  при передаче обеспечивает SSH.
-- На новом EC2 остановите `celery_worker`, который обслуживает очередь `email`,
-  и `account_cleanup`, который повторяет удаление файлов. Запишите исходное
-  состояние сервисов. Приостановите внешние cron/systemd-задачи или отдельно
-  развернутые воркеры, если они обращаются к тестовой среде.
-- Используйте отдельный `SECRET_KEY` тестового приложения, синтетическую учётную
-  запись и синтетические данные для функциональных проверок. Приватные
-  координатные ключи для проверки расшифровки передавайте отдельно через
-  утверждённое хранилище секретов. Не копируйте production `.env`, SMTP/Firebase
-  credentials или media. В PostgreSQL хранятся ссылки на файлы, а содержимое
-  `media_volume` переносится отдельно.
-- Выводите агрегаты и статусы. Не сохраняйте строки таблиц, координаты,
-  токены, тела ответов API и содержимое писем в чатах, Git или журналах.
-  Зафиксируйте срок хранения и ответственного за ручное удаление тестовой копии,
-  ключей, архивов и связанных снимков после согласования.
-
-На новом EC2:
-
-```bash
-compose ps -a
-compose stop celery_worker account_cleanup
-compose ps -a celery_worker account_cleanup
-```
-
-## 3. Снять дамп на старом EC2 и передать по SSH
+До передачи проверьте доступ к каталогу на новом EC2. Храните дамп на
+зашифрованном диске с доступом только для операторов. PostgreSQL должен
+оставаться недоступным из интернета.
 
 На старом EC2 из корня репозитория:
 
@@ -141,8 +109,7 @@ archive="$(bash scripts/backup_db.sh --output-dir "$BACKUP_DIR")" &&
 `pg_dump` записывает согласованный снимок в custom format при работающем
 приложении. Скрипт выводит путь готового архива в stdout. Для передачи
 нужны сам `.dump` и соседний `.dump.sha256`. Каталог по умолчанию
-`$HOME/mamaair-db-backups`. Если нужны контрольные количества строк,
-снимите их на источнике по шагу 5 сразу после создания архива.
+`$HOME/mamaair-db-backups`.
 
 Из Bash на компьютере оператора подставьте фактические абсолютные пути
 каталогов на серверах и имя файла, выведенное предыдущей командой.
@@ -155,10 +122,13 @@ SOURCE_DIR=/home/ec2-user/mamaair-db-backups
 TARGET_DIR=/home/ec2-user/mamaair-db-backups
 DUMP_NAME=postgresql-YYYYMMDDTHHMMSSZ-XXXXXXXX.dump
 
+# Выполните один раз, если каталога ещё нет на новом EC2.
+ssh mamaair-api 'install -d -m 700 "$HOME/mamaair-db-backups"'
+
 scp -3 -p -o StrictHostKeyChecking=yes \
-  "mamaair-api-prod:$SOURCE_DIR/$DUMP_NAME" \
-  "mamaair-api-prod:$SOURCE_DIR/$DUMP_NAME.sha256" \
-  "mamaair-api-dev:$TARGET_DIR/"
+  "bsi-dev:$SOURCE_DIR/$DUMP_NAME" \
+  "bsi-dev:$SOURCE_DIR/$DUMP_NAME.sha256" \
+  "mamaair-api:$TARGET_DIR/"
 ```
 
 На новом EC2 подставьте то же имя и проверьте полученные файлы.
@@ -173,9 +143,10 @@ chmod 600 "$archive" "$archive.sha256" &&
 Продолжайте после `OK` и нулевого кода выхода. При прерванной передаче
 повторите передачу обоих файлов и проверку.
 
-## 4. Сохранить базу нового EC2 и восстановить отдельную копию
+## 3. Сохранить базу нового EC2 и восстановить отдельную копию
 
-На новом EC2 запишите имя текущей базы `web` и убедитесь, что оно совпадает
+Если оба дампа уже сделаны и проверены, сохраните их имена и переходите
+к восстановлению. На новом EC2 запишите имя текущей базы `web` и убедитесь, что оно совпадает
 с базой, из которой скрипт сделает backup. При расхождении выясните, какая
 конфигурация используется работающим приложением, перед резервным копированием.
 
@@ -202,7 +173,8 @@ compose ps --status running --quiet db
 EXPECTED_DB_CONTAINER=REPLACE_WITH_RECORDED_FULL_DOCKER_CONTAINER_ID
 RESTORED_DB="mamaair_restore_$(date -u +%Y%m%d_%H%M%S)"
 
-bash scripts/restore_db.sh "$archive" --database "$RESTORED_DB" \
+DUMP_NAME=postgresql-YYYYMMDDTHHMMSSZ-XXXXXXXX.dump # Файл с bsi-dev
+bash scripts/restore_db.sh "$BACKUP_DIR/$DUMP_NAME" --database "$RESTORED_DB" \
   --confirm-container "$EXPECTED_DB_CONTAINER"
 ```
 
@@ -213,81 +185,31 @@ PostgreSQL. Восстановление транзакционное. При о
 созданная база. После диагностики используйте свежее имя для новой попытки.
 Скрипт не переключает приложение и не запускает миграции.
 
-## 5. Сверить количество записей и целостность до миграций
+## 4. Подготовить проверку Django на копии
 
-Определите эту функцию в обеих сессиях. Она выводит только метки таблиц
-и количества, включая таблицы пользователей, перемещений, симптомов и
-`django_migrations`. На production выполняйте полные подсчёты при приемлемой
-нагрузке.
+Если цель — проверить восстановление, достаточно успешного вывода
+restore_db.sh. Для проверки совместимости с Django продолжите до плана
+миграций. Переключение web выполняется только в следующем разделе.
 
-```bash
-row_counts() {
-  db_psql "$1" -Atq -F $'\t' <<'SQL'
-BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
-SELECT format('SELECT %L, count(*) FROM %I.%I;', tablename, schemaname, tablename)
-FROM pg_catalog.pg_tables
-WHERE schemaname = 'public'
-ORDER BY tablename COLLATE "C"
-\gexec
-COMMIT;
-SQL
-}
-```
+Архив и восстановленная база содержат реальные персональные, медицинские
+и геолокационные данные. Храните их на зашифрованном EBS с ограниченным
+доступом к SSH, Docker, PostgreSQL и снимкам. Каталог должен иметь права
+0700, файлы — 0600. Оставьте PostgreSQL недоступным из интернета.
 
-На старом EC2 запишите контрольные значения как можно ближе к моменту дампа.
-Если шаг уже пройден, сохраните серверное время контрольного замера и
-учтите разницу со временем архива.
+Перед запуском приложения на копии ограничьте вход на 80/443 операторами
+или закройте эти порты снаружи и используйте SSH-туннель. Заблокируйте
+исходящие соединения приложения к внешним сервисам, включая SMTP,
+Google/Firebase и OpenWeatherMap, сохранив доступ к PostgreSQL. Проверьте
+действие правил для Docker и IPv4/IPv6. На новом EC2 запишите состояние
+воркеров, остановите их и приостановите внешние задания, если они есть.
+
+На новом EC2:
 
 ```bash
-date -u
-row_counts '' >"$BACKUP_DIR/source-counts.tsv"
+compose ps -a
+compose stop celery_worker account_cleanup
+compose ps -a celery_worker account_cleanup
 ```
-
-На компьютере оператора используйте те же `SOURCE_DIR` и `TARGET_DIR`:
-
-```bash
-scp -3 -p -o StrictHostKeyChecking=yes \
-  "mamaair-api-prod:$SOURCE_DIR/source-counts.tsv" "mamaair-api-dev:$TARGET_DIR/"
-```
-
-На новом EC2 до `migrate` и до тестовых записей:
-
-```bash
-row_counts "$RESTORED_DB" >"$BACKUP_DIR/restored-counts.tsv"
-diff -u "$BACKUP_DIR/source-counts.tsv" "$BACKUP_DIR/restored-counts.tsv"
-```
-
-Подсчёт на работающем production использует отдельный снимок, поэтому
-параллельные изменения дают допустимые расхождения. Сопоставьте их с
-временем дампа и активностью приложения, а различия в наборе таблиц и
-необъяснимые расхождения разберите до переключения. Сверьте список
-ограничений без валидации и количество записей без связанного пользователя.
-На старом EC2 задайте `CHECK_DB=''`, а на новом
-`CHECK_DB="${RESTORED_DB:?Set RESTORED_DB}"`. Затем выполните одинаковый SQL.
-
-```bash
-db_psql "${CHECK_DB?Set CHECK_DB for this EC2}" <<'SQL'
-SELECT c.conrelid::regclass AS relation, c.conname
-FROM pg_constraint c
-JOIN pg_namespace n ON n.oid = c.connamespace
-WHERE n.nspname = 'public' AND c.contype = 'f' AND NOT c.convalidated
-ORDER BY 1, 2;
-SELECT 'movements' AS relation, count(*) AS orphan_rows
-FROM public.movements m LEFT JOIN public.api_user u ON u.myuser_ptr_id = m.user_id
-WHERE u.myuser_ptr_id IS NULL
-UNION ALL
-SELECT 'api_airexposurelog', count(*)
-FROM public.api_airexposurelog e
-LEFT JOIN public.api_user u ON u.myuser_ptr_id = e.user_id
-WHERE u.myuser_ptr_id IS NULL;
-SQL
-```
-
-Для этих двух связей ожидается `orphan_rows = 0`. Если сравниваемая версия
-схемы старше и таблицы отсутствуют, сверьте `showmigrations --plan` и
-адаптируйте SQL к общей версии исходной и восстановленной схем.
-
-## 6. Проверить миграции и координаты в отдельном процессе
 
 На новом EC2 создайте локальный Compose overlay вне checkout. Штатный
 `deployment/entrypoint.sh` запускает `migrate` при `DJANGO_ENV=production`
@@ -300,7 +222,7 @@ set +x
 TRIAL_COMPOSE="$BACKUP_DIR/trial.compose.yml"
 export TRIAL_COORDINATE_ENV="$BACKUP_DIR/trial.coordinate.env"
 export TRIAL_FIREBASE_PLACEHOLDER="$BACKUP_DIR/trial.firebase-disabled.json"
-export TRIAL_DB_NAME="$RESTORED_DB"
+export TRIAL_DB_NAME="${RESTORED_DB:?Set RESTORED_DB}"
 
 TRIAL_SECRET_FILE="$BACKUP_DIR/trial.secret"
 if [ ! -s "$TRIAL_SECRET_FILE" ]; then
@@ -347,37 +269,9 @@ trial() {
 }
 ```
 
-Через защищённый канал заполните `trial.coordinate.env` значениями
-`MOVEMENT_COORDINATE_KEYS`, `MOVEMENT_COORDINATE_ACTIVE_KEY_VERSION` и, при
-отличии от значения по умолчанию, `MOVEMENT_H3_RESOLUTION`. В карте AES-ключей
-нужны все версии, используемые зашифрованными записями, и активная версия.
-Файл имеет формат Compose env-файла. Для JSON-карты в нём можно использовать
-одинарные кавычки вокруг целого JSON. Для проверки Compose используйте
-`config --quiet`, поскольку полный вывод содержит секреты.
-
-Проверьте настроенную блокировку исходящих соединений из одноразового
-контейнера приложения. Проверка открывает только TCP-соединение и не передаёт
-данные. Если какое-либо соединение удалось, исправьте правила до запуска.
-
-```bash
-trial config --quiet &&
-  trial run --rm --no-deps -T web python - <<'PY'
-import socket
-
-for host, port in [
-    ("smtp.gmail.com", 587),
-    ("accounts.google.com", 443),
-    ("identitytoolkit.googleapis.com", 443),
-    ("api.openweathermap.org", 80),
-    ("api.openweathermap.org", 443),
-]:
-    try:
-        with socket.create_connection((host, port), timeout=3):
-            raise SystemExit(f"Unexpected outbound connectivity to {host}:{port}")
-    except OSError:
-        print(f"Outbound connection unavailable to {host}:{port}")
-PY
-```
+Для проверки входа и профиля файл trial.coordinate.env можно оставить
+пустым. Ключи координат понадобятся при проверке геолокации. Проверяйте
+конфигурацию через config --quiet, чтобы секреты не попали в вывод.
 
 Сначала подтвердите подключение к `RESTORED_DB` и изучите план:
 
@@ -388,8 +282,7 @@ trial_manage() {
 
 trial config --quiet &&
   trial_manage shell --no-imports -c \
-    'from django.db import connection; c = connection.cursor(); c.execute("SELECT current_database()"); print(c.fetchone()[0])' &&
-  trial_manage showmigrations --plan &&
+    'from django.db import connection; c = connection.cursor(); c.execute("SELECT current_database()"); name = c.fetchone()[0]; print(name); raise SystemExit(name != connection.settings_dict["NAME"] or not name.startswith("mamaair_restore_"))' &&
   trial_manage migrate --plan
 ```
 
@@ -398,52 +291,10 @@ trial config --quiet &&
 применение. Для уже актуальной схемы достаточно проверок.
 
 ```bash
-trial_manage migrate --noinput
-trial_manage showmigrations --plan &&
-  trial_manage migrate --check
+trial_manage migrate --noinput && trial_manage migrate --check
 ```
 
-Миграция `0047_movement_location_security` добавляет поля для AES-256-GCM
-и H3. Она не шифрует исторические записи. `backfill_movement_locations`
-изменяет данные и требует отдельного решения. Открытые поля координат
-в `movements` и `api_airexposurelog`, а также H3-ячейки, учитывайте как
-чувствительные данные независимо от результатов проверки.
-
-Проверьте аутентификацию и расшифровку выборки для каждой версии ключа без
-вывода координат или идентификаторов пользователей:
-
-```bash
-trial_manage shell --no-imports <<'PY'
-from django.db.models import Count
-from api.models import Movement
-from api.services.coordinate_encryption import CoordinateEncryptionError, decrypt_coordinates
-
-encrypted = Movement.objects.filter(coordinates_encrypted__isnull=False)
-print("Movement rows without ciphertext:", Movement.objects.count() - encrypted.count())
-if encrypted.filter(coordinates_key_version__isnull=True).exists():
-    raise SystemExit("Encrypted movements with missing key versions")
-if not encrypted.exists():
-    raise SystemExit("No encrypted movements available to verify")
-
-versions = encrypted.values("coordinates_key_version").annotate(total=Count("pk"))
-for group in versions.order_by("coordinates_key_version"):
-    version = group["coordinates_key_version"]
-    sample = encrypted.filter(coordinates_key_version=version).order_by("pk")
-    checked = 0
-    for ciphertext in sample.values_list("coordinates_encrypted", flat=True)[:20]:
-        try:
-            decrypt_coordinates(ciphertext, version)
-        except CoordinateEncryptionError:
-            raise SystemExit(f"Coordinate validation failed for key version {version}") from None
-        checked += 1
-    print(f"Key version {version}: checked {checked} of {group['total']} rows")
-PY
-```
-
-Отсутствие зашифрованных строк означает, что проверку расшифровки нельзя
-подтвердить по этому архиву. Разберите неожиданные ошибки до запуска `web`.
-
-## 7. Переключить новый web и проверить API
+## 5. Переключить новый web и проверить API
 
 Сохраняйте сетевые ограничения и остановленные фоновые сервисы. Запустите
 только `web` с overlay. `--no-deps` оставляет `db`, Redis и Caddy без
@@ -464,7 +315,7 @@ trial exec -T web python manage.py migrate --check
 аутентификации, сохраняя исходное доменное имя для TLS и HTTP.
 
 ```bash
-ssh -o ExitOnForwardFailure=yes -N -L 127.0.0.1:8443:127.0.0.1:443 mamaair-api-dev
+ssh -o ExitOnForwardFailure=yes -N -L 127.0.0.1:8443:127.0.0.1:443 mamaair-api
 ```
 
 ```bash
@@ -474,7 +325,7 @@ test "$(curl -sS --max-time 15 --noproxy '*' --connect-to api-new.mamaair.work:4
   https://api-new.mamaair.work/api/profile/ -o /dev/null -w '%{http_code}')" = 401
 ```
 
-На новом EC2 проверьте вход по паролю, профиль и чтение каталога задач
+На новом EC2 проверьте вход по паролю, профиль
 через HTTP. Тест создаёт только синтетическую учётную запись в копии и
 удаляет её после проверки. Пароль, JWT и тела ответов остаются в процессе
 теста.
@@ -514,9 +365,7 @@ try:
     access = request("/api/auth/email/login/", payload={"email": email, "password": password})["access"]
     if request("/api/profile/", access=access)["email"] != email:
         raise SystemExit("Unexpected profile")
-    if not isinstance(request("/api/daily-tasks/", access=access), list):
-        raise SystemExit("Unexpected daily task response")
-    print("Email login, authenticated profile and daily tasks passed")
+    print("Email login and authenticated profile passed")
 finally:
     user.delete()
 PY
@@ -526,7 +375,7 @@ Google/Firebase, SMTP, прогноз погоды и загрузку марш�
 отдельно с синтетической базой. `scripts/test_server_api.py` выполняет
 широкий набор записей и может вызывать внешние интеграции.
 
-## 8. Вернуть новый EC2 к прежней базе
+## 6. Вернуть новый EC2 к прежней базе
 
 Оставьте ограничения доступа и внешних вызовов. В той же сессии подставьте
 ранее записанное имя `PREVIOUS_DB`, если переменная была потеряна.
@@ -563,3 +412,63 @@ compose config --quiet &&
 
 Проверьте имя базы в новом `web`, здоровье сервисов и прежний API.
 Не удаляйте Docker volumes при переключении или возврате.
+
+
+## Дополнительно. Сверить данные и проверить координаты
+
+Для выборочной сверки выполните запрос на старом EC2 с CHECK_DB='',
+а на новом с CHECK_DB="$RESTORED_DB". Сравните только агрегаты.
+На работающем источнике количество строк могло измениться после дампа.
+
+```bash
+db_psql "${CHECK_DB?Set CHECK_DB}" <<'SQL'
+SELECT 'api_user' AS table_name, count(*) FROM public.api_user
+UNION ALL SELECT 'movements', count(*) FROM public.movements;
+SQL
+```
+
+Перед тестированием геолокации заполните trial.coordinate.env ключами
+MOVEMENT_COORDINATE_KEYS для всех нужных версий и задайте
+MOVEMENT_COORDINATE_ACTIVE_KEY_VERSION. Используйте защищённое хранилище
+секретов. При отличии от значения по умолчанию задайте MOVEMENT_H3_RESOLUTION.
+Выполните проверку с TRIAL_DB_NAME, указывающим на восстановленную базу.
+
+Миграция `0047_movement_location_security` добавляет поля для AES-256-GCM
+и H3. Она не шифрует исторические записи. `backfill_movement_locations`
+изменяет данные и требует отдельного решения. Открытые поля координат
+в `movements` и `api_airexposurelog`, а также H3-ячейки, учитывайте как
+чувствительные данные независимо от результатов проверки.
+
+Проверьте аутентификацию и расшифровку выборки для каждой версии ключа без
+вывода координат или идентификаторов пользователей:
+
+```bash
+trial_manage shell --no-imports <<'PY'
+from django.db.models import Count
+from api.models import Movement
+from api.services.coordinate_encryption import CoordinateEncryptionError, decrypt_coordinates
+
+encrypted = Movement.objects.filter(coordinates_encrypted__isnull=False)
+print("Movement rows without ciphertext:", Movement.objects.count() - encrypted.count())
+if encrypted.filter(coordinates_key_version__isnull=True).exists():
+    raise SystemExit("Encrypted movements with missing key versions")
+if not encrypted.exists():
+    raise SystemExit("No encrypted movements available to verify")
+
+versions = encrypted.values("coordinates_key_version").annotate(total=Count("pk"))
+for group in versions.order_by("coordinates_key_version"):
+    version = group["coordinates_key_version"]
+    sample = encrypted.filter(coordinates_key_version=version).order_by("pk")
+    checked = 0
+    for ciphertext in sample.values_list("coordinates_encrypted", flat=True)[:20]:
+        try:
+            decrypt_coordinates(ciphertext, version)
+        except CoordinateEncryptionError:
+            raise SystemExit(f"Coordinate validation failed for key version {version}") from None
+        checked += 1
+    print(f"Key version {version}: checked {checked} of {group['total']} rows")
+PY
+```
+
+Отсутствие зашифрованных строк означает, что проверку расшифровки нельзя
+подтвердить по этому архиву. Разберите ошибки до проверки функций геолокации.
