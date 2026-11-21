@@ -34,6 +34,8 @@ static/
 
 # If using PostgreSQL locally
 *.psql_history
+*.dump
+*.dump.sha256
 
 # .env files
 *.env

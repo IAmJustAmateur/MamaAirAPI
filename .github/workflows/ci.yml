@@ -32,7 +32,8 @@ jobs:
 
   django-tests:
     name: Django tests (PostgreSQL)
-    runs-on: ubuntu-latest
+    # Playwright 1.58 requires a supported Ubuntu image for Chromium.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     services:
