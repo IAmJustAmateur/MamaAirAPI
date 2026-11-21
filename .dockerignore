@@ -7,6 +7,8 @@ venv
 env
 **/__pycache__
 *.sqlite3
+**/*.dump
+**/*.dump.sha256
 *.log
 .e2e-emails
 .e2e-artifacts
