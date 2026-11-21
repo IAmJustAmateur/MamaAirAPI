@@ -85,7 +85,21 @@ with Redis/PostgreSQL. Gmail credentials are never used by automated E2E tests.
 
 ### Application settings
 
-Create `.env` next to `manage.py`. Start from `env.dist` when possible.
+Create one `.env` next to `manage.py`. Start from `env.dist` when possible.
+Django loads this file when it runs directly. For the deployment stack, run
+Compose from the repository root and pass the same file explicitly:
+
+```sh
+docker compose --env-file .env -f deployment/docker-compose.yml config --quiet
+docker compose --env-file .env -f deployment/docker-compose.yml up -d
+```
+
+`--env-file` supplies values for `${...}` in the Compose file. The services
+with `env_file: ../.env` also receive variables from the root `.env` in their
+container environment. From `deployment/`, use `docker compose --env-file
+../.env` instead. If an existing deployment used `COMPOSE_PROJECT_NAME`,
+keep the same project name when switching to the root `.env` so Compose
+continues to use the existing containers and volumes.
 
 Common settings:
 

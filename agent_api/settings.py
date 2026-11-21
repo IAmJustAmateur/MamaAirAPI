@@ -66,8 +66,6 @@ else:
 logger.info(f"BASE_DIR: {BASE_DIR}, TEMPLATE_DIR: {TEMPLATE_DIR}")
 
 
-load_dotenv(dotenv_path=BASE_DIR / ".env")
-
 FIREBASE_CREDENTIALS = os.getenv("FIREBASE_CREDENTIALS")
 if FIREBASE_CREDENTIALS and not firebase_admin._apps:
     cred = credentials.Certificate(FIREBASE_CREDENTIALS)
